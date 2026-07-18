@@ -5,4 +5,4 @@ while IFS= read -r command; do
 done < <(find "$OUTPOST_PATH/bin" -maxdepth 1 -type f -executable -printf '%f\n')
 
 outpost_info "Outpost commands are available from $HOME/.local/bin"
-outpost_info "Run: outpost-image-fetch"
+"$OUTPOST_PATH/bin/outpost-image-fetch"
