@@ -18,6 +18,9 @@ readonly OUTPOST_INSTALLED_PATH="${OUTPOST_INSTALLED_PATH:-$HOME/.local/share/ou
 source "$OUTPOST_PATH/helpers/all.sh"
 
 gum confirm "Remove Outpost at $OUTPOST_PATH and image assets at $OUTPOST_DEFAULT_IMAGE_DIR?" || exit 0
+
+find "$HOME/.local/bin" -maxdepth 1 -type l -lname "$OUTPOST_PATH/bin/*" -delete 2>/dev/null || true
+
 rm -rf "$OUTPOST_DEFAULT_IMAGE_DIR"
 rm -rf "$OUTPOST_PATH"
 outpost_info "Removed Outpost"
