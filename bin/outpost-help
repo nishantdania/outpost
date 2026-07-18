@@ -5,7 +5,11 @@ set -euo pipefail
 cat <<'EOF'
 Outpost commands:
   outpost-image-fetch                  Fetch Firecracker CI Ubuntu image assets.
+  outpost-firecracker-list             List Firecracker VMs.
+  outpost-firecracker-log NAME         Follow a Firecracker VM log.
+  outpost-firecracker-remove NAME      Remove a Firecracker VM.
   outpost-firecracker-start NAME       Start a Firecracker VM.
+  outpost-firecracker-stop NAME        Stop a Firecracker VM.
   outpost-uninstall                    Remove Outpost and its data.
   outpost-version                      Print the installed Outpost version.
 EOF

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
+source "$OUTPOST_PATH/helpers/all.sh"
+
+[ "$#" -eq 1 ] || {
+    outpost_error "Usage: outpost-firecracker-log NAME"
+    exit 2
+}
+
+readonly vm_name="$1"
+readonly log_file="$OUTPOST_DEFAULT_VM_DIR/$vm_name/firecracker.log"
+
+outpost_info "Log: $log_file"
+tail --lines=+1 --follow "$log_file"

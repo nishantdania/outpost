@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
+source "$OUTPOST_PATH/helpers/all.sh"
+
+[ "$#" -eq 1 ] || {
+    outpost_error "Usage: outpost-firecracker-stop NAME"
+    exit 2
+}
+
+readonly vm_name="$1"
+readonly vm_dir="$OUTPOST_DEFAULT_VM_DIR/$vm_name"
+readonly api_socket="$vm_dir/firecracker.socket"
+readonly pid_file="$vm_dir/firecracker.pid"
+
+if [ ! -f "$pid_file" ] || ! kill -0 "$(< "$pid_file")" 2>/dev/null; then
+    outpost_error "Firecracker is not running: $vm_name"
+    exit 1
+fi
+
+curl --silent --show-error --fail \
+    --unix-socket "$api_socket" \
+    --request PUT \
+    --header 'Content-Type: application/json' \
+    --data '{"action_type":"SendCtrlAltDel"}' \
+    http://localhost/actions
+
+outpost_info "Stopping Firecracker: $vm_name"

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
+source "$OUTPOST_PATH/helpers/all.sh"
+
+[ "$#" -eq 0 ] || {
+    outpost_error "Usage: outpost-firecracker-list"
+    exit 2
+}
+
+shopt -s nullglob
+vm_dirs=("$OUTPOST_DEFAULT_VM_DIR"/*)
+
+[ "${#vm_dirs[@]}" -gt 0 ] || {
+    outpost_info "No Firecracker VMs."
+    exit 0
+}
+
+rows=()
+for vm_dir in "${vm_dirs[@]}"; do
+    vm_name="$(basename "$vm_dir")"
+
+    if [ -f "$vm_dir/firecracker.pid" ]; then
+        pid="$(< "$vm_dir/firecracker.pid")"
+        if kill -0 "$pid" 2>/dev/null; then
+            status="running"
+        else
+            status="stopped"
+        fi
+    else
+        pid="-"
+        status="created"
+    fi
+
+    rows+=("$vm_name,$status,$pid,$vm_dir/firecracker.log")
+done
+
+printf '%s\n' "${rows[@]}" | gum table --print --columns Name,Status,PID,Log
