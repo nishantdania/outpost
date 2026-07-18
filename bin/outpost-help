@@ -11,6 +11,7 @@ Outpost commands:
   outpost-firecracker-remove NAME      Remove a Firecracker VM.
   outpost-firecracker-start NAME       Start a Firecracker VM.
   outpost-firecracker-stop NAME        Stop a Firecracker VM.
+  outpost-firecracker-ssh NAME [COMMAND]  Connect to a Firecracker VM over SSH.
   outpost-uninstall                    Remove Outpost and its data.
   outpost-version                      Print the installed Outpost version.
 EOF

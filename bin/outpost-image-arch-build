@@ -28,20 +28,27 @@ truncate --size 2G "$temporary_image_path"
 
 outpost_info "Building Arch rootfs..."
 sudo chown root:root "$rootfs_directory"
-sudo pacstrap -K "$rootfs_directory" base
+sudo pacstrap -K "$rootfs_directory" base openssh
+mkdir -p "$OUTPOST_DEFAULT_SSH_DIR"
+if [ ! -f "$OUTPOST_DEFAULT_SSH_KEY" ]; then
+    ssh-keygen -q -t ed25519 -N '' -f "$OUTPOST_DEFAULT_SSH_KEY"
+fi
+sudo install -d -m 700 "$rootfs_directory/root/.ssh"
+sudo install -m 600 "$OUTPOST_DEFAULT_SSH_KEY.pub" "$rootfs_directory/root/.ssh/authorized_keys"
 sudo install -d "$rootfs_directory/etc/systemd/network"
-sudo tee "$rootfs_directory/etc/systemd/network/20-eth0.network" >/dev/null <<'EOF'
+sudo tee "$rootfs_directory/etc/systemd/network/20-eth0.network" >/dev/null <<EOF
 [Match]
 Name=eth0
 
 [Network]
-Address=172.16.0.2/30
-Gateway=172.16.0.1
+Address=$OUTPOST_NETWORK_GUEST_IP/30
+Gateway=$OUTPOST_NETWORK_HOST_IP
 DNS=8.8.8.8
 EOF
 sudo ln -sfn /run/systemd/resolve/stub-resolv.conf "$rootfs_directory/etc/resolv.conf"
 sudo systemctl --root "$rootfs_directory" enable \
     serial-getty@ttyS0.service \
+    sshd.service \
     systemd-networkd.service \
     systemd-resolved.service
 sudo mkfs.ext4 -F -d "$rootfs_directory" "$temporary_image_path" >/dev/null
