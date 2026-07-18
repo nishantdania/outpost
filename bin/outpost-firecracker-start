@@ -45,5 +45,5 @@ firecracker_api boot-source "{\"kernel_image_path\": \"$OUTPOST_DEFAULT_IMAGE_DI
 firecracker_api drives/rootfs "{\"drive_id\": \"rootfs\", \"path_on_host\": \"$rootfs\", \"is_root_device\": true, \"is_read_only\": true}"
 firecracker_api actions '{"action_type":"InstanceStart"}'
 
-outpost_info "Started VM: $vm_name"
-tail --pid="$firecracker_pid" --lines=+1 --follow "$log_file"
+outpost_info "Started Firecracker: $vm_name"
+outpost_info "Log: $log_file"
