@@ -29,7 +29,19 @@ truncate --size 2G "$temporary_image_path"
 outpost_info "Building Arch rootfs..."
 sudo chown root:root "$rootfs_directory"
 sudo pacstrap -K "$rootfs_directory" base
-sudo systemctl --root "$rootfs_directory" enable serial-getty@ttyS0.service
+sudo install -d "$rootfs_directory/etc/systemd/network"
+sudo tee "$rootfs_directory/etc/systemd/network/20-eth0.network" >/dev/null <<'EOF'
+[Match]
+Name=eth0
+
+[Network]
+DHCP=yes
+EOF
+sudo ln -sfn /run/systemd/resolve/stub-resolv.conf "$rootfs_directory/etc/resolv.conf"
+sudo systemctl --root "$rootfs_directory" enable \
+    serial-getty@ttyS0.service \
+    systemd-networkd.service \
+    systemd-resolved.service
 sudo mkfs.ext4 -F -d "$rootfs_directory" "$temporary_image_path" >/dev/null
 
 mv "$temporary_image_path" "$image_path"
