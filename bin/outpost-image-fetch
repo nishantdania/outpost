@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
+source "$OUTPOST_PATH/helpers/all.sh"
+
+latest_key() {
+    local prefix="$1"
+
+    curl -fsSL "$OUTPOST_FIRECRACKER_ASSET_BUCKET?list-type=2&prefix=$prefix" \
+        | grep -oP '(?<=<Key>)[^<]+' \
+        | sort -V \
+        | tail -n1
+}
+
+download_asset() {
+    local key="$1" path temporary_path
+
+    path="$destination/$(basename "$key")"
+    if [ -e "$path" ]; then
+        outpost_info "Already downloaded: $path"
+        return
+    fi
+
+    outpost_info "Downloading: $(basename "$key")"
+    temporary_path="$(mktemp "$destination/.outpost-download.XXXXXX")"
+    if ! curl -fL --progress-bar -o "$temporary_path" "$OUTPOST_FIRECRACKER_ASSET_BUCKET/$key"; then
+        rm -f "$temporary_path"
+        return 1
+    fi
+    mv "$temporary_path" "$path"
+    outpost_info "Downloaded: $path"
+}
+
+[ "$#" -le 1 ] || {
+    "$OUTPOST_PATH/bin/outpost-help" >&2
+    exit 2
+}
+
+arch="$(uname -m)"
+case "$arch" in
+    x86_64|aarch64) ;;
+    *) outpost_error "Unsupported architecture: $arch"; exit 1 ;;
+esac
+
+command -v curl >/dev/null || { outpost_error "curl is required"; exit 1; }
+command -v grep >/dev/null || { outpost_error "grep is required"; exit 1; }
+
+destination="${1:-$OUTPOST_DEFAULT_IMAGE_DIR}"
+mkdir -p "$destination"
+
+# CI artifact directories are date-prefixed, so lexical order selects the latest.
+outpost_info "Finding the latest Firecracker CI release..."
+if ! release_prefix=$(curl -fsSL "$OUTPOST_FIRECRACKER_ASSET_BUCKET?list-type=2&prefix=firecracker-ci/&delimiter=/" \
+    | grep -oP '(?<=<Prefix>)firecracker-ci/[0-9]{8}-[^<]+(?=</Prefix>)' \
+    | sort \
+    | tail -n1); then
+    outpost_error "Could not query Firecracker CI artifacts"
+    exit 1
+fi
+[ -n "$release_prefix" ] || { outpost_error "Could not find a Firecracker CI artifact"; exit 1; }
+
+outpost_info "Finding $arch kernel and Ubuntu rootfs artifacts..."
+if ! kernel_key=$(latest_key "${release_prefix}${arch}/vmlinux-") \
+    || ! rootfs_key=$(latest_key "${release_prefix}${arch}/ubuntu-"); then
+    outpost_error "Could not query kernel and Ubuntu rootfs artifacts"
+    exit 1
+fi
+[ -n "$kernel_key" ] && [ -n "$rootfs_key" ] || {
+    outpost_error "Could not find kernel and Ubuntu rootfs artifacts for $arch"
+    exit 1
+}
+
+outpost_info "Fetching assets to $destination"
+download_asset "$kernel_key"
+download_asset "$rootfs_key"

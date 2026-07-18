@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+cat <<'EOF'
+Outpost commands:
+  outpost-image-fetch [destination]  Fetch Firecracker CI Ubuntu image assets.
+EOF

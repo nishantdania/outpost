@@ -1,0 +1,5 @@
+readonly OUTPOST_APP_NAME="outpost"
+readonly OUTPOST_FIRECRACKER_ASSET_BUCKET="https://s3.amazonaws.com/spec.ccfc.min"
+readonly OUTPOST_DEFAULT_DATA_HOME="${HOME}/.local/share"
+readonly OUTPOST_DATA_HOME="${XDG_DATA_HOME:-$OUTPOST_DEFAULT_DATA_HOME}"
+readonly OUTPOST_DEFAULT_IMAGE_DIR="${OUTPOST_DATA_HOME}/${OUTPOST_APP_NAME}/images"
