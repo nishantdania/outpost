@@ -35,7 +35,9 @@ sudo tee "$rootfs_directory/etc/systemd/network/20-eth0.network" >/dev/null <<'E
 Name=eth0
 
 [Network]
-DHCP=yes
+Address=172.16.0.2/30
+Gateway=172.16.0.1
+DNS=8.8.8.8
 EOF
 sudo ln -sfn /run/systemd/resolve/stub-resolv.conf "$rootfs_directory/etc/resolv.conf"
 sudo systemctl --root "$rootfs_directory" enable \

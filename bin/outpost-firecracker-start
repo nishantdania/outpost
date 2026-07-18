@@ -20,7 +20,8 @@ readonly pid_file="$vm_dir/firecracker.pid"
 readonly tap_file="$vm_dir/tap"
 readonly vm_hash="$(printf '%s' "$vm_name" | sha256sum | cut -c1-10)"
 readonly tap_name="op${vm_hash:0:8}"
-readonly guest_mac="02:${vm_hash:0:2}:${vm_hash:2:2}:${vm_hash:4:2}:${vm_hash:6:2}:${vm_hash:8:2}"
+readonly guest_mac="06:00:ac:10:00:02"
+readonly uplink="$(ip route show default | awk 'NR==1 {print $5}')"
 
 firecracker_api() {
     local resource="$1" payload="$2"
@@ -40,8 +41,16 @@ fi
 
 printf '%s\n' "$tap_name" > "$tap_file"
 sudo ip tuntap add dev "$tap_name" mode tap user "$USER"
-sudo ip link set "$tap_name" master "$OUTPOST_NETWORK_BRIDGE"
+sudo ip addr add 172.16.0.1/30 dev "$tap_name"
 sudo ip link set "$tap_name" up
+sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
+sudo nft delete table ip outpost 2>/dev/null || true
+sudo nft -f - <<EOF
+table ip outpost {
+  chain forward { type filter hook forward priority filter; policy accept; }
+  chain postrouting { type nat hook postrouting priority srcnat; ip saddr 172.16.0.2 oifname "$uplink" masquerade; }
+}
+EOF
 
 rm -f "$api_socket"
 : > "$log_file"
