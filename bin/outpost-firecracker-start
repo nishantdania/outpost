@@ -20,8 +20,8 @@ readonly pid_file="$vm_dir/firecracker.pid"
 readonly tap_file="$vm_dir/tap"
 readonly vm_hash="$(printf '%s' "$vm_name" | sha256sum | cut -c1-10)"
 readonly tap_name="op${vm_hash:0:8}"
-readonly guest_mac="06:00:ac:10:00:02"
-readonly uplink="$(ip route show default | awk 'NR==1 {print $5}')"
+readonly guest_mac="02:${vm_hash:0:2}:${vm_hash:2:2}:${vm_hash:4:2}:${vm_hash:6:2}:${vm_hash:8:2}"
+readonly guest_ip_file="$vm_dir/ip"
 
 firecracker_api() {
     local resource="$1" payload="$2"
@@ -39,18 +39,28 @@ if [ ! -e "$rootfs" ]; then
     cp --reflink=auto "$OUTPOST_DEFAULT_ARCH_ROOTFS" "$rootfs"
 fi
 
+if [ -f "$guest_ip_file" ]; then
+    readonly guest_ip="$(< "$guest_ip_file")"
+else
+    used_ips="$(find "$OUTPOST_DEFAULT_VM_DIR" -mindepth 2 -maxdepth 2 -name ip -exec cat {} + 2>/dev/null || true)"
+    guest_ip=""
+    for last_octet in $(seq 10 250); do
+        candidate_ip="${OUTPOST_NETWORK_HOST_IP%.*}.$last_octet"
+        if ! grep -Fxq "$candidate_ip" <<< "$used_ips"; then
+            guest_ip="$candidate_ip"
+            break
+        fi
+    done
+    [ -n "$guest_ip" ] || { outpost_error "No VM IP addresses remain in $OUTPOST_NETWORK_SUBNET"; exit 1; }
+    printf '%s\n' "$guest_ip" > "$guest_ip_file"
+    readonly guest_ip
+fi
+
+"$OUTPOST_PATH/bin/outpost-network-setup"
 printf '%s\n' "$tap_name" > "$tap_file"
 sudo ip tuntap add dev "$tap_name" mode tap user "$USER"
-sudo ip addr add "$OUTPOST_NETWORK_HOST_IP/30" dev "$tap_name"
+sudo ip link set "$tap_name" master "$OUTPOST_NETWORK_BRIDGE"
 sudo ip link set "$tap_name" up
-sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
-sudo nft delete table ip outpost 2>/dev/null || true
-sudo nft -f - <<EOF
-table ip outpost {
-  chain forward { type filter hook forward priority filter; policy accept; }
-  chain postrouting { type nat hook postrouting priority srcnat; ip saddr $OUTPOST_NETWORK_GUEST_IP oifname "$uplink" masquerade; }
-}
-EOF
 
 rm -f "$api_socket"
 : > "$log_file"
@@ -59,7 +69,7 @@ readonly firecracker_pid=$!
 printf '%s\n' "$firecracker_pid" > "$pid_file"
 
 firecracker_api machine-config "{\"vcpu_count\": $OUTPOST_DEFAULT_VM_VCPU_COUNT, \"mem_size_mib\": $OUTPOST_DEFAULT_VM_MEMORY_MIB}"
-firecracker_api boot-source "{\"kernel_image_path\": \"$OUTPOST_DEFAULT_IMAGE_DIR/vmlinux\", \"boot_args\": \"console=ttyS0 reboot=k panic=1 net.ifnames=0\"}"
+firecracker_api boot-source "{\"kernel_image_path\": \"$OUTPOST_DEFAULT_IMAGE_DIR/vmlinux\", \"boot_args\": \"console=ttyS0 reboot=k panic=1 net.ifnames=0 ip=$guest_ip::$OUTPOST_NETWORK_HOST_IP:$OUTPOST_NETWORK_NETMASK::eth0:off\"}"
 firecracker_api drives/rootfs "{\"drive_id\": \"rootfs\", \"path_on_host\": \"$rootfs\", \"is_root_device\": true, \"is_read_only\": false}"
 firecracker_api network-interfaces/eth0 "{\"iface_id\": \"eth0\", \"host_dev_name\": \"$tap_name\", \"guest_mac\": \"$guest_mac\"}"
 firecracker_api actions '{"action_type":"InstanceStart"}'

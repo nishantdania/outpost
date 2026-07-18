@@ -11,10 +11,20 @@ source "$OUTPOST_PATH/helpers/all.sh"
     exit 2
 }
 
+readonly vm_name="$1"
+readonly vm_dir="$OUTPOST_DEFAULT_VM_DIR/$vm_name"
+readonly guest_ip_file="$vm_dir/ip"
 shift
+
+[ -f "$guest_ip_file" ] || {
+    outpost_error "No network address found for Firecracker: $vm_name"
+    exit 1
+}
+readonly guest_ip="$(< "$guest_ip_file")"
+
 exec ssh \
     -i "$OUTPOST_DEFAULT_SSH_KEY" \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
-    "root@$OUTPOST_NETWORK_GUEST_IP" \
+    "root@$guest_ip" \
     "$@"

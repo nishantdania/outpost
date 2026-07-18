@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
+source "$OUTPOST_PATH/helpers/all.sh"
+
+readonly uplink="$(ip route show default | awk 'NR == 1 { print $5 }')"
+[ -n "$uplink" ] || { outpost_error "Could not determine the default network interface."; exit 1; }
+
+if ! ip link show "$OUTPOST_NETWORK_BRIDGE" >/dev/null 2>&1; then
+    sudo ip link add name "$OUTPOST_NETWORK_BRIDGE" type bridge
+fi
+if ! ip -4 addr show dev "$OUTPOST_NETWORK_BRIDGE" | grep -Fq "$OUTPOST_NETWORK_HOST_IP/$OUTPOST_NETWORK_PREFIX"; then
+    sudo ip addr add "$OUTPOST_NETWORK_HOST_IP/$OUTPOST_NETWORK_PREFIX" dev "$OUTPOST_NETWORK_BRIDGE"
+fi
+sudo ip link set "$OUTPOST_NETWORK_BRIDGE" up
+sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
+
+sudo nft delete table ip outpost 2>/dev/null || true
+sudo nft -f - <<EOF
+table ip outpost {
+  chain forward { type filter hook forward priority filter; policy accept; }
+  chain postrouting { type nat hook postrouting priority srcnat; ip saddr $OUTPOST_NETWORK_SUBNET oifname "$uplink" masquerade; }
+}
+EOF
