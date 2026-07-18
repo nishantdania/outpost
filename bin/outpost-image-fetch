@@ -34,7 +34,7 @@ download_asset() {
     outpost_info "Downloaded: $path"
 }
 
-[ "$#" -le 1 ] || {
+[ "$#" -eq 0 ] || {
     "$OUTPOST_PATH/bin/outpost-help" >&2
     exit 2
 }
@@ -48,7 +48,7 @@ esac
 command -v curl >/dev/null || { outpost_error "curl is required"; exit 1; }
 command -v grep >/dev/null || { outpost_error "grep is required"; exit 1; }
 
-destination="${1:-$OUTPOST_DEFAULT_IMAGE_DIR}"
+destination="$OUTPOST_DEFAULT_IMAGE_DIR"
 mkdir -p "$destination"
 
 # CI artifact directories are date-prefixed, so lexical order selects the latest.

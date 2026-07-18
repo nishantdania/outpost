@@ -5,5 +5,5 @@ set -euo pipefail
 cat <<'EOF'
 Outpost commands:
   outpost uninstall                    Remove Outpost and its data.
-  outpost-image-fetch [destination]  Fetch Firecracker CI Ubuntu image assets.
+  outpost-image-fetch                Fetch Firecracker CI Ubuntu image assets.
 EOF
