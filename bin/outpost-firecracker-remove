@@ -20,6 +20,7 @@ fi
 readonly vm_name="$1"
 readonly vm_dir="$OUTPOST_DEFAULT_VM_DIR/$vm_name"
 readonly pid_file="$vm_dir/firecracker.pid"
+readonly tap_file="$vm_dir/tap"
 
 if [ -f "$pid_file" ] && kill -0 "$(< "$pid_file")" 2>/dev/null; then
     "$OUTPOST_PATH/bin/outpost-firecracker-stop" "$vm_name"
@@ -30,5 +31,8 @@ fi
 
 "$assume_yes" || gum confirm "Remove Firecracker: $vm_name?" || exit 0
 
+if [ -f "$tap_file" ]; then
+    sudo ip link delete "$(< "$tap_file")" 2>/dev/null || true
+fi
 rm -rf "$vm_dir"
 outpost_info "Removed Firecracker: $vm_name"

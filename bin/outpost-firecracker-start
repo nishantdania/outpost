@@ -17,6 +17,10 @@ readonly rootfs="$vm_dir/rootfs.ext4"
 readonly api_socket="$vm_dir/firecracker.socket"
 readonly log_file="$vm_dir/firecracker.log"
 readonly pid_file="$vm_dir/firecracker.pid"
+readonly tap_file="$vm_dir/tap"
+readonly vm_hash="$(printf '%s' "$vm_name" | sha256sum | cut -c1-10)"
+readonly tap_name="op${vm_hash:0:8}"
+readonly guest_mac="02:${vm_hash:0:2}:${vm_hash:2:2}:${vm_hash:4:2}:${vm_hash:6:2}:${vm_hash:8:2}"
 
 firecracker_api() {
     local resource="$1" payload="$2"
@@ -34,6 +38,11 @@ if [ ! -e "$rootfs" ]; then
     cp --reflink=auto "$OUTPOST_DEFAULT_ARCH_ROOTFS" "$rootfs"
 fi
 
+printf '%s\n' "$tap_name" > "$tap_file"
+sudo ip tuntap add dev "$tap_name" mode tap user "$USER"
+sudo ip link set "$tap_name" master "$OUTPOST_NETWORK_BRIDGE"
+sudo ip link set "$tap_name" up
+
 rm -f "$api_socket"
 : > "$log_file"
 firecracker --api-sock "$api_socket" > "$log_file" 2>&1 &
@@ -43,6 +52,7 @@ printf '%s\n' "$firecracker_pid" > "$pid_file"
 firecracker_api machine-config "{\"vcpu_count\": $OUTPOST_DEFAULT_VM_VCPU_COUNT, \"mem_size_mib\": $OUTPOST_DEFAULT_VM_MEMORY_MIB}"
 firecracker_api boot-source "{\"kernel_image_path\": \"$OUTPOST_DEFAULT_IMAGE_DIR/vmlinux\", \"boot_args\": \"console=ttyS0 reboot=k panic=1 pci=off\"}"
 firecracker_api drives/rootfs "{\"drive_id\": \"rootfs\", \"path_on_host\": \"$rootfs\", \"is_root_device\": true, \"is_read_only\": false}"
+firecracker_api network-interfaces/eth0 "{\"iface_id\": \"eth0\", \"host_dev_name\": \"$tap_name\", \"guest_mac\": \"$guest_mac\"}"
 firecracker_api actions '{"action_type":"InstanceStart"}'
 
 outpost_info "Started Firecracker: $vm_name"

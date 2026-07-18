@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
+source "$OUTPOST_PATH/helpers/all.sh"
+[ "$#" -eq 0 ] || { outpost_error "Usage: outpost-network-remove"; exit 2; }
+readonly pid_file="$OUTPOST_DEFAULT_NETWORK_DIR/dnsmasq.pid"
+if [ -f "$pid_file" ] && sudo kill -0 "$(< "$pid_file")" 2>/dev/null; then
+    sudo kill "$(< "$pid_file")"
+fi
+sudo nft delete table ip outpost 2>/dev/null || true
+sudo ip link delete "$OUTPOST_NETWORK_BRIDGE" 2>/dev/null || true
+rm -rf "$OUTPOST_DEFAULT_NETWORK_DIR"
+outpost_info "Removed Outpost network"

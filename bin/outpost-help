@@ -6,6 +6,7 @@ cat <<'EOF'
 Outpost commands:
   outpost-image-arch-build             Build an Arch Linux rootfs image.
   outpost-image-fetch                  Fetch Firecracker CI Ubuntu image assets.
+  outpost-network-setup                Set up Firecracker networking.
   outpost-firecracker-list             List Firecracker VMs.
   outpost-firecracker-log NAME         Follow a Firecracker VM log.
   outpost-firecracker-remove NAME      Remove a Firecracker VM.

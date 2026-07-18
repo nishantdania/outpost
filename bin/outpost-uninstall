@@ -26,6 +26,7 @@ shopt -s nullglob
 for vm_dir in "$OUTPOST_DEFAULT_VM_DIR"/*; do
     "$OUTPOST_PATH/bin/outpost-firecracker-remove" --yes "$(basename "$vm_dir")"
 done
+"$OUTPOST_PATH/bin/outpost-network-remove"
 
 rm -rf "$OUTPOST_DEFAULT_IMAGE_DIR"
 rm -rf "$OUTPOST_DEFAULT_VM_DIR"

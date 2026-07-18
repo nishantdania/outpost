@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
+source "$OUTPOST_PATH/helpers/all.sh"
+[ "$#" -eq 0 ] || { outpost_error "Usage: outpost-network-setup"; exit 2; }
+mkdir -p "$OUTPOST_DEFAULT_NETWORK_DIR"
+uplink="$(ip route show default | awk 'NR==1 {print $5}')"
+sudo ip link show "$OUTPOST_NETWORK_BRIDGE" >/dev/null 2>&1 || sudo ip link add "$OUTPOST_NETWORK_BRIDGE" type bridge
+sudo ip addr replace "$OUTPOST_NETWORK_GATEWAY/24" dev "$OUTPOST_NETWORK_BRIDGE"
+sudo ip link set "$OUTPOST_NETWORK_BRIDGE" up
+sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
+sudo tee "$OUTPOST_DEFAULT_NETWORK_DIR/dnsmasq.conf" >/dev/null <<EOF
+interface=$OUTPOST_NETWORK_BRIDGE
+bind-interfaces
+dhcp-range=$OUTPOST_NETWORK_DHCP_RANGE,12h
+dhcp-option=option:router,$OUTPOST_NETWORK_GATEWAY
+dhcp-option=option:dns-server,$OUTPOST_NETWORK_GATEWAY
+EOF
+if [ ! -f "$OUTPOST_DEFAULT_NETWORK_DIR/dnsmasq.pid" ] || ! sudo kill -0 "$(< "$OUTPOST_DEFAULT_NETWORK_DIR/dnsmasq.pid")" 2>/dev/null; then
+    sudo dnsmasq --conf-file="$OUTPOST_DEFAULT_NETWORK_DIR/dnsmasq.conf" --pid-file="$OUTPOST_DEFAULT_NETWORK_DIR/dnsmasq.pid" --dhcp-leasefile="$OUTPOST_DEFAULT_NETWORK_DIR/dnsmasq.leases"
+fi
+sudo nft delete table ip outpost 2>/dev/null || true
+sudo nft -f - <<EOF
+table ip outpost {
+  chain forward { type filter hook forward priority filter; policy accept; }
+  chain postrouting { type nat hook postrouting priority srcnat; ip saddr $OUTPOST_NETWORK_SUBNET oifname "$uplink" masquerade; }
+}
+EOF
+outpost_info "Outpost network is ready on $OUTPOST_NETWORK_BRIDGE"
