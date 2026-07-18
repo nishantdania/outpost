@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
+source "$OUTPOST_PATH/helpers/all.sh"
+
+[ "$#" -eq 0 ] || {
+    outpost_error "Usage: outpost-image-arch-build"
+    exit 2
+}
+
+readonly rootfs_directory="$(mktemp -d)"
+readonly destination="$OUTPOST_DEFAULT_IMAGE_DIR"
+readonly image_path="$destination/arch-rootfs.ext4"
+
+mkdir -p "$destination"
+readonly temporary_image_path="$(mktemp "$destination/.outpost-arch-rootfs.XXXXXX")"
+
+cleanup() {
+    rm -f "$temporary_image_path"
+    sudo rm -rf "$rootfs_directory"
+}
+trap cleanup EXIT
+
+truncate --size 2G "$temporary_image_path"
+
+outpost_info "Building Arch rootfs..."
+sudo chown root:root "$rootfs_directory"
+sudo pacstrap -K "$rootfs_directory" base
+sudo systemctl --root "$rootfs_directory" enable serial-getty@ttyS0.service
+sudo mkfs.ext4 -F -d "$rootfs_directory" "$temporary_image_path" >/dev/null
+
+mv "$temporary_image_path" "$image_path"
+outpost_info "Built Arch rootfs: $image_path"

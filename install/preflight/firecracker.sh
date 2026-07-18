@@ -1,6 +1,6 @@
 command -v firecracker >/dev/null && return
 
-echo "Installing Firecracker..."
+gum log --level info "Installing Firecracker..."
 if ((EUID == 0)); then
     pacman -S --needed --noconfirm firecracker
 else
