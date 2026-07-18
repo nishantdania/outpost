@@ -7,10 +7,11 @@ readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
 source "$OUTPOST_PATH/helpers/all.sh"
 
 latest_key() {
-    local prefix="$1"
+    local prefix="$1" pattern="$2"
 
     curl -fsSL "$OUTPOST_FIRECRACKER_ASSET_BUCKET?list-type=2&prefix=$prefix" \
         | grep -oP '(?<=<Key>)[^<]+' \
+        | grep -P "$pattern" \
         | sort -V \
         | tail -n1
 }
@@ -63,8 +64,8 @@ fi
 [ -n "$release_prefix" ] || { outpost_error "Could not find a Firecracker CI artifact"; exit 1; }
 
 outpost_info "Finding $arch kernel and Ubuntu rootfs artifacts..."
-if ! kernel_key=$(latest_key "${release_prefix}${arch}/vmlinux-") \
-    || ! rootfs_key=$(latest_key "${release_prefix}${arch}/ubuntu-"); then
+if ! kernel_key=$(latest_key "${release_prefix}${arch}/vmlinux-" '/vmlinux-[0-9]+(\.[0-9]+)*$') \
+    || ! rootfs_key=$(latest_key "${release_prefix}${arch}/ubuntu-" '/ubuntu-[0-9]+(\.[0-9]+)*\.squashfs$'); then
     outpost_error "Could not query kernel and Ubuntu rootfs artifacts"
     exit 1
 fi
@@ -76,3 +77,6 @@ fi
 outpost_info "Fetching assets to $destination"
 download_asset "$kernel_key"
 download_asset "$rootfs_key"
+
+ln -sfn "$(basename "$kernel_key")" "$destination/vmlinux"
+ln -sfn "$(basename "$rootfs_key")" "$destination/rootfs"

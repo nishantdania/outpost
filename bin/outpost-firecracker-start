@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
+source "$OUTPOST_PATH/helpers/all.sh"
+
+[ "$#" -eq 1 ] || {
+    outpost_error "Usage: outpost-firecracker-start NAME"
+    exit 2
+}
+
+readonly vm_name="$1"
+readonly vm_dir="$OUTPOST_DEFAULT_VM_DIR/$vm_name"
+readonly rootfs="$vm_dir/rootfs.ext4"
+readonly api_socket="$vm_dir/firecracker.socket"
+readonly log_file="$vm_dir/firecracker.log"
+readonly pid_file="$vm_dir/firecracker.pid"
+
+firecracker_api() {
+    local resource="$1" payload="$2"
+
+    curl --silent --show-error --fail \
+        --unix-socket "$api_socket" \
+        --request PUT \
+        --header 'Content-Type: application/json' \
+        --data "$payload" \
+        "http://localhost/$resource"
+}
+
+mkdir -p "$vm_dir"
+if [ ! -e "$rootfs" ]; then
+    cp --reflink=auto "$OUTPOST_DEFAULT_IMAGE_DIR/rootfs" "$rootfs"
+fi
+
+rm -f "$api_socket"
+: > "$log_file"
+firecracker --api-sock "$api_socket" > "$log_file" 2>&1 &
+readonly firecracker_pid=$!
+printf '%s\n' "$firecracker_pid" > "$pid_file"
+
+firecracker_api machine-config "{\"vcpu_count\": $OUTPOST_DEFAULT_VM_VCPU_COUNT, \"mem_size_mib\": $OUTPOST_DEFAULT_VM_MEMORY_MIB}"
+firecracker_api boot-source "{\"kernel_image_path\": \"$OUTPOST_DEFAULT_IMAGE_DIR/vmlinux\", \"boot_args\": \"console=ttyS0 reboot=k panic=1 pci=off\"}"
+firecracker_api drives/rootfs "{\"drive_id\": \"rootfs\", \"path_on_host\": \"$rootfs\", \"is_root_device\": true, \"is_read_only\": true}"
+firecracker_api actions '{"action_type":"InstanceStart"}'
+
+outpost_info "Started VM: $vm_name"
+tail --pid="$firecracker_pid" --lines=+1 --follow "$log_file"
