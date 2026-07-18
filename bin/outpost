@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)"
+
+case "${1:-}" in
+    uninstall)
+        shift
+        exec "$OUTPOST_PATH/uninstall.sh" "$@"
+        ;;
+    help|-h|--help|'')
+        exec "$OUTPOST_BIN_DIR/outpost-help"
+        ;;
+    *)
+        "$OUTPOST_BIN_DIR/outpost-help" >&2
+        exit 2
+        ;;
+esac
