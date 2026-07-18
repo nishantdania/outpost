@@ -6,8 +6,14 @@ readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE
 readonly OUTPOST_PATH="${OUTPOST_PATH:-$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)}"
 source "$OUTPOST_PATH/helpers/all.sh"
 
+assume_yes=false
+if [ "${1:-}" = "--yes" ]; then
+    assume_yes=true
+    shift
+fi
+
 [ "$#" -eq 1 ] || {
-    outpost_error "Usage: outpost-firecracker-remove NAME"
+    outpost_error "Usage: outpost-firecracker-remove [--yes] NAME"
     exit 2
 }
 
@@ -16,11 +22,13 @@ readonly vm_dir="$OUTPOST_DEFAULT_VM_DIR/$vm_name"
 readonly pid_file="$vm_dir/firecracker.pid"
 
 if [ -f "$pid_file" ] && kill -0 "$(< "$pid_file")" 2>/dev/null; then
-    outpost_error "Stop Firecracker before removing it: $vm_name"
-    exit 1
+    "$OUTPOST_PATH/bin/outpost-firecracker-stop" "$vm_name"
+    while kill -0 "$(< "$pid_file")" 2>/dev/null; do
+        sleep 0.1
+    done
 fi
 
-gum confirm "Remove Firecracker: $vm_name?" || exit 0
+"$assume_yes" || gum confirm "Remove Firecracker: $vm_name?" || exit 0
 
 rm -rf "$vm_dir"
 outpost_info "Removed Firecracker: $vm_name"
