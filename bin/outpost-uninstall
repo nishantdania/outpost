@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-readonly OUTPOST_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly OUTPOST_BIN_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd)"
+readonly OUTPOST_PATH="$(cd -- "$OUTPOST_BIN_DIR/.." && pwd)"
 readonly OUTPOST_INSTALLED_PATH="${OUTPOST_INSTALLED_PATH:-$HOME/.local/share/outpost}"
 
 [ "$#" -eq 0 ] || {
