@@ -24,6 +24,19 @@ func (service *Service) start(record *Record) error {
 	} else if err != nil {
 		return err
 	}
+	info, err := os.Stat(rootfs)
+	if err != nil {
+		return err
+	}
+	const diskSize = int64(4 << 30)
+	if info.Size() < diskSize {
+		if err := os.Truncate(rootfs, diskSize); err != nil {
+			return err
+		}
+		if err := exec.Command("resize2fs", rootfs).Run(); err != nil {
+			return err
+		}
+	}
 	socket := filepath.Join(directory, "firecracker.sock")
 	_ = os.Remove(socket)
 	bootArgs := "console=ttyS0 reboot=k panic=1"
