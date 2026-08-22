@@ -26,6 +26,13 @@ func (service *Service) Create(_ context.Context, name string) (Record, error) {
 	}
 	record := Record{ID: id, Name: name, Status: "created", CreatedAt: time.Now().UTC()}
 	if service.assets != "" {
+		index, err := networkIndex(records)
+		if err != nil {
+			return Record{}, err
+		}
+		record.IP = fmt.Sprintf("172.30.0.%d", index+2)
+		record.Tap = fmt.Sprintf("outpost-tap%d", index)
+		record.MAC = fmt.Sprintf("06:00:ac:1e:00:%02x", index+2)
 		if err := service.start(&record); err != nil {
 			return Record{}, err
 		}
@@ -35,6 +42,23 @@ func (service *Service) Create(_ context.Context, name string) (Record, error) {
 		return Record{}, err
 	}
 	return record, nil
+}
+
+func networkIndex(records []Record) (int, error) {
+	for index := 0; index < 16; index++ {
+		tap := fmt.Sprintf("outpost-tap%d", index)
+		used := false
+		for _, record := range records {
+			if record.Tap == tap {
+				used = true
+				break
+			}
+		}
+		if !used {
+			return index, nil
+		}
+	}
+	return 0, fmt.Errorf("network capacity reached")
 }
 
 func uuid() (string, error) {

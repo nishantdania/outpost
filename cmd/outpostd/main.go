@@ -31,6 +31,12 @@ func main() {
 		return
 	}
 
+	path, err := config.OutpostsPath()
+	if err != nil {
+		log.Fatal(err)
+	}
+	service := outpost.NewWithRuntime(path, filepath.Join(filepath.Dir(path), "assets"))
+
 	applyUpdate := func(ctx context.Context) (update.Result, error) {
 		executable, err := os.Executable()
 		if err != nil {
@@ -54,8 +60,22 @@ func main() {
 		if err != nil {
 			return err
 		}
+		dataPath, err := config.OutpostsPath()
+		if err != nil {
+			return err
+		}
+		records, _ := service.List(context.Background())
+		for _, record := range records {
+			_, _ = service.Delete(context.Background(), record.ID)
+		}
 		go func() {
 			time.Sleep(time.Second)
+			if err := exec.Command("sudo", "-n", "/usr/local/lib/outpost/uninstall-network").Run(); err != nil {
+				log.Printf("remove VM networking: %v", err)
+			}
+			if err := os.RemoveAll(filepath.Dir(dataPath)); err != nil {
+				log.Printf("remove data: %v", err)
+			}
 			if err := exec.Command("systemctl", "--user", "disable", "outpostd.service").Run(); err != nil {
 				log.Printf("disable outpostd: %v", err)
 			}
@@ -79,11 +99,6 @@ func main() {
 		return nil
 	}
 
-	path, err := config.OutpostsPath()
-	if err != nil {
-		log.Fatal(err)
-	}
-	service := outpost.NewWithRuntime(path, filepath.Join(filepath.Dir(path), "assets"))
 	server := &http.Server{Addr: cfg.ListenAddr, Handler: daemon.New(service.Create, service.List, service.Delete, service.Start, service.Stop, version, applyUpdate, uninstall, doctor.Run)}
 	log.Printf("outpostd listening on %s", cfg.ListenAddr)
 	log.Fatal(server.ListenAndServe())

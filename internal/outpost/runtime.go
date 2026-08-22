@@ -26,7 +26,12 @@ func (service *Service) start(record *Record) error {
 	}
 	socket := filepath.Join(directory, "firecracker.sock")
 	_ = os.Remove(socket)
-	config := map[string]any{"boot-source": map[string]any{"kernel_image_path": filepath.Join(service.assets, "vmlinux"), "boot_args": "console=ttyS0 reboot=k panic=1"}, "drives": []map[string]any{{"drive_id": "rootfs", "path_on_host": rootfs, "is_root_device": true, "is_read_only": false}}, "machine-config": map[string]any{"vcpu_count": 1, "mem_size_mib": 256}}
+	bootArgs := "console=ttyS0 reboot=k panic=1"
+	config := map[string]any{"boot-source": map[string]any{"kernel_image_path": filepath.Join(service.assets, "vmlinux"), "boot_args": bootArgs}, "drives": []map[string]any{{"drive_id": "rootfs", "path_on_host": rootfs, "is_root_device": true, "is_read_only": false}}, "machine-config": map[string]any{"vcpu_count": 1, "mem_size_mib": 256}}
+	if record.Tap != "" {
+		config["network-interfaces"] = []map[string]any{{"iface_id": "eth0", "host_dev_name": record.Tap, "guest_mac": record.MAC}}
+		config["boot-source"].(map[string]any)["boot_args"] = bootArgs + " ip=" + record.IP + "::172.30.0.1:255.255.255.0::eth0:off nameserver=1.1.1.1"
+	}
 	data, err := json.Marshal(config)
 	if err != nil {
 		return err

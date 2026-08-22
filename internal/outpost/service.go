@@ -14,6 +14,9 @@ type Record struct {
 	Status    string    `json:"status"`
 	PID       int       `json:"pid,omitempty"`
 	Socket    string    `json:"socket,omitempty"`
+	IP        string    `json:"ip,omitempty"`
+	Tap       string    `json:"tap,omitempty"`
+	MAC       string    `json:"mac,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

@@ -68,6 +68,15 @@ func Run(ctx context.Context, firecrackerVersion string) error {
 	if err := command(ctx, "sudo", "unsquashfs", "-d", root, squashfs); err != nil {
 		return err
 	}
+	key := filepath.Join(filepath.Dir(assets), "id_ed25519")
+	if _, err := os.Stat(key); os.IsNotExist(err) {
+		if err := command(ctx, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key); err != nil {
+			return err
+		}
+	}
+	if err := command(ctx, "sudo", "install", "-D", "-m", "600", key+".pub", filepath.Join(root, "root", ".ssh", "authorized_keys")); err != nil {
+		return err
+	}
 	ext4 := filepath.Join(assets, "rootfs.ext4")
 	if err := command(ctx, "sudo", "truncate", "-s", "1G", ext4); err != nil {
 		return err
@@ -76,6 +85,10 @@ func Run(ctx context.Context, firecrackerVersion string) error {
 		return err
 	}
 	if err := command(ctx, "sudo", "chown", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), ext4); err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stdout, "Configuring VM networking…")
+	if err := configureNetwork(ctx, temporary); err != nil {
 		return err
 	}
 	fmt.Fprintln(os.Stdout, "Writing asset manifest…")

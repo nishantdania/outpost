@@ -15,6 +15,7 @@ Commands:
   list      List Outposts
   start     Start an Outpost
   stop      Stop an Outpost
+  ssh       Connect to an Outpost
   delete    Delete an Outpost
   setup     Prepare a server for Firecracker
   doctor    Check server readiness
@@ -41,6 +42,8 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 		return run(lifecycle(ctx, args[1], "start", stdout), "start", stderr)
 	case len(args) == 2 && args[0] == "stop":
 		return run(lifecycle(ctx, args[1], "stop", stdout), "stop", stderr)
+	case len(args) == 2 && args[0] == "ssh":
+		return run(sshOutpost(ctx, args[1]), "ssh", stderr)
 	case len(args) == 2 && args[0] == "delete":
 		return run(deleteOutpost(ctx, args[1], stdout), "delete", stderr)
 	case len(args) == 1 && args[0] == "setup":
