@@ -77,6 +77,16 @@ func Run(ctx context.Context, firecrackerVersion string) error {
 	if err := command(ctx, "sudo", "install", "-D", "-m", "600", key+".pub", filepath.Join(root, "root", ".ssh", "authorized_keys")); err != nil {
 		return err
 	}
+	resolv := filepath.Join(temporary, "resolv.conf")
+	if err := os.WriteFile(resolv, []byte("nameserver 1.1.1.1\nnameserver 8.8.8.8\n"), 0o644); err != nil {
+		return err
+	}
+	if err := command(ctx, "sudo", "rm", "-f", filepath.Join(root, "etc", "resolv.conf")); err != nil {
+		return err
+	}
+	if err := command(ctx, "sudo", "install", "-m", "644", resolv, filepath.Join(root, "etc", "resolv.conf")); err != nil {
+		return err
+	}
 	ext4 := filepath.Join(assets, "rootfs.ext4")
 	if err := command(ctx, "sudo", "truncate", "-s", "1G", ext4); err != nil {
 		return err
