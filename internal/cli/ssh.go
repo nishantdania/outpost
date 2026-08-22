@@ -12,30 +12,33 @@ import (
 	"github.com/nishantdania/outpost/internal/outpost"
 )
 
-func sshOutpost(ctx context.Context, id string) error {
+func findOutpost(ctx context.Context, identifier string) (outpost.Record, error) {
 	response, err := request(ctx, http.MethodGet, "/outposts")
 	if err != nil {
-		return err
+		return outpost.Record{}, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("daemon returned %s", response.Status)
+		return outpost.Record{}, fmt.Errorf("daemon returned %s", response.Status)
 	}
 	var body struct {
 		Outposts []outpost.Record `json:"outposts"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
-		return err
+		return outpost.Record{}, err
 	}
-	var found outpost.Record
 	for _, record := range body.Outposts {
-		if record.ID == id || record.Name == id {
-			found = record
-			break
+		if record.ID == identifier || record.Name == identifier {
+			return record, nil
 		}
 	}
-	if found.ID == "" {
-		return fmt.Errorf("outpost not found")
+	return outpost.Record{}, fmt.Errorf("outpost not found")
+}
+
+func sshOutpost(ctx context.Context, identifier string) error {
+	found, err := findOutpost(ctx, identifier)
+	if err != nil {
+		return err
 	}
 	if found.Status != "running" || found.IP == "" {
 		return fmt.Errorf("outpost is not reachable")
