@@ -60,6 +60,7 @@ Description=Outpost daemon
 
 [Service]
 ExecStart=$install_dir/outpostd
+KillMode=process
 Restart=on-failure
 RestartSec=2
 

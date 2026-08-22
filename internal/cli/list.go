@@ -22,13 +22,14 @@ func list(ctx context.Context, stdout io.Writer) error {
 			ID     string `json:"id"`
 			Name   string `json:"name"`
 			Status string `json:"status"`
+			IP     string `json:"ip"`
 		} `json:"outposts"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		return err
 	}
 	for _, record := range body.Outposts {
-		fmt.Fprintf(stdout, "%s\t%s\t%s\n", record.ID, record.Name, record.Status)
+		fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\n", record.ID, record.Name, record.Status, record.IP)
 	}
 	return nil
 }

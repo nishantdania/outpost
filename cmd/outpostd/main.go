@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/nishantdania/outpost/internal/config"
@@ -36,6 +37,10 @@ func main() {
 		log.Fatal(err)
 	}
 	service := outpost.NewWithRuntime(path, filepath.Join(filepath.Dir(path), "assets"))
+	ensureServiceUnit()
+	if _, err := service.List(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 
 	applyUpdate := func(ctx context.Context) (update.Result, error) {
 		executable, err := os.Executable()
@@ -102,4 +107,23 @@ func main() {
 	server := &http.Server{Addr: cfg.ListenAddr, Handler: daemon.New(service.Create, service.List, service.Delete, service.Start, service.Stop, version, applyUpdate, uninstall, doctor.Run)}
 	log.Printf("outpostd listening on %s", cfg.ListenAddr)
 	log.Fatal(server.ListenAndServe())
+}
+
+func ensureServiceUnit() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	path := filepath.Join(home, ".config", "systemd", "user", "outpostd.service")
+	data, err := os.ReadFile(path)
+	if err != nil || strings.Contains(string(data), "KillMode=") {
+		return
+	}
+	updated := strings.Replace(string(data), "[Service]\n", "[Service]\nKillMode=process\n", 1)
+	if updated == string(data) {
+		return
+	}
+	if os.WriteFile(path, []byte(updated), 0o644) == nil {
+		_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+	}
 }
