@@ -33,7 +33,7 @@ func copyArgs(args []string) (string, string, os.FileMode, error) {
 		values = append(values, args[index])
 	}
 	if len(values) != 2 {
-		return "", "", 0, fmt.Errorf("usage: outpost cp [--mode MODE] <source> <outpost>:<destination>")
+		return "", "", 0, fmt.Errorf("usage: outpost copy [--mode MODE] <source> <outpost>:<destination>")
 	}
 	return values[0], values[1], mode, nil
 }

@@ -12,12 +12,12 @@ const helpText = `Usage:
 
 Commands:
   create    Create an Outpost
-  list      List Outposts
+  list      List Outposts (alias: ls)
   start     Start an Outpost
   stop      Stop an Outpost
   ssh       Connect to an Outpost
   exec      Run a bash command in an Outpost
-  cp        Copy a file into an Outpost
+  copy      Copy a file into an Outpost (alias: cp)
   delete    Delete an Outpost
   setup     Prepare a server for Firecracker
   doctor    Check server readiness
@@ -44,7 +44,7 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 			}
 		}
 		return run(create(ctx, name, stdout), "create", stderr)
-	case len(args) == 1 && args[0] == "list":
+	case len(args) == 1 && (args[0] == "list" || args[0] == "ls"):
 		return run(list(ctx, stdout), "list", stderr)
 	case len(args) == 2 && args[0] == "start":
 		return run(lifecycle(ctx, args[1], "start", stdout), "start", stderr)
@@ -56,12 +56,12 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 		return runExec(execOutpost(ctx, args[2], strings.Join(args[3:], " "), true), stderr)
 	case len(args) >= 3 && args[0] == "exec":
 		return runExec(execOutpost(ctx, args[1], strings.Join(args[2:], " "), false), stderr)
-	case len(args) >= 3 && args[0] == "cp":
+	case len(args) >= 3 && (args[0] == "copy" || args[0] == "cp"):
 		source, target, mode, err := copyArgs(args[1:])
 		if err != nil {
-			return run(err, "cp", stderr)
+			return run(err, "copy", stderr)
 		}
-		return run(copyToOutpost(ctx, source, target, mode, stdout), "cp", stderr)
+		return run(copyToOutpost(ctx, source, target, mode, stdout), "copy", stderr)
 	case len(args) == 2 && args[0] == "delete":
 		return run(deleteOutpost(ctx, args[1], stdout), "delete", stderr)
 	case len(args) == 1 && args[0] == "setup":
@@ -116,18 +116,25 @@ func helpRequested(args []string) bool {
 }
 
 func printHelp(args []string, stdout io.Writer) int {
+	command := args[0]
+	if command == "cp" {
+		command = "copy"
+	}
+	if command == "ls" {
+		command = "list"
+	}
 	type help struct {
 		usage       string
 		description string
 	}
 	commands := map[string]help{
 		"create":    {"outpost create [name]", "Create and start a new Outpost."},
-		"list":      {"outpost list", "List Outposts and their runtime status."},
+		"list":      {"outpost list", "List Outposts and their runtime status. Alias: ls."},
 		"start":     {"outpost start <id>", "Start a stopped Outpost."},
 		"stop":      {"outpost stop <id>", "Stop an Outpost without deleting its disk."},
 		"ssh":       {"outpost ssh <id|name>", "Open an interactive SSH session to an Outpost."},
 		"exec":      {"outpost exec [-i] <id|name> <command>", "Run a Bash command in an Outpost; -i forwards stdin."},
-		"cp":        {"outpost cp [--mode MODE] <source> <id|name>:<destination>", "Copy a local, stdin, or host file into an Outpost."},
+		"copy":      {"outpost copy [--mode MODE] <source> <id|name>:<destination>", "Copy a local, stdin, or host file into an Outpost. Alias: cp."},
 		"delete":    {"outpost delete <id|name>", "Stop and permanently delete an Outpost."},
 		"setup":     {"outpost setup", "Prepare the server, VM assets, networking, and SSH access."},
 		"doctor":    {"outpost doctor", "Check whether the server is ready to run Outposts."},
@@ -135,7 +142,7 @@ func printHelp(args []string, stdout io.Writer) int {
 		"uninstall": {"outpost uninstall [local|server]", "Remove Outpost and its managed resources."},
 		"version":   {"outpost version [local|server]", "Show local and server Outpost versions."},
 	}
-	if value, ok := commands[args[0]]; ok {
+	if value, ok := commands[command]; ok {
 		fmt.Fprintf(stdout, "Usage: %s\n\n%s\n", value.usage, value.description)
 	} else {
 		fmt.Fprintf(stdout, "No help available for %s.\n", args[0])

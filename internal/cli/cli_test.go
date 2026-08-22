@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +29,18 @@ func TestRunCommandHelpDoesNotRunCommand(t *testing.T) {
 	}
 	if got := stdout.String(); got != "Usage: outpost create [name]\n\nCreate and start a new Outpost.\n" || stderr.Len() != 0 {
 		t.Fatalf("output = stdout %q, stderr %q", got, stderr.String())
+	}
+}
+
+func TestRunAliasHelpUsesCanonicalCommand(t *testing.T) {
+	for _, test := range []struct{ alias, usage string }{{"cp", "Usage: outpost copy"}, {"ls", "Usage: outpost list"}} {
+		var stdout, stderr bytes.Buffer
+		if code := Run(context.Background(), []string{test.alias, "--help"}, "v0.0.2", &stdout, &stderr); code != 0 {
+			t.Fatalf("Run(%s) code = %d", test.alias, code)
+		}
+		if !strings.HasPrefix(stdout.String(), test.usage) || stderr.Len() != 0 {
+			t.Fatalf("Run(%s) output = stdout %q, stderr %q", test.alias, stdout.String(), stderr.String())
+		}
 	}
 }
 
