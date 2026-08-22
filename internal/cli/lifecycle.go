@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/nishantdania/outpost/internal/outpost"
 )
 
-func lifecycle(ctx context.Context, id, action string, stdout io.Writer) error {
-	response, err := request(ctx, http.MethodPost, "/outposts/"+id+"/"+action)
+func lifecycle(ctx context.Context, identifier, action string, stdout io.Writer) error {
+	response, err := request(ctx, http.MethodPost, "/outposts/"+url.PathEscape(identifier)+"/"+action)
 	if err != nil {
 		return err
 	}

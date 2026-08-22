@@ -164,8 +164,8 @@ func printHelp(args []string, stdout io.Writer) int {
 	commands := map[string]help{
 		"create":    {"outpost create [name] [--cpus N] [--memory SIZE] [--disk SIZE]", "Create and start a new Outpost. Defaults: 2 vCPU, 4 GiB RAM, 8 GiB disk.", []string{"outpost create dev", "outpost create build --cpus 4 --memory 8G --disk 32G"}},
 		"list":      {"outpost list", "List Outposts and their runtime status. Alias: ls.", []string{"outpost list", "outpost ls"}},
-		"start":     {"outpost start <id>", "Start a stopped Outpost.", []string{"outpost start <id>"}},
-		"stop":      {"outpost stop <id>", "Stop an Outpost without deleting its disk.", []string{"outpost stop <id>"}},
+		"start":     {"outpost start <id|name>", "Start a stopped Outpost by ID or name.", []string{"outpost start dev"}},
+		"stop":      {"outpost stop <id|name>", "Stop an Outpost by ID or name without deleting its disk.", []string{"outpost stop dev"}},
 		"ssh":       {"outpost ssh <id|name>", "Open an interactive SSH session to an Outpost.", []string{"outpost ssh dev"}},
 		"exec":      {"outpost exec [-i] <id|name> <command>", "Run a Bash command in an Outpost; -i forwards stdin.", []string{"outpost exec dev 'uname -a'", "printf 'hello' | outpost exec -i dev 'cat'"}},
 		"copy":      {"outpost copy [--mode MODE] <source> <id|name>:<destination>", "Copy a local, stdin, or host file into an Outpost. Alias: cp.", []string{"outpost copy ./file dev:/root/file", "outpost copy --mode 600 host:~/.config/app dev:/root/.config/app"}},

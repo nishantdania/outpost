@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (service *Service) Start(_ context.Context, id string) (Record, error) {
+func (service *Service) Start(_ context.Context, identifier string) (Record, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 	records, err := service.load()
@@ -13,7 +13,7 @@ func (service *Service) Start(_ context.Context, id string) (Record, error) {
 		return Record{}, err
 	}
 	for index := range records {
-		if records[index].ID != id {
+		if records[index].ID != identifier && records[index].Name != identifier {
 			continue
 		}
 		if records[index].Status == "running" && alive(records[index].PID) {
@@ -32,7 +32,7 @@ func (service *Service) Start(_ context.Context, id string) (Record, error) {
 	return Record{}, fmt.Errorf("outpost not found")
 }
 
-func (service *Service) Stop(_ context.Context, id string) (Record, error) {
+func (service *Service) Stop(_ context.Context, identifier string) (Record, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 	records, err := service.load()
@@ -40,7 +40,7 @@ func (service *Service) Stop(_ context.Context, id string) (Record, error) {
 		return Record{}, err
 	}
 	for index := range records {
-		if records[index].ID != id {
+		if records[index].ID != identifier && records[index].Name != identifier {
 			continue
 		}
 		service.stopProcess(records[index])
