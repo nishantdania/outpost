@@ -46,8 +46,10 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 		return run(lifecycle(ctx, args[1], "stop", stdout), "stop", stderr)
 	case len(args) == 2 && args[0] == "ssh":
 		return run(sshOutpost(ctx, args[1]), "ssh", stderr)
+	case len(args) >= 4 && args[0] == "exec" && (args[1] == "-i" || args[1] == "--interactive"):
+		return runExec(execOutpost(ctx, args[2], strings.Join(args[3:], " "), true), stderr)
 	case len(args) >= 3 && args[0] == "exec":
-		return runExec(execOutpost(ctx, args[1], strings.Join(args[2:], " ")), stderr)
+		return runExec(execOutpost(ctx, args[1], strings.Join(args[2:], " "), false), stderr)
 	case len(args) >= 3 && args[0] == "cp":
 		source, target, mode, err := copyArgs(args[1:])
 		if err != nil {
