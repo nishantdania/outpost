@@ -42,15 +42,12 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 	case len(args) == 0 || isHelp(args):
 		fmt.Fprint(stdout, helpText)
 		return 0
-	case (len(args) == 1 || len(args) == 2) && args[0] == "create":
-		name := ""
-		if len(args) == 2 {
-			name = args[1]
-			if strings.HasPrefix(name, "-") {
-				return run(fmt.Errorf("invalid name %q", name), "create", stderr)
-			}
+	case len(args) >= 1 && args[0] == "create":
+		options, err := parseCreateArgs(args[1:])
+		if err != nil {
+			return run(err, "create", stderr)
 		}
-		return run(create(ctx, name, stdout), "create", stderr)
+		return run(create(ctx, options, stdout), "create", stderr)
 	case len(args) == 1 && (args[0] == "list" || args[0] == "ls"):
 		return run(list(ctx, stdout), "list", stderr)
 	case len(args) == 2 && args[0] == "start":
@@ -165,7 +162,7 @@ func printHelp(args []string, stdout io.Writer) int {
 		examples    []string
 	}
 	commands := map[string]help{
-		"create":    {"outpost create [name]", "Create and start a new Outpost.", []string{"outpost create dev"}},
+		"create":    {"outpost create [name] [--cpus N] [--memory SIZE] [--disk SIZE]", "Create and start a new Outpost. Defaults: 2 vCPU, 4 GiB RAM, 8 GiB disk.", []string{"outpost create dev", "outpost create build --cpus 4 --memory 8G --disk 32G"}},
 		"list":      {"outpost list", "List Outposts and their runtime status. Alias: ls.", []string{"outpost list", "outpost ls"}},
 		"start":     {"outpost start <id>", "Start a stopped Outpost.", []string{"outpost start <id>"}},
 		"stop":      {"outpost stop <id>", "Stop an Outpost without deleting its disk.", []string{"outpost stop <id>"}},

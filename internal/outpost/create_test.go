@@ -6,16 +6,34 @@ import (
 	"testing"
 )
 
-func TestCreateAndList(t *testing.T) {
+func TestCreateResources(t *testing.T) {
 	service := New(filepath.Join(t.TempDir(), "outposts.json"))
-	record, err := service.Create(context.Background(), "test")
+	record, err := service.Create(context.Background(), "build", Resources{VCPUs: 4, MemoryMiB: 8192, DiskGiB: 32})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if record.Name != "test" || record.ID == "" {
+	if record.VCPUs != 4 || record.MemoryMiB != 8192 || record.DiskGiB != 32 {
 		t.Fatalf("record = %#v", record)
 	}
-	if _, err := service.Create(context.Background(), "test"); err == nil {
+}
+
+func TestCreateRejectsInvalidResources(t *testing.T) {
+	service := New(filepath.Join(t.TempDir(), "outposts.json"))
+	if _, err := service.Create(context.Background(), "bad", Resources{VCPUs: 33}); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestCreateAndList(t *testing.T) {
+	service := New(filepath.Join(t.TempDir(), "outposts.json"))
+	record, err := service.Create(context.Background(), "test", Resources{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Name != "test" || record.ID == "" || record.VCPUs != 2 || record.MemoryMiB != 4096 || record.DiskGiB != 8 {
+		t.Fatalf("record = %#v", record)
+	}
+	if _, err := service.Create(context.Background(), "test", Resources{}); err == nil {
 		t.Fatal("expected duplicate name error")
 	}
 	records, err := service.List(context.Background())

@@ -25,8 +25,10 @@ func (service *Service) start(record *Record) error {
 		return err
 	}
 	diskMarker := filepath.Join(directory, "disk-size")
-	if _, err := os.Stat(diskMarker); os.IsNotExist(err) {
-		if err := os.Truncate(rootfs, 4<<30); err != nil {
+	diskSize := fmt.Sprintf("%dG\n", record.DiskGiB)
+	marker, err := os.ReadFile(diskMarker)
+	if os.IsNotExist(err) || string(marker) != diskSize {
+		if err := os.Truncate(rootfs, int64(record.DiskGiB)<<30); err != nil {
 			return err
 		}
 		if err := exec.Command("sh", "-c", "e2fsck -fy \"$1\"; code=$?; [ \"$code\" -le 1 ]", "sh", rootfs).Run(); err != nil {
@@ -35,7 +37,7 @@ func (service *Service) start(record *Record) error {
 		if err := exec.Command("resize2fs", rootfs).Run(); err != nil {
 			return err
 		}
-		if err := os.WriteFile(diskMarker, []byte("4G\n"), 0o600); err != nil {
+		if err := os.WriteFile(diskMarker, []byte(diskSize), 0o600); err != nil {
 			return err
 		}
 	} else if err != nil {
@@ -44,7 +46,7 @@ func (service *Service) start(record *Record) error {
 	socket := filepath.Join(directory, "firecracker.sock")
 	_ = os.Remove(socket)
 	bootArgs := "console=ttyS0 reboot=k panic=1"
-	config := map[string]any{"boot-source": map[string]any{"kernel_image_path": filepath.Join(service.assets, "vmlinux"), "boot_args": bootArgs}, "drives": []map[string]any{{"drive_id": "rootfs", "path_on_host": rootfs, "is_root_device": true, "is_read_only": false}}, "machine-config": map[string]any{"vcpu_count": 1, "mem_size_mib": 256}}
+	config := map[string]any{"boot-source": map[string]any{"kernel_image_path": filepath.Join(service.assets, "vmlinux"), "boot_args": bootArgs}, "drives": []map[string]any{{"drive_id": "rootfs", "path_on_host": rootfs, "is_root_device": true, "is_read_only": false}}, "machine-config": map[string]any{"vcpu_count": record.VCPUs, "mem_size_mib": record.MemoryMiB}}
 	if record.Tap != "" {
 		config["network-interfaces"] = []map[string]any{{"iface_id": "eth0", "host_dev_name": record.Tap, "guest_mac": record.MAC}}
 		config["boot-source"].(map[string]any)["boot_args"] = bootArgs + " ip=" + record.IP + "::172.30.0.1:255.255.255.0::eth0:off nameserver=1.1.1.1"

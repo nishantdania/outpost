@@ -8,15 +8,22 @@ import (
 	"time"
 )
 
+type Resources struct {
+	VCPUs     int `json:"vcpus"`
+	MemoryMiB int `json:"memory_mib"`
+	DiskGiB   int `json:"disk_gib"`
+}
+
 type Record struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	PID       int       `json:"pid,omitempty"`
-	Socket    string    `json:"socket,omitempty"`
-	IP        string    `json:"ip,omitempty"`
-	Tap       string    `json:"tap,omitempty"`
-	MAC       string    `json:"mac,omitempty"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	PID    int    `json:"pid,omitempty"`
+	Socket string `json:"socket,omitempty"`
+	IP     string `json:"ip,omitempty"`
+	Tap    string `json:"tap,omitempty"`
+	MAC    string `json:"mac,omitempty"`
+	Resources
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -42,7 +49,23 @@ func (service *Service) load() ([]Record, error) {
 	if err := json.NewDecoder(file).Decode(&records); err != nil {
 		return nil, err
 	}
+	for index := range records {
+		records[index].Resources = defaultResources(records[index].Resources)
+	}
 	return records, nil
+}
+
+func defaultResources(resources Resources) Resources {
+	if resources.VCPUs == 0 {
+		resources.VCPUs = 2
+	}
+	if resources.MemoryMiB == 0 {
+		resources.MemoryMiB = 4096
+	}
+	if resources.DiskGiB == 0 {
+		resources.DiskGiB = 8
+	}
+	return resources
 }
 
 func (service *Service) save(records []Record) error {

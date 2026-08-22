@@ -10,7 +10,7 @@ import (
 	"github.com/nishantdania/outpost/internal/update"
 )
 
-type CreateFunc func(context.Context, string) (outpost.Record, error)
+type CreateFunc func(context.Context, string, outpost.Resources) (outpost.Record, error)
 type ListFunc func(context.Context) ([]outpost.Record, error)
 type DeleteFunc func(context.Context, string) (bool, error)
 type LifecycleFunc func(context.Context, string) (outpost.Record, error)
@@ -36,12 +36,13 @@ func createHandler(create CreateFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Name string `json:"name"`
+			outpost.Resources
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err.Error() != "EOF" {
 			http.Error(w, "invalid request", http.StatusBadRequest)
 			return
 		}
-		record, err := create(r.Context(), body.Name)
+		record, err := create(r.Context(), body.Name, body.Resources)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

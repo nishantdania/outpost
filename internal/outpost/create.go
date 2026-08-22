@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func (service *Service) Create(_ context.Context, name string) (Record, error) {
+func (service *Service) Create(_ context.Context, name string, resources Resources) (Record, error) {
 	service.mu.Lock()
 	defer service.mu.Unlock()
 	records, err := service.load()
@@ -21,6 +21,16 @@ func (service *Service) Create(_ context.Context, name string) (Record, error) {
 		return Record{}, err
 	}
 	name = strings.TrimSpace(name)
+	resources = defaultResources(resources)
+	if resources.VCPUs < 1 || resources.VCPUs > 32 {
+		return Record{}, fmt.Errorf("cpus must be between 1 and 32")
+	}
+	if resources.MemoryMiB < 128 || resources.MemoryMiB > 131072 {
+		return Record{}, fmt.Errorf("memory must be between 128 MiB and 128 GiB")
+	}
+	if resources.DiskGiB < 1 || resources.DiskGiB > 1024 {
+		return Record{}, fmt.Errorf("disk must be between 1 and 1024 GiB")
+	}
 	if name == "" {
 		name = id
 	}
@@ -29,7 +39,7 @@ func (service *Service) Create(_ context.Context, name string) (Record, error) {
 			return Record{}, fmt.Errorf("outpost name already exists")
 		}
 	}
-	record := Record{ID: id, Name: name, Status: "created", CreatedAt: time.Now().UTC()}
+	record := Record{ID: id, Name: name, Status: "created", Resources: resources, CreatedAt: time.Now().UTC()}
 	if service.assets != "" {
 		index, err := networkIndex(records)
 		if err != nil {

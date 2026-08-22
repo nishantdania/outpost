@@ -72,6 +72,7 @@ outpost doctor
 
 ```bash
 outpost create dev
+outpost create build --cpus 4 --memory 8G --disk 32G
 outpost list
 outpost ssh dev
 outpost exec dev 'uname -a'

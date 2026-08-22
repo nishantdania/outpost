@@ -42,7 +42,7 @@ func TestRunCommandHelpDoesNotRunCommand(t *testing.T) {
 	if code := Run(context.Background(), []string{"create", "--help"}, "v0.0.2", &stdout, &stderr); code != 0 {
 		t.Fatalf("Run() code = %d", code)
 	}
-	if got := stdout.String(); got != "Usage: outpost create [name]\n\nCreate and start a new Outpost.\n\nExamples:\n  outpost create dev\n" || stderr.Len() != 0 {
+	if got := stdout.String(); got != "Usage: outpost create [name] [--cpus N] [--memory SIZE] [--disk SIZE]\n\nCreate and start a new Outpost. Defaults: 2 vCPU, 4 GiB RAM, 8 GiB disk.\n\nExamples:\n  outpost create dev\n  outpost create build --cpus 4 --memory 8G --disk 32G\n" || stderr.Len() != 0 {
 		t.Fatalf("output = stdout %q, stderr %q", got, stderr.String())
 	}
 }
@@ -56,6 +56,16 @@ func TestRunAliasHelpUsesCanonicalCommand(t *testing.T) {
 		if !strings.HasPrefix(stdout.String(), test.usage) || stderr.Len() != 0 {
 			t.Fatalf("Run(%s) output = stdout %q, stderr %q", test.alias, stdout.String(), stderr.String())
 		}
+	}
+}
+
+func TestParseCreateResources(t *testing.T) {
+	options, err := parseCreateArgs([]string{"build", "--cpus", "4", "--memory", "8G", "--disk", "32G"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Name != "build" || options.VCPUs != 4 || options.MemoryMiB != 8192 || options.DiskGiB != 32 {
+		t.Fatalf("options = %#v", options)
 	}
 }
 
@@ -75,7 +85,7 @@ func TestRunCreate(t *testing.T) {
 			t.Errorf("request = %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"id":"id","name":"name","status":"created"}`)
+		_, _ = io.WriteString(w, `{"id":"id","name":"name","status":"created","vcpus":2,"memory_mib":4096,"disk_gib":8}`)
 	}))
 	defer server.Close()
 
@@ -85,8 +95,8 @@ func TestRunCreate(t *testing.T) {
 	if code := Run(context.Background(), []string{"create"}, "v0.0.2", &stdout, &stderr); code != 0 {
 		t.Fatalf("Run() code = %d, stderr = %s", code, stderr.String())
 	}
-	if got := stdout.String(); got != "Created name (id)\n" {
-		t.Errorf("stdout = %q, want %q", got, "Created name (id)\n")
+	if got := stdout.String(); got != "Created name (id): 2 vCPU, 4096 MiB RAM, 8 GiB disk\n" {
+		t.Errorf("stdout = %q", got)
 	}
 }
 
