@@ -126,24 +126,31 @@ func printHelp(args []string, stdout io.Writer) int {
 	type help struct {
 		usage       string
 		description string
+		examples    []string
 	}
 	commands := map[string]help{
-		"create":    {"outpost create [name]", "Create and start a new Outpost."},
-		"list":      {"outpost list", "List Outposts and their runtime status. Alias: ls."},
-		"start":     {"outpost start <id>", "Start a stopped Outpost."},
-		"stop":      {"outpost stop <id>", "Stop an Outpost without deleting its disk."},
-		"ssh":       {"outpost ssh <id|name>", "Open an interactive SSH session to an Outpost."},
-		"exec":      {"outpost exec [-i] <id|name> <command>", "Run a Bash command in an Outpost; -i forwards stdin."},
-		"copy":      {"outpost copy [--mode MODE] <source> <id|name>:<destination>", "Copy a local, stdin, or host file into an Outpost. Alias: cp."},
-		"delete":    {"outpost delete <id|name>", "Stop and permanently delete an Outpost."},
-		"setup":     {"outpost setup", "Prepare the server, VM assets, networking, and SSH access."},
-		"doctor":    {"outpost doctor", "Check whether the server is ready to run Outposts."},
-		"update":    {"outpost update [local|server]", "Update the local CLI, server daemon, or both."},
-		"uninstall": {"outpost uninstall [local|server]", "Remove Outpost and its managed resources."},
-		"version":   {"outpost version [local|server]", "Show local and server Outpost versions."},
+		"create":    {"outpost create [name]", "Create and start a new Outpost.", []string{"outpost create dev"}},
+		"list":      {"outpost list", "List Outposts and their runtime status. Alias: ls.", []string{"outpost list", "outpost ls"}},
+		"start":     {"outpost start <id>", "Start a stopped Outpost.", []string{"outpost start <id>"}},
+		"stop":      {"outpost stop <id>", "Stop an Outpost without deleting its disk.", []string{"outpost stop <id>"}},
+		"ssh":       {"outpost ssh <id|name>", "Open an interactive SSH session to an Outpost.", []string{"outpost ssh dev"}},
+		"exec":      {"outpost exec [-i] <id|name> <command>", "Run a Bash command in an Outpost; -i forwards stdin.", []string{"outpost exec dev 'uname -a'", "printf 'hello' | outpost exec -i dev 'cat'"}},
+		"copy":      {"outpost copy [--mode MODE] <source> <id|name>:<destination>", "Copy a local, stdin, or host file into an Outpost. Alias: cp.", []string{"outpost copy ./file dev:/root/file", "outpost copy --mode 600 host:~/.config/app dev:/root/.config/app"}},
+		"delete":    {"outpost delete <id|name>", "Stop and permanently delete an Outpost.", []string{"outpost delete dev"}},
+		"setup":     {"outpost setup", "Prepare the server, VM assets, networking, and SSH access.", nil},
+		"doctor":    {"outpost doctor", "Check whether the server is ready to run Outposts.", nil},
+		"update":    {"outpost update [local|server]", "Update the local CLI, server daemon, or both.", []string{"outpost update", "outpost update server"}},
+		"uninstall": {"outpost uninstall [local|server]", "Remove Outpost and its managed resources.", []string{"outpost uninstall server"}},
+		"version":   {"outpost version [local|server]", "Show local and server Outpost versions.", []string{"outpost version", "outpost version server"}},
 	}
 	if value, ok := commands[command]; ok {
 		fmt.Fprintf(stdout, "Usage: %s\n\n%s\n", value.usage, value.description)
+		if len(value.examples) > 0 {
+			fmt.Fprintln(stdout, "\nExamples:")
+			for _, example := range value.examples {
+				fmt.Fprintf(stdout, "  %s\n", example)
+			}
+		}
 	} else {
 		fmt.Fprintf(stdout, "No help available for %s.\n", args[0])
 	}
