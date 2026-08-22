@@ -7,13 +7,13 @@ Outpost creates and manages Outposts through a daemon running on your network.
 Install the CLI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nishantdania/outpost/main/install.sh | bash
+curl -fsSL https://github.com/nishantdania/outpost/raw/main/install.sh | bash
 ```
 
 Install the daemon on a Linux server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nishantdania/outpost/main/install.sh | bash -s -- --daemon
+curl -fsSL https://github.com/nishantdania/outpost/raw/main/install.sh | bash -s -- --daemon
 ```
 
 Binaries are installed to `~/.local/bin` by default.
