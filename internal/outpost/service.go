@@ -50,7 +50,15 @@ func (service *Service) load() ([]Record, error) {
 		return nil, err
 	}
 	for index := range records {
-		records[index].Resources = defaultResources(records[index].Resources)
+		if records[index].VCPUs == 0 {
+			records[index].VCPUs = 1
+		}
+		if records[index].MemoryMiB == 0 {
+			records[index].MemoryMiB = 256
+		}
+		if records[index].DiskGiB == 0 {
+			records[index].DiskGiB = 4
+		}
 	}
 	return records, nil
 }
