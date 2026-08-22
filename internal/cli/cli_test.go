@@ -12,6 +12,21 @@ import (
 	"testing"
 )
 
+func TestSelectHost(t *testing.T) {
+	t.Setenv("OUTPOST_HOST", "default")
+	args, restore, err := selectHost([]string{"--host", "local", "list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(args) != 1 || args[0] != "list" || os.Getenv("OUTPOST_HOST") != "local" {
+		t.Fatalf("args = %#v, host = %q", args, os.Getenv("OUTPOST_HOST"))
+	}
+	restore()
+	if os.Getenv("OUTPOST_HOST") != "default" {
+		t.Fatalf("restored host = %q", os.Getenv("OUTPOST_HOST"))
+	}
+}
+
 func TestRunHelp(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := Run(context.Background(), nil, "v0.0.2", &stdout, &stderr); code != 0 {

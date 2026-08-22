@@ -30,8 +30,17 @@ Create `~/.config/outpost/config.json` on your computer:
 
 ```json
 {
-  "daemon_url": "http://server.your-tailnet.ts.net:8080",
-  "ssh_host": "user@server"
+  "default_host": "fortytwo",
+  "hosts": {
+    "fortytwo": {
+      "daemon_url": "http://server.your-tailnet.ts.net:8080",
+      "ssh_host": "user@server"
+    },
+    "local": {
+      "daemon_url": "http://localhost:8080",
+      "ssh_host": "local"
+    }
+  }
 }
 ```
 
@@ -44,7 +53,7 @@ Create `~/.config/outpost/daemon.json` on the server:
 }
 ```
 
-When the CLI runs on the daemon server, use `"daemon_url": "http://localhost:8080"` and `"ssh_host": "local"` to bypass the remote SSH hop.
+The default host is used automatically. Select another with `outpost --host local <command>` or `OUTPOST_HOST=local`. The `local` SSH transport bypasses the remote SSH hop when CLI and daemon share a machine.
 
 Enable the daemon:
 

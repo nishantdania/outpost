@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 )
 
 const helpText = `Usage:
-  outpost <command>
+  outpost [--host <name>] <command>
 
 Commands:
   create    Create an Outpost
@@ -28,6 +29,12 @@ Commands:
 `
 
 func Run(ctx context.Context, args []string, version string, stdout, stderr io.Writer) int {
+	parsed, restore, err := selectHost(args)
+	if err != nil {
+		return run(err, "host", stderr)
+	}
+	defer restore()
+	args = parsed
 	if helpRequested(args) {
 		return printHelp(args, stdout)
 	}
@@ -99,6 +106,35 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 		return 2
 	}
 }
+func selectHost(args []string) ([]string, func(), error) {
+	if len(args) == 0 || (args[0] != "--host" && !strings.HasPrefix(args[0], "--host=")) {
+		return args, func() {}, nil
+	}
+	name := strings.TrimPrefix(args[0], "--host=")
+	consumed := 1
+	if args[0] == "--host" {
+		if len(args) < 2 {
+			return nil, func() {}, fmt.Errorf("--host requires a name")
+		}
+		name, consumed = args[1], 2
+	}
+	if name == "" {
+		return nil, func() {}, fmt.Errorf("--host requires a name")
+	}
+	previous, existed := os.LookupEnv("OUTPOST_HOST")
+	if err := os.Setenv("OUTPOST_HOST", name); err != nil {
+		return nil, func() {}, err
+	}
+	restore := func() {
+		if existed {
+			_ = os.Setenv("OUTPOST_HOST", previous)
+		} else {
+			_ = os.Unsetenv("OUTPOST_HOST")
+		}
+	}
+	return args[consumed:], restore, nil
+}
+
 func isHelp(args []string) bool {
 	return len(args) == 1 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help")
 }

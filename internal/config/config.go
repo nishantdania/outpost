@@ -7,9 +7,17 @@ import (
 	"path/filepath"
 )
 
-type Client struct {
+type ClientHost struct {
 	DaemonURL string `json:"daemon_url"`
 	SSHHost   string `json:"ssh_host"`
+}
+
+type Client struct {
+	DaemonURL   string                `json:"daemon_url,omitempty"`
+	SSHHost     string                `json:"ssh_host,omitempty"`
+	DefaultHost string                `json:"default_host,omitempty"`
+	Hosts       map[string]ClientHost `json:"hosts,omitempty"`
+	Host        string                `json:"-"`
 }
 
 type Daemon struct {
@@ -58,9 +66,30 @@ func LoadClientFile(path string) (Client, error) {
 	if err := load(path, &cfg); err != nil {
 		return Client{}, err
 	}
-	if cfg.DaemonURL == "" {
-		return Client{}, fmt.Errorf("%s: daemon_url is required", path)
+	selected := os.Getenv("OUTPOST_HOST")
+	if len(cfg.Hosts) == 0 {
+		if selected != "" {
+			return Client{}, fmt.Errorf("%s: host %q requested but no hosts are configured", path, selected)
+		}
+		if cfg.DaemonURL == "" {
+			return Client{}, fmt.Errorf("%s: daemon_url is required", path)
+		}
+		return cfg, nil
 	}
+	if selected == "" {
+		selected = cfg.DefaultHost
+	}
+	if selected == "" {
+		return Client{}, fmt.Errorf("%s: default_host is required", path)
+	}
+	host, ok := cfg.Hosts[selected]
+	if !ok {
+		return Client{}, fmt.Errorf("%s: host %q is not configured", path, selected)
+	}
+	if host.DaemonURL == "" {
+		return Client{}, fmt.Errorf("%s: hosts.%s.daemon_url is required", path, selected)
+	}
+	cfg.DaemonURL, cfg.SSHHost, cfg.Host = host.DaemonURL, host.SSHHost, selected
 	return cfg, nil
 }
 

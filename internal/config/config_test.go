@@ -18,6 +18,38 @@ func TestLoadClientFile(t *testing.T) {
 	}
 }
 
+func TestLoadClientFileUsesDefaultHost(t *testing.T) {
+	t.Setenv("OUTPOST_HOST", "")
+	path := writeConfig(t, `{"default_host":"fortytwo","hosts":{"fortytwo":{"daemon_url":"http://remote:8080","ssh_host":"user@remote"},"local":{"daemon_url":"http://localhost:8080","ssh_host":"local"}}}`)
+	cfg, err := LoadClientFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Host != "fortytwo" || cfg.DaemonURL != "http://remote:8080" {
+		t.Fatalf("config = %#v", cfg)
+	}
+}
+
+func TestLoadClientFileUsesSelectedHost(t *testing.T) {
+	t.Setenv("OUTPOST_HOST", "local")
+	path := writeConfig(t, `{"default_host":"fortytwo","hosts":{"fortytwo":{"daemon_url":"http://remote:8080"},"local":{"daemon_url":"http://localhost:8080","ssh_host":"local"}}}`)
+	cfg, err := LoadClientFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Host != "local" || cfg.SSHHost != "local" {
+		t.Fatalf("config = %#v", cfg)
+	}
+}
+
+func TestLoadClientFileRejectsUnknownHost(t *testing.T) {
+	t.Setenv("OUTPOST_HOST", "missing")
+	path := writeConfig(t, `{"default_host":"fortytwo","hosts":{"fortytwo":{"daemon_url":"http://remote:8080"}}}`)
+	if _, err := LoadClientFile(path); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestLoadDaemonFile(t *testing.T) {
 	path := writeConfig(t, `{"listen_addr":":8080"}`)
 
