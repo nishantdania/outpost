@@ -1,3 +1,4 @@
 /outpost
+dist/
 *.test
 *.out
