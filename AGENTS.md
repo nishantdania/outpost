@@ -4,7 +4,7 @@ Outpost is a Go control plane for creating and managing Firecracker-backed compu
 
 ## Code guide
 
-Keep boundaries simple. Use focused files inside domain packages; do not add generic `api`, `utils`, or `commands` packages.
+Keep boundaries simple. Use focused files inside domain packages; do not add generic `api`, `utils`, or `commands` packages. When adding files, state, services, or downloaded assets, update `outpost uninstall` so it cleanly removes them.
 
 ## Test
 
