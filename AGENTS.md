@@ -28,11 +28,40 @@ Do not stop after editing or unit testing. Unless the user explicitly says other
    git push origin v0.0.X
    ```
 
-4. Wait for the `Release` GitHub Actions workflow and fail the task if the release fails:
+4. Wait for the `Release` GitHub Actions workflow and fail the task if the release fails. Do not assume the newest run appeared immediately or accidentally watch a previous release.
+
+   Poll until the run for the exact tag appears:
 
    ```bash
-   gh run list --workflow Release --limit 1
-   gh run watch <run-id> --exit-status
+   tag=v0.0.X
+   run_id=""
+   for _ in $(seq 1 30); do
+     run_id=$(gh run list --workflow Release --limit 20 \
+       --json databaseId,headBranch \
+       --jq ".[] | select(.headBranch == \"$tag\") | .databaseId" | head -n1)
+     [[ -n "$run_id" ]] && break
+     sleep 5
+   done
+   [[ -n "$run_id" ]]
+   ```
+
+   Watch it to completion:
+
+   ```bash
+   gh run watch "$run_id" --exit-status
+   ```
+
+   When it fails, inspect the failed jobs before changing code:
+
+   ```bash
+   gh run view "$run_id" --log-failed
+   ```
+
+   Confirm that the GitHub Release and its assets exist:
+
+   ```bash
+   gh release view "$tag" --json tagName,assets \
+     --jq '{tag: .tagName, assets: [.assets[].name]}'
    ```
 
 5. Deploy the release:
@@ -42,7 +71,21 @@ Do not stop after editing or unit testing. Unless the user explicitly says other
    outpost version
    ```
 
-   `outpost update` updates the current CLI and selected daemon. A CLI installed alongside the daemon is a separate installation; update or reinstall it when testing server-local CLI behavior.
+   `outpost update` updates the current CLI and selected daemon. Confirm both report the exact tag rather than merely assuming the update completed:
+
+   ```bash
+   outpost version
+   outpost version local
+   outpost version server
+   ```
+
+   A CLI installed alongside the daemon is a separate installation. Update or reinstall it when testing server-local behavior, then verify it from the server:
+
+   ```bash
+   ssh nishant@fortytwo \
+     'curl -fsSL https://github.com/nishantdania/outpost/raw/main/install.sh | bash'
+   ssh nishant@fortytwo '~/.local/bin/outpost version'
+   ```
 
 6. Exercise the changed behavior against a real Firecracker VM. Test the successful path, relevant failure behavior, and persistence or cleanup where applicable. Do not claim completion based only on Go tests.
 
