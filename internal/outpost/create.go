@@ -24,6 +24,11 @@ func (service *Service) Create(_ context.Context, name string) (Record, error) {
 	if name == "" {
 		name = id
 	}
+	for _, record := range records {
+		if record.Name == name {
+			return Record{}, fmt.Errorf("outpost name already exists")
+		}
+	}
 	record := Record{ID: id, Name: name, Status: "created", CreatedAt: time.Now().UTC()}
 	if service.assets != "" {
 		index, err := networkIndex(records)
