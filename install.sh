@@ -50,3 +50,22 @@ install_dir="${OUTPOST_INSTALL_DIR:-$HOME/.local/bin}"
 mkdir -p "$install_dir"
 install -m 0755 "$tmpdir/$component" "$install_dir/$component"
 printf 'Installed %s to %s\n' "$component" "$install_dir/$component"
+
+if [[ "$component" == "outpostd" ]]; then
+  unit_dir="$HOME/.config/systemd/user"
+  mkdir -p "$unit_dir"
+  cat > "$unit_dir/outpostd.service" <<EOF
+[Unit]
+Description=Outpost daemon
+
+[Service]
+ExecStart=$install_dir/outpostd
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+EOF
+  systemctl --user daemon-reload
+  printf 'Created %s/outpostd.service\n' "$unit_dir"
+fi

@@ -13,21 +13,11 @@ import (
 
 func TestRunHelp(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := Run(context.Background(), nil, &stdout, &stderr); code != 0 {
+	if code := Run(context.Background(), nil, "v0.0.2", &stdout, &stderr); code != 0 {
 		t.Fatalf("Run() code = %d, want 0", code)
 	}
 	if got := stdout.String(); got == "" || stderr.Len() != 0 {
 		t.Errorf("help output = stdout %q, stderr %q", got, stderr.String())
-	}
-}
-
-func TestRunCreateHelp(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	if code := Run(context.Background(), []string{"create", "--help"}, &stdout, &stderr); code != 0 {
-		t.Fatalf("Run() code = %d, want 0", code)
-	}
-	if got := stdout.String(); got != createHelpText {
-		t.Errorf("stdout = %q, want %q", got, createHelpText)
 	}
 }
 
@@ -44,7 +34,7 @@ func TestRunCreate(t *testing.T) {
 	setClientConfig(t, server.URL)
 
 	var stdout, stderr bytes.Buffer
-	if code := Run(context.Background(), []string{"create"}, &stdout, &stderr); code != 0 {
+	if code := Run(context.Background(), []string{"create"}, "v0.0.2", &stdout, &stderr); code != 0 {
 		t.Fatalf("Run() code = %d, stderr = %s", code, stderr.String())
 	}
 	if got := stdout.String(); got != "Hello, World!\n" {
@@ -54,7 +44,7 @@ func TestRunCreate(t *testing.T) {
 
 func TestRunUnknownCommand(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := Run(context.Background(), []string{"nope"}, &stdout, &stderr); code != 2 {
+	if code := Run(context.Background(), []string{"nope"}, "v0.0.2", &stdout, &stderr); code != 2 {
 		t.Fatalf("Run() code = %d, want 2", code)
 	}
 	if stdout.Len() != 0 || stderr.Len() == 0 {

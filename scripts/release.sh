@@ -16,7 +16,7 @@ build() {
   local binary="$1"
   local os="$2"
   local arch="$3"
-  GOOS="$os" GOARCH="$arch" go build -o "$outdir/$binary" "./cmd/$binary"
+  GOOS="$os" GOARCH="$arch" go build -ldflags "-X main.version=$version" -o "$outdir/$binary" "./cmd/$binary"
   tar -C "$outdir" -czf "$outdir/${binary}_${os}_${arch}.tar.gz" "$binary"
   rm "$outdir/$binary"
 }
