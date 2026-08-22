@@ -1,64 +1,85 @@
 # Outpost
 
-Outpost creates and manages Outposts through a daemon running on your network.
+Outpost runs lightweight Firecracker VMs on a remote Linux server and manages them over Tailscale.
+
+## Requirements
+
+- A Linux server with KVM access
+- Tailscale connectivity between client and server
+- SSH and interactive sudo access to the server
 
 ## Install
 
-Install the CLI:
+On your computer:
 
 ```bash
 curl -fsSL https://github.com/nishantdania/outpost/raw/main/install.sh | bash
 ```
 
-Install the daemon on a Linux server:
+On the server:
 
 ```bash
 curl -fsSL https://github.com/nishantdania/outpost/raw/main/install.sh | bash -s -- --daemon
 ```
 
-Binaries are installed to `~/.local/bin` by default.
+Binaries are installed in `~/.local/bin`.
 
 ## Configure
 
-On the machine running the CLI, create `~/.config/outpost/config.json`:
+Create `~/.config/outpost/config.json` on your computer:
 
 ```json
 {
-  "daemon_url": "http://server.your-tailnet.ts.net:8080"
+  "daemon_url": "http://server.your-tailnet.ts.net:8080",
+  "ssh_host": "user@server"
 }
 ```
 
-On the machine running the daemon, create `~/.config/outpost/daemon.json`:
+Create `~/.config/outpost/daemon.json` on the server:
 
 ```json
 {
-  "listen_addr": ":8080"
+  "listen_addr": ":8080",
+  "firecracker_version": "v1.10.1"
 }
 ```
 
-## Run
-
-Start the daemon:
+Enable the daemon:
 
 ```bash
-outpostd
+systemctl --user enable --now outpostd.service
 ```
 
-Use the CLI:
+Prepare Firecracker, VM images, networking, and SSH access:
 
 ```bash
-outpost
-outpost create
+outpost setup
+outpost doctor
 ```
 
-The initial `create` command returns `Hello, World!`.
-
-## Release
-
-Create release archives and checksums:
+## Usage
 
 ```bash
-mise exec go -- scripts/release.sh v0.0.1
+outpost create dev
+outpost list
+outpost ssh dev
+outpost stop <id>
+outpost start <id>
+outpost delete <id>
 ```
 
-Publish the contents of `dist/v0.0.1` as a GitHub Release tagged `v0.0.1`.
+Maintenance commands:
+
+```bash
+outpost version
+outpost update
+outpost uninstall
+```
+
+## Development
+
+```bash
+go test ./...
+go vet ./...
+go build ./cmd/...
+```
