@@ -83,7 +83,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	service := outpost.New(path)
+	service := outpost.NewWithRuntime(path, filepath.Join(filepath.Dir(path), "assets"))
 	server := &http.Server{Addr: cfg.ListenAddr, Handler: daemon.New(service.Create, service.List, service.Delete, version, applyUpdate, uninstall, doctor.Run)}
 	log.Printf("outpostd listening on %s", cfg.ListenAddr)
 	log.Fatal(server.ListenAndServe())

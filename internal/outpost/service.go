@@ -12,15 +12,19 @@ type Record struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Status    string    `json:"status"`
+	PID       int       `json:"pid,omitempty"`
+	Socket    string    `json:"socket,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type Service struct {
-	path string
-	mu   sync.Mutex
+	path   string
+	assets string
+	mu     sync.Mutex
 }
 
-func New(path string) *Service { return &Service{path: path} }
+func New(path string) *Service                    { return &Service{path: path} }
+func NewWithRuntime(path, assets string) *Service { return &Service{path: path, assets: assets} }
 
 func (service *Service) load() ([]Record, error) {
 	file, err := os.Open(service.path)

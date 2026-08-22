@@ -25,6 +25,12 @@ func (service *Service) Create(_ context.Context, name string) (Record, error) {
 		name = id
 	}
 	record := Record{ID: id, Name: name, Status: "created", CreatedAt: time.Now().UTC()}
+	if service.assets != "" {
+		if err := service.start(&record); err != nil {
+			return Record{}, err
+		}
+		record.Status = "running"
+	}
 	if err := service.save(append(records, record)); err != nil {
 		return Record{}, err
 	}
