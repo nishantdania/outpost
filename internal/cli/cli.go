@@ -20,6 +20,7 @@ const helpText = `Usage:
 Commands:
   create    Create an Outpost
   update    Update Outpost
+  uninstall Remove Outpost
   version   Show versions
   help      Show help
 `
@@ -57,6 +58,28 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 		}
 		if err := localUpdate(ctx, version, stdout); err != nil {
 			fmt.Fprintf(stderr, "outpost update: %v\n", err)
+			return 1
+		}
+		return 0
+	case len(args) == 1 && args[0] == "uninstall":
+		if err := serverUninstall(ctx, stdout); err != nil {
+			fmt.Fprintf(stderr, "outpost uninstall: %v\n", err)
+			return 1
+		}
+		if err := localUninstall(stdout); err != nil {
+			fmt.Fprintf(stderr, "outpost uninstall: %v\n", err)
+			return 1
+		}
+		return 0
+	case len(args) == 2 && args[0] == "uninstall" && args[1] == "local":
+		if err := localUninstall(stdout); err != nil {
+			fmt.Fprintf(stderr, "outpost uninstall local: %v\n", err)
+			return 1
+		}
+		return 0
+	case len(args) == 2 && args[0] == "uninstall" && args[1] == "server":
+		if err := serverUninstall(ctx, stdout); err != nil {
+			fmt.Fprintf(stderr, "outpost uninstall server: %v\n", err)
 			return 1
 		}
 		return 0
@@ -154,6 +177,31 @@ func localUpdate(ctx context.Context, version string, stdout io.Writer) error {
 	fmt.Fprintf(stdout, "Local:  %s → %s\n", result.CurrentVersion, result.LatestVersion)
 	return nil
 }
+func serverUninstall(ctx context.Context, stdout io.Writer) error {
+	response, err := request(ctx, http.MethodPost, "/uninstall")
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("daemon returned %s", response.Status)
+	}
+	fmt.Fprintln(stdout, "Server: uninstalled")
+	return nil
+}
+
+func localUninstall(stdout io.Writer) error {
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(executable); err != nil {
+		return err
+	}
+	fmt.Fprintln(stdout, "Local:  uninstalled")
+	return nil
+}
+
 func serverUpdate(ctx context.Context, stdout io.Writer) error {
 	response, err := request(ctx, http.MethodPost, "/update")
 	if err != nil {

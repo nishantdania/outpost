@@ -11,12 +11,14 @@ import (
 
 type CreateFunc func(context.Context) (outpost.Result, error)
 type UpdateFunc func(context.Context) (update.Result, error)
+type UninstallFunc func(context.Context) error
 
-func New(create CreateFunc, version string, applyUpdate UpdateFunc) http.Handler {
+func New(create CreateFunc, version string, applyUpdate UpdateFunc, uninstall UninstallFunc) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /outposts", createHandler(create))
 	mux.HandleFunc("GET /version", versionHandler(version))
 	mux.HandleFunc("POST /update", updateHandler(applyUpdate))
+	mux.HandleFunc("POST /uninstall", uninstallHandler(uninstall))
 	return mux
 }
 
@@ -50,6 +52,16 @@ func versionHandler(version string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(versionResponse{Version: version})
+	}
+}
+
+func uninstallHandler(uninstall UninstallFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := uninstall(r.Context()); err != nil {
+			http.Error(w, "uninstall outpostd", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

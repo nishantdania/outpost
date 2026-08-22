@@ -13,7 +13,7 @@ import (
 func TestCreateOutpost(t *testing.T) {
 	handler := New(func(context.Context) (outpost.Result, error) {
 		return outpost.Result{Message: "Hello, World!"}, nil
-	}, "v0.0.2", nil)
+	}, "v0.0.2", nil, nil)
 
 	request := httptest.NewRequest(http.MethodPost, "/outposts", nil)
 	response := httptest.NewRecorder()
@@ -35,7 +35,7 @@ func TestCreateOutpost(t *testing.T) {
 }
 
 func TestCreateOutpostRejectsOtherMethods(t *testing.T) {
-	handler := New(outpost.Create, "v0.0.2", nil)
+	handler := New(outpost.Create, "v0.0.2", nil, nil)
 	request := httptest.NewRequest(http.MethodGet, "/outposts", nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)

@@ -40,7 +40,24 @@ func main() {
 		return result, nil
 	}
 
-	server := &http.Server{Addr: cfg.ListenAddr, Handler: daemon.New(outpost.Create, version, applyUpdate)}
+	uninstall := func(context.Context) error {
+		executable, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		go func() {
+			time.Sleep(time.Second)
+			if err := os.Remove(executable); err != nil {
+				log.Printf("remove outpostd: %v", err)
+			}
+			if err := exec.Command("systemctl", "--user", "disable", "--now", "outpostd.service").Run(); err != nil {
+				log.Printf("stop outpostd: %v", err)
+			}
+		}()
+		return nil
+	}
+
+	server := &http.Server{Addr: cfg.ListenAddr, Handler: daemon.New(outpost.Create, version, applyUpdate, uninstall)}
 	log.Printf("outpostd listening on %s", cfg.ListenAddr)
 	log.Fatal(server.ListenAndServe())
 }
