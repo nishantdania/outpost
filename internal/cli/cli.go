@@ -17,6 +17,7 @@ Commands:
   stop      Stop an Outpost
   ssh       Connect to an Outpost
   exec      Run a bash command in an Outpost
+  cp        Copy a file into an Outpost
   delete    Delete an Outpost
   setup     Prepare a server for Firecracker
   doctor    Check server readiness
@@ -47,6 +48,12 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 		return run(sshOutpost(ctx, args[1]), "ssh", stderr)
 	case len(args) >= 3 && args[0] == "exec":
 		return runExec(execOutpost(ctx, args[1], strings.Join(args[2:], " ")), stderr)
+	case len(args) >= 3 && args[0] == "cp":
+		source, target, mode, err := copyArgs(args[1:])
+		if err != nil {
+			return run(err, "cp", stderr)
+		}
+		return run(copyToOutpost(ctx, source, target, mode, stdout), "cp", stderr)
 	case len(args) == 2 && args[0] == "delete":
 		return run(deleteOutpost(ctx, args[1], stdout), "delete", stderr)
 	case len(args) == 1 && args[0] == "setup":

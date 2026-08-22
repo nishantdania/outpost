@@ -64,6 +64,8 @@ outpost create dev
 outpost list
 outpost ssh dev
 outpost exec dev 'uname -a'
+outpost cp ./file dev:/root/file
+outpost cp host:~/.pi/agent/auth.json dev:/root/.pi/agent/auth.json --mode 600
 outpost stop <id>
 outpost start <id>
 outpost delete <id>
