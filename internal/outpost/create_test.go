@@ -2,15 +2,24 @@ package outpost
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 )
 
-func TestCreate(t *testing.T) {
-	result, err := Create(context.Background())
+func TestCreateAndList(t *testing.T) {
+	service := New(filepath.Join(t.TempDir(), "outposts.json"))
+	record, err := service.Create(context.Background(), "test")
 	if err != nil {
-		t.Fatalf("Create() error = %v", err)
+		t.Fatal(err)
 	}
-	if result.Message != "Hello, World!" {
-		t.Errorf("Create() message = %q, want %q", result.Message, "Hello, World!")
+	if record.Name != "test" || record.ID == "" {
+		t.Fatalf("record = %#v", record)
+	}
+	records, err := service.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 1 || records[0].ID != record.ID {
+		t.Fatalf("records = %#v", records)
 	}
 }

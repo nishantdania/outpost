@@ -20,6 +20,7 @@ const helpText = `Usage:
 
 Commands:
   create    Create an Outpost
+  list      List Outposts
   update    Update Outpost
   uninstall Remove Outpost
   version   Show versions
@@ -31,9 +32,19 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 	case len(args) == 0 || isHelp(args):
 		fmt.Fprint(stdout, helpText)
 		return 0
-	case len(args) == 1 && args[0] == "create":
-		if err := create(ctx, stdout); err != nil {
+	case (len(args) == 1 || len(args) == 2) && args[0] == "create":
+		name := ""
+		if len(args) == 2 {
+			name = args[1]
+		}
+		if err := create(ctx, name, stdout); err != nil {
 			fmt.Fprintf(stderr, "outpost create: %v\n", err)
+			return 1
+		}
+		return 0
+	case len(args) == 1 && args[0] == "list":
+		if err := list(ctx, stdout); err != nil {
+			fmt.Fprintf(stderr, "outpost list: %v\n", err)
 			return 1
 		}
 		return 0
@@ -126,8 +137,23 @@ func request(ctx context.Context, method, path string) (*http.Response, error) {
 	return (&http.Client{Timeout: 30 * time.Second}).Do(req)
 }
 
-func create(ctx context.Context, stdout io.Writer) error {
-	response, err := request(ctx, http.MethodPost, "/outposts")
+func create(ctx context.Context, name string, stdout io.Writer) error {
+	base, err := daemonURL()
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(struct {
+		Name string `json:"name"`
+	}{name})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/outposts", strings.NewReader(string(payload)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	response, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {
 		return err
 	}
@@ -136,12 +162,39 @@ func create(ctx context.Context, stdout io.Writer) error {
 		return fmt.Errorf("daemon returned %s", response.Status)
 	}
 	var body struct {
-		Message string `json:"message"`
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		return err
 	}
-	fmt.Fprintln(stdout, body.Message)
+	fmt.Fprintf(stdout, "Created %s (%s)\n", body.Name, body.ID)
+	return nil
+}
+
+func list(ctx context.Context, stdout io.Writer) error {
+	response, err := request(ctx, http.MethodGet, "/outposts")
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("daemon returned %s", response.Status)
+	}
+	var body struct {
+		Outposts []struct {
+			ID     string `json:"id"`
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"outposts"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		return err
+	}
+	for _, record := range body.Outposts {
+		fmt.Fprintf(stdout, "%s\t%s\t%s\n", record.ID, record.Name, record.Status)
+	}
 	return nil
 }
 func versions(ctx context.Context, version string, stdout io.Writer) error {

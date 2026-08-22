@@ -23,6 +23,18 @@ func DaemonPath() (string, error) {
 	return configPath("daemon.json")
 }
 
+func OutpostsPath() (string, error) {
+	directory := os.Getenv("XDG_DATA_HOME")
+	if directory == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		directory = filepath.Join(home, ".local", "share")
+	}
+	return filepath.Join(directory, "outpost", "outposts.json"), nil
+}
+
 func configPath(name string) (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {

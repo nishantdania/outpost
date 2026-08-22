@@ -27,7 +27,7 @@ func TestRunCreate(t *testing.T) {
 			t.Errorf("request = %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"message":"Hello, World!"}`)
+		_, _ = io.WriteString(w, `{"id":"id","name":"name","status":"created"}`)
 	}))
 	defer server.Close()
 
@@ -37,8 +37,8 @@ func TestRunCreate(t *testing.T) {
 	if code := Run(context.Background(), []string{"create"}, "v0.0.2", &stdout, &stderr); code != 0 {
 		t.Fatalf("Run() code = %d, stderr = %s", code, stderr.String())
 	}
-	if got := stdout.String(); got != "Hello, World!\n" {
-		t.Errorf("stdout = %q, want %q", got, "Hello, World!\n")
+	if got := stdout.String(); got != "Created name (id)\n" {
+		t.Errorf("stdout = %q, want %q", got, "Created name (id)\n")
 	}
 }
 
