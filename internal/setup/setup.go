@@ -18,6 +18,7 @@ import (
 )
 
 func Run(ctx context.Context) error {
+	fmt.Fprintln(os.Stdout, "Checking host requirements…")
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("setup requires Linux")
 	}
@@ -34,6 +35,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	assets := filepath.Join(home, ".local", "share", "outpost", "assets")
+	fmt.Fprintln(os.Stdout, "Downloading Firecracker…")
 	if err := os.MkdirAll(assets, 0o700); err != nil {
 		return err
 	}
@@ -44,6 +46,7 @@ func Run(ctx context.Context) error {
 	if err := os.WriteFile(filepath.Join(assets, "firecracker"), firecracker, 0o755); err != nil {
 		return err
 	}
+	fmt.Fprintln(os.Stdout, "Downloading kernel and rootfs…")
 	kernel, rootfs, kernelKey, rootfsKey, err := images(ctx)
 	if err != nil {
 		return err
@@ -61,6 +64,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	root := filepath.Join(temporary, "rootfs")
+	fmt.Fprintln(os.Stdout, "Preparing ext4 rootfs…")
 	if err := command(ctx, "sudo", "unsquashfs", "-d", root, squashfs); err != nil {
 		return err
 	}
@@ -74,8 +78,13 @@ func Run(ctx context.Context) error {
 	if err := command(ctx, "sudo", "chown", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), ext4); err != nil {
 		return err
 	}
+	fmt.Fprintln(os.Stdout, "Writing asset manifest…")
 	manifest := fmt.Sprintf("{\"firecracker\":%q,\"kernel\":%q,\"rootfs\":%q}\n", version, kernelKey, rootfsKey)
-	return os.WriteFile(filepath.Join(assets, "manifest.json"), []byte(manifest), 0o600)
+	if err := os.WriteFile(filepath.Join(assets, "manifest.json"), []byte(manifest), 0o600); err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stdout, "Setup complete.")
+	return nil
 }
 
 func command(ctx context.Context, name string, args ...string) error {
