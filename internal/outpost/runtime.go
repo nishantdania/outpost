@@ -80,6 +80,32 @@ func (service *Service) start(record *Record) error {
 	return nil
 }
 
+func (service *Service) runtimeResources(record Record) (Resources, bool) {
+	directory := filepath.Join(filepath.Dir(service.path), "instances", record.ID)
+	data, err := os.ReadFile(filepath.Join(directory, "config.json"))
+	if err != nil {
+		return Resources{}, false
+	}
+	var config struct {
+		Machine struct {
+			VCPUs     int `json:"vcpu_count"`
+			MemoryMiB int `json:"mem_size_mib"`
+		} `json:"machine-config"`
+	}
+	if json.Unmarshal(data, &config) != nil {
+		return Resources{}, false
+	}
+	var diskGiB int
+	marker, err := os.ReadFile(filepath.Join(directory, "disk-size"))
+	if err != nil {
+		return Resources{}, false
+	}
+	if _, err := fmt.Sscanf(string(marker), "%dG", &diskGiB); err != nil {
+		return Resources{}, false
+	}
+	return Resources{VCPUs: config.Machine.VCPUs, MemoryMiB: config.Machine.MemoryMiB, DiskGiB: diskGiB}, true
+}
+
 func alive(pid int) bool {
 	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
 	if err != nil {

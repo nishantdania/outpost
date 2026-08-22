@@ -11,6 +11,10 @@ func (service *Service) List(context.Context) ([]Record, error) {
 	}
 	changed := false
 	for index := range records {
+		if resources, ok := service.runtimeResources(records[index]); ok && records[index].Resources != resources {
+			records[index].Resources = resources
+			changed = true
+		}
 		if records[index].Status == "running" && !alive(records[index].PID) {
 			records[index].Status = "stopped"
 			records[index].PID = 0
