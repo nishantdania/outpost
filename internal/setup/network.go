@@ -40,6 +40,8 @@ ip link del outpost0 2>/dev/null || true
 set -u
 systemctl disable --now outpost-network.service 2>/dev/null || true
 rm -f /etc/systemd/system/outpost-network.service /usr/local/lib/outpost/network /usr/local/lib/outpost/network-stop /etc/sudoers.d/outpost
+rm -f /usr/local/lib/outpost/uninstall-network
+rmdir /usr/local/lib/outpost 2>/dev/null || true
 systemctl daemon-reload
 `
 	sudoers := fmt.Sprintf("%s ALL=(root) NOPASSWD: /usr/local/lib/outpost/uninstall-network\n", os.Getenv("USER"))
