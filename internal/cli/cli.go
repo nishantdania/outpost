@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -191,6 +192,13 @@ func serverUninstall(ctx context.Context, stdout io.Writer) error {
 }
 
 func localUninstall(stdout io.Writer) error {
+	configDirectory, err := os.UserConfigDir()
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(filepath.Join(configDirectory, "outpost")); err != nil {
+		return err
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		return err

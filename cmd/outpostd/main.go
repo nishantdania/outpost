@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/nishantdania/outpost/internal/config"
@@ -47,10 +48,23 @@ func main() {
 		}
 		go func() {
 			time.Sleep(time.Second)
+			if err := exec.Command("systemctl", "--user", "disable", "outpostd.service").Run(); err != nil {
+				log.Printf("disable outpostd: %v", err)
+			}
 			if err := os.Remove(executable); err != nil {
 				log.Printf("remove outpostd: %v", err)
 			}
-			if err := exec.Command("systemctl", "--user", "disable", "--now", "outpostd.service").Run(); err != nil {
+			if configDirectory, err := os.UserConfigDir(); err != nil {
+				log.Printf("find configuration directory: %v", err)
+			} else if err := os.RemoveAll(filepath.Join(configDirectory, "outpost")); err != nil {
+				log.Printf("remove configuration: %v", err)
+			}
+			if home, err := os.UserHomeDir(); err != nil {
+				log.Printf("find home directory: %v", err)
+			} else if err := os.Remove(filepath.Join(home, ".config", "systemd", "user", "outpostd.service")); err != nil && !os.IsNotExist(err) {
+				log.Printf("remove service unit: %v", err)
+			}
+			if err := exec.Command("systemctl", "--user", "stop", "outpostd.service").Run(); err != nil {
 				log.Printf("stop outpostd: %v", err)
 			}
 		}()
