@@ -21,6 +21,26 @@ func TestRunHelp(t *testing.T) {
 	}
 }
 
+func TestRunCommandHelpDoesNotRunCommand(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{"create", "--help"}, "v0.0.2", &stdout, &stderr); code != 0 {
+		t.Fatalf("Run() code = %d", code)
+	}
+	if got := stdout.String(); got != "Usage: outpost create [name]\n" || stderr.Len() != 0 {
+		t.Fatalf("output = stdout %q, stderr %q", got, stderr.String())
+	}
+}
+
+func TestRunCreateRejectsOptionAsName(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{"create", "--unknown"}, "v0.0.2", &stdout, &stderr); code != 1 {
+		t.Fatalf("Run() code = %d", code)
+	}
+	if stdout.Len() != 0 || stderr.Len() == 0 {
+		t.Fatalf("output = stdout %q, stderr %q", stdout.String(), stderr.String())
+	}
+}
+
 func TestRunCreate(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/outposts" {

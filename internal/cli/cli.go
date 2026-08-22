@@ -28,6 +28,9 @@ Commands:
 `
 
 func Run(ctx context.Context, args []string, version string, stdout, stderr io.Writer) int {
+	if helpRequested(args) {
+		return printHelp(args, stdout)
+	}
 	switch {
 	case len(args) == 0 || isHelp(args):
 		fmt.Fprint(stdout, helpText)
@@ -36,6 +39,9 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 		name := ""
 		if len(args) == 2 {
 			name = args[1]
+			if strings.HasPrefix(name, "-") {
+				return run(fmt.Errorf("invalid name %q", name), "create", stderr)
+			}
 		}
 		return run(create(ctx, name, stdout), "create", stderr)
 	case len(args) == 1 && args[0] == "list":
@@ -96,6 +102,43 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 func isHelp(args []string) bool {
 	return len(args) == 1 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help")
 }
+
+func helpRequested(args []string) bool {
+	if len(args) < 2 {
+		return false
+	}
+	for _, arg := range args[1:] {
+		if arg == "--help" || arg == "-h" {
+			return true
+		}
+	}
+	return false
+}
+
+func printHelp(args []string, stdout io.Writer) int {
+	usage := map[string]string{
+		"create":    "outpost create [name]",
+		"list":      "outpost list",
+		"start":     "outpost start <id>",
+		"stop":      "outpost stop <id>",
+		"ssh":       "outpost ssh <id|name>",
+		"exec":      "outpost exec [-i] <id|name> <command>",
+		"cp":        "outpost cp [--mode MODE] <source> <id|name>:<destination>",
+		"delete":    "outpost delete <id|name>",
+		"setup":     "outpost setup",
+		"doctor":    "outpost doctor",
+		"update":    "outpost update [local|server]",
+		"uninstall": "outpost uninstall [local|server]",
+		"version":   "outpost version [local|server]",
+	}
+	if value, ok := usage[args[0]]; ok {
+		fmt.Fprintf(stdout, "Usage: %s\n", value)
+	} else {
+		fmt.Fprintf(stdout, "No help available for %s.\n", args[0])
+	}
+	return 0
+}
+
 func run(err error, command string, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "outpost %s: %v\n", command, err)
