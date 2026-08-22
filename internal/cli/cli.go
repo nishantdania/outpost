@@ -13,6 +13,8 @@ const helpText = `Usage:
 Commands:
   create    Create an Outpost
   list      List Outposts
+  start     Start an Outpost
+  stop      Stop an Outpost
   delete    Delete an Outpost
   setup     Prepare a server for Firecracker
   doctor    Check server readiness
@@ -35,6 +37,10 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 		return run(create(ctx, name, stdout), "create", stderr)
 	case len(args) == 1 && args[0] == "list":
 		return run(list(ctx, stdout), "list", stderr)
+	case len(args) == 2 && args[0] == "start":
+		return run(lifecycle(ctx, args[1], "start", stdout), "start", stderr)
+	case len(args) == 2 && args[0] == "stop":
+		return run(lifecycle(ctx, args[1], "stop", stdout), "stop", stderr)
 	case len(args) == 2 && args[0] == "delete":
 		return run(deleteOutpost(ctx, args[1], stdout), "delete", stderr)
 	case len(args) == 1 && args[0] == "setup":

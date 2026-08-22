@@ -17,10 +17,15 @@ func (service *Service) start(record *Record) error {
 		return err
 	}
 	rootfs := filepath.Join(directory, "rootfs.ext4")
-	if err := exec.Command("cp", "--reflink=auto", "--sparse=always", filepath.Join(service.assets, "rootfs.ext4"), rootfs).Run(); err != nil {
+	if _, err := os.Stat(rootfs); os.IsNotExist(err) {
+		if err := exec.Command("cp", "--reflink=auto", "--sparse=always", filepath.Join(service.assets, "rootfs.ext4"), rootfs).Run(); err != nil {
+			return err
+		}
+	} else if err != nil {
 		return err
 	}
 	socket := filepath.Join(directory, "firecracker.sock")
+	_ = os.Remove(socket)
 	config := map[string]any{"boot-source": map[string]any{"kernel_image_path": filepath.Join(service.assets, "vmlinux"), "boot_args": "console=ttyS0 reboot=k panic=1"}, "drives": []map[string]any{{"drive_id": "rootfs", "path_on_host": rootfs, "is_root_device": true, "is_read_only": false}}, "machine-config": map[string]any{"vcpu_count": 1, "mem_size_mib": 256}}
 	data, err := json.Marshal(config)
 	if err != nil {
@@ -60,11 +65,15 @@ func alive(pid int) bool {
 	return len(parts) > 2 && parts[2] != "Z"
 }
 
-func (service *Service) stop(record Record) {
+func (service *Service) stopProcess(record Record) {
 	if record.PID > 0 {
 		if process, err := os.FindProcess(record.PID); err == nil {
 			_ = process.Kill()
 		}
 	}
+}
+
+func (service *Service) stop(record Record) {
+	service.stopProcess(record)
 	_ = os.RemoveAll(filepath.Join(filepath.Dir(service.path), "instances", record.ID))
 }

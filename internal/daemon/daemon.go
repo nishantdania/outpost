@@ -13,15 +13,18 @@ import (
 type CreateFunc func(context.Context, string) (outpost.Record, error)
 type ListFunc func(context.Context) ([]outpost.Record, error)
 type DeleteFunc func(context.Context, string) (bool, error)
+type LifecycleFunc func(context.Context, string) (outpost.Record, error)
 type UpdateFunc func(context.Context) (update.Result, error)
 type UninstallFunc func(context.Context) error
 type DoctorFunc func(context.Context) []doctor.Check
 
-func New(create CreateFunc, list ListFunc, delete DeleteFunc, version string, applyUpdate UpdateFunc, uninstall UninstallFunc, doctorRun DoctorFunc) http.Handler {
+func New(create CreateFunc, list ListFunc, delete DeleteFunc, start, stop LifecycleFunc, version string, applyUpdate UpdateFunc, uninstall UninstallFunc, doctorRun DoctorFunc) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /outposts", createHandler(create))
 	mux.HandleFunc("GET /outposts", listHandler(list))
 	mux.HandleFunc("DELETE /outposts/{id}", deleteHandler(delete))
+	mux.HandleFunc("POST /outposts/{id}/start", lifecycleHandler(start))
+	mux.HandleFunc("POST /outposts/{id}/stop", lifecycleHandler(stop))
 	mux.HandleFunc("GET /version", versionHandler(version))
 	mux.HandleFunc("GET /doctor", doctorHandler(doctorRun))
 	mux.HandleFunc("POST /update", updateHandler(applyUpdate))
@@ -77,6 +80,16 @@ func deleteHandler(delete DeleteFunc) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+func lifecycleHandler(action LifecycleFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		record, err := action(r.Context(), r.PathValue("id"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		write(w, record)
 	}
 }
 func versionHandler(version string) http.HandlerFunc {

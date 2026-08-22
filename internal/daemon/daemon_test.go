@@ -13,7 +13,7 @@ import (
 func TestCreateOutpost(t *testing.T) {
 	handler := New(func(context.Context, string) (outpost.Record, error) {
 		return outpost.Record{ID: "id", Name: "name", Status: "created"}, nil
-	}, func(context.Context) ([]outpost.Record, error) { return nil, nil }, nil, "v", nil, nil, nil)
+	}, func(context.Context) ([]outpost.Record, error) { return nil, nil }, nil, nil, nil, "v", nil, nil, nil)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/outposts", nil))
 	if response.Code != http.StatusOK {
