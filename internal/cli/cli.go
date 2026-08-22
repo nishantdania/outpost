@@ -15,6 +15,7 @@ Commands:
   list      List Outposts
   delete    Delete an Outpost
   setup     Prepare a server for Firecracker
+  doctor    Check server readiness
   update    Update Outpost
   uninstall Remove Outpost
   version   Show versions
@@ -38,6 +39,8 @@ func Run(ctx context.Context, args []string, version string, stdout, stderr io.W
 		return run(deleteOutpost(ctx, args[1], stdout), "delete", stderr)
 	case len(args) == 1 && args[0] == "setup":
 		return run(setup(ctx), "setup", stderr)
+	case len(args) == 1 && args[0] == "doctor":
+		return run(doctor(ctx, stdout), "doctor", stderr)
 	case len(args) == 1 && args[0] == "version":
 		return run(versions(ctx, version, stdout), "version", stderr)
 	case len(args) == 2 && args[0] == "version" && args[1] == "local":

@@ -11,6 +11,7 @@ import (
 
 	"github.com/nishantdania/outpost/internal/config"
 	"github.com/nishantdania/outpost/internal/daemon"
+	"github.com/nishantdania/outpost/internal/doctor"
 	"github.com/nishantdania/outpost/internal/outpost"
 	"github.com/nishantdania/outpost/internal/setup"
 	"github.com/nishantdania/outpost/internal/update"
@@ -83,7 +84,7 @@ func main() {
 		log.Fatal(err)
 	}
 	service := outpost.New(path)
-	server := &http.Server{Addr: cfg.ListenAddr, Handler: daemon.New(service.Create, service.List, service.Delete, version, applyUpdate, uninstall)}
+	server := &http.Server{Addr: cfg.ListenAddr, Handler: daemon.New(service.Create, service.List, service.Delete, version, applyUpdate, uninstall, doctor.Run)}
 	log.Printf("outpostd listening on %s", cfg.ListenAddr)
 	log.Fatal(server.ListenAndServe())
 }

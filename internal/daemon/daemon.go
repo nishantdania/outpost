@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/nishantdania/outpost/internal/doctor"
 	"github.com/nishantdania/outpost/internal/outpost"
 	"github.com/nishantdania/outpost/internal/update"
 )
@@ -14,13 +15,15 @@ type ListFunc func(context.Context) ([]outpost.Record, error)
 type DeleteFunc func(context.Context, string) (bool, error)
 type UpdateFunc func(context.Context) (update.Result, error)
 type UninstallFunc func(context.Context) error
+type DoctorFunc func(context.Context) []doctor.Check
 
-func New(create CreateFunc, list ListFunc, delete DeleteFunc, version string, applyUpdate UpdateFunc, uninstall UninstallFunc) http.Handler {
+func New(create CreateFunc, list ListFunc, delete DeleteFunc, version string, applyUpdate UpdateFunc, uninstall UninstallFunc, doctorRun DoctorFunc) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /outposts", createHandler(create))
 	mux.HandleFunc("GET /outposts", listHandler(list))
 	mux.HandleFunc("DELETE /outposts/{id}", deleteHandler(delete))
 	mux.HandleFunc("GET /version", versionHandler(version))
+	mux.HandleFunc("GET /doctor", doctorHandler(doctorRun))
 	mux.HandleFunc("POST /update", updateHandler(applyUpdate))
 	mux.HandleFunc("POST /uninstall", uninstallHandler(uninstall))
 	return mux
@@ -53,6 +56,13 @@ func listHandler(list ListFunc) http.HandlerFunc {
 		write(w, struct {
 			Outposts []outpost.Record `json:"outposts"`
 		}{records})
+	}
+}
+func doctorHandler(run DoctorFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		write(w, struct {
+			Checks []doctor.Check `json:"checks"`
+		}{run(r.Context())})
 	}
 }
 func deleteHandler(delete DeleteFunc) http.HandlerFunc {
