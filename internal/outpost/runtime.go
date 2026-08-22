@@ -2,9 +2,13 @@ package outpost
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 func (service *Service) start(record *Record) error {
@@ -37,9 +41,22 @@ func (service *Service) start(record *Record) error {
 		log.Close()
 		return err
 	}
+	time.Sleep(time.Second)
+	if !alive(command.Process.Pid) {
+		return fmt.Errorf("firecracker exited; see %s", filepath.Join(directory, "firecracker.log"))
+	}
 	record.PID = command.Process.Pid
 	record.Socket = socket
 	return nil
+}
+
+func alive(pid int) bool {
+	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return false
+	}
+	parts := strings.Fields(string(data))
+	return len(parts) > 2 && parts[2] != "Z"
 }
 
 func (service *Service) stop(record Record) {
