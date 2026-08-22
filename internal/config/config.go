@@ -13,7 +13,8 @@ type Client struct {
 }
 
 type Daemon struct {
-	ListenAddr string `json:"listen_addr"`
+	ListenAddr         string `json:"listen_addr"`
+	FirecrackerVersion string `json:"firecracker_version"`
 }
 
 func ClientPath() (string, error) {
@@ -78,6 +79,9 @@ func LoadDaemonFile(path string) (Daemon, error) {
 	}
 	if cfg.ListenAddr == "" {
 		return Daemon{}, fmt.Errorf("%s: listen_addr is required", path)
+	}
+	if cfg.FirecrackerVersion == "" {
+		cfg.FirecrackerVersion = "v1.10.1"
 	}
 	return cfg, nil
 }

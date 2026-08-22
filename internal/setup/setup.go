@@ -17,7 +17,7 @@ import (
 	"strings"
 )
 
-func Run(ctx context.Context) error {
+func Run(ctx context.Context, firecrackerVersion string) error {
 	fmt.Fprintln(os.Stdout, "Checking host requirements…")
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("setup requires Linux")
@@ -39,7 +39,7 @@ func Run(ctx context.Context) error {
 	if err := os.MkdirAll(assets, 0o700); err != nil {
 		return err
 	}
-	firecracker, version, err := firecrackerBinary(ctx)
+	firecracker, version, err := firecrackerBinary(ctx, firecrackerVersion)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func get(ctx context.Context, url string) ([]byte, error) {
 	}
 	return io.ReadAll(res.Body)
 }
-func firecrackerBinary(ctx context.Context) ([]byte, string, error) {
+func firecrackerBinary(ctx context.Context, version string) ([]byte, string, error) {
 	arch := runtime.GOARCH
 	if arch == "amd64" {
 		arch = "x86_64"
@@ -118,7 +118,7 @@ func firecrackerBinary(ctx context.Context) ([]byte, string, error) {
 		arch = "aarch64"
 	}
 	base := "https://github.com/firecracker-microvm/firecracker/releases"
-	v := "v1.10.1"
+	v := version
 	a, e := get(ctx, fmt.Sprintf("%s/download/%s/firecracker-%s-%s.tgz", base, v, v, arch))
 	if e != nil {
 		return nil, "", e

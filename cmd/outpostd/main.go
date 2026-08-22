@@ -20,15 +20,15 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "--setup" {
-		if err := setup.Run(context.Background()); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
 	cfg, err := config.LoadDaemon()
 	if err != nil {
 		log.Fatal(err)
+	}
+	if len(os.Args) == 2 && os.Args[1] == "--setup" {
+		if err := setup.Run(context.Background(), cfg.FirecrackerVersion); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 
 	applyUpdate := func(ctx context.Context) (update.Result, error) {
