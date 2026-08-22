@@ -24,18 +24,22 @@ func (service *Service) start(record *Record) error {
 	} else if err != nil {
 		return err
 	}
-	info, err := os.Stat(rootfs)
-	if err != nil {
-		return err
-	}
-	const diskSize = int64(4 << 30)
-	if info.Size() < diskSize {
-		if err := os.Truncate(rootfs, diskSize); err != nil {
+	diskMarker := filepath.Join(directory, "disk-size")
+	if _, err := os.Stat(diskMarker); os.IsNotExist(err) {
+		if err := os.Truncate(rootfs, 4<<30); err != nil {
+			return err
+		}
+		if err := exec.Command("sh", "-c", "e2fsck -fy \"$1\"; code=$?; [ \"$code\" -le 1 ]", "sh", rootfs).Run(); err != nil {
 			return err
 		}
 		if err := exec.Command("resize2fs", rootfs).Run(); err != nil {
 			return err
 		}
+		if err := os.WriteFile(diskMarker, []byte("4G\n"), 0o600); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
 	socket := filepath.Join(directory, "firecracker.sock")
 	_ = os.Remove(socket)
