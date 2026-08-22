@@ -118,17 +118,7 @@ func firecrackerBinary(ctx context.Context) ([]byte, string, error) {
 		arch = "aarch64"
 	}
 	base := "https://github.com/firecracker-microvm/firecracker/releases"
-	r, e := http.NewRequestWithContext(ctx, http.MethodGet, base+"/latest", nil)
-	if e != nil {
-		return nil, "", e
-	}
-	res, e := http.DefaultClient.Do(r)
-	if e != nil {
-		return nil, "", e
-	}
-	res.Body.Close()
-	parts := strings.Split(strings.TrimRight(res.Request.URL.Path, "/"), "/")
-	v := parts[len(parts)-1]
+	v := "v1.10.1"
 	a, e := get(ctx, fmt.Sprintf("%s/download/%s/firecracker-%s-%s.tgz", base, v, v, arch))
 	if e != nil {
 		return nil, "", e
@@ -179,7 +169,11 @@ func images(ctx context.Context) ([]byte, []byte, string, string, error) {
 		if e != nil {
 			return "", e
 		}
-		r := regexp.MustCompile(prefix + regexp.QuoteMeta(arch) + `/` + kind + `[^<]+`)
+		pattern := `[0-9]+\.[0-9]+\.[0-9]+`
+		if kind == "ubuntu-" {
+			pattern = `[0-9]+\.[0-9]+\.squashfs`
+		}
+		r := regexp.MustCompile(prefix + regexp.QuoteMeta(arch) + `/` + kind + pattern)
 		m := r.FindAllString(string(d), -1)
 		if len(m) == 0 {
 			return "", fmt.Errorf("missing %s", kind)
