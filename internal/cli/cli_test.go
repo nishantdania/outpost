@@ -26,7 +26,7 @@ func TestRunCommandHelpDoesNotRunCommand(t *testing.T) {
 	if code := Run(context.Background(), []string{"create", "--help"}, "v0.0.2", &stdout, &stderr); code != 0 {
 		t.Fatalf("Run() code = %d", code)
 	}
-	if got := stdout.String(); got != "Usage: outpost create [name]\n" || stderr.Len() != 0 {
+	if got := stdout.String(); got != "Usage: outpost create [name]\n\nCreate and start a new Outpost.\n" || stderr.Len() != 0 {
 		t.Fatalf("output = stdout %q, stderr %q", got, stderr.String())
 	}
 }

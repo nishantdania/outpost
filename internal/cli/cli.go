@@ -116,23 +116,27 @@ func helpRequested(args []string) bool {
 }
 
 func printHelp(args []string, stdout io.Writer) int {
-	usage := map[string]string{
-		"create":    "outpost create [name]",
-		"list":      "outpost list",
-		"start":     "outpost start <id>",
-		"stop":      "outpost stop <id>",
-		"ssh":       "outpost ssh <id|name>",
-		"exec":      "outpost exec [-i] <id|name> <command>",
-		"cp":        "outpost cp [--mode MODE] <source> <id|name>:<destination>",
-		"delete":    "outpost delete <id|name>",
-		"setup":     "outpost setup",
-		"doctor":    "outpost doctor",
-		"update":    "outpost update [local|server]",
-		"uninstall": "outpost uninstall [local|server]",
-		"version":   "outpost version [local|server]",
+	type help struct {
+		usage       string
+		description string
 	}
-	if value, ok := usage[args[0]]; ok {
-		fmt.Fprintf(stdout, "Usage: %s\n", value)
+	commands := map[string]help{
+		"create":    {"outpost create [name]", "Create and start a new Outpost."},
+		"list":      {"outpost list", "List Outposts and their runtime status."},
+		"start":     {"outpost start <id>", "Start a stopped Outpost."},
+		"stop":      {"outpost stop <id>", "Stop an Outpost without deleting its disk."},
+		"ssh":       {"outpost ssh <id|name>", "Open an interactive SSH session to an Outpost."},
+		"exec":      {"outpost exec [-i] <id|name> <command>", "Run a Bash command in an Outpost; -i forwards stdin."},
+		"cp":        {"outpost cp [--mode MODE] <source> <id|name>:<destination>", "Copy a local, stdin, or host file into an Outpost."},
+		"delete":    {"outpost delete <id|name>", "Stop and permanently delete an Outpost."},
+		"setup":     {"outpost setup", "Prepare the server, VM assets, networking, and SSH access."},
+		"doctor":    {"outpost doctor", "Check whether the server is ready to run Outposts."},
+		"update":    {"outpost update [local|server]", "Update the local CLI, server daemon, or both."},
+		"uninstall": {"outpost uninstall [local|server]", "Remove Outpost and its managed resources."},
+		"version":   {"outpost version [local|server]", "Show local and server Outpost versions."},
+	}
+	if value, ok := commands[args[0]]; ok {
+		fmt.Fprintf(stdout, "Usage: %s\n\n%s\n", value.usage, value.description)
 	} else {
 		fmt.Fprintf(stdout, "No help available for %s.\n", args[0])
 	}
