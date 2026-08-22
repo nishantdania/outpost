@@ -25,7 +25,7 @@ func execOutpost(ctx context.Context, identifier, script string) error {
 		return err
 	}
 	encoded := base64.StdEncoding.EncodeToString([]byte(script))
-	remote := "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.local/share/outpost/id_ed25519 root@" + record.IP + " 'bash -lc \"$(printf %s " + encoded + " | base64 -d)\"'"
+	remote := "ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.local/share/outpost/id_ed25519 root@" + record.IP + " 'bash -lc \"$(printf %s " + encoded + " | base64 -d)\"'"
 	command := exec.CommandContext(ctx, "ssh", cfg.SSHHost, remote)
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return command.Run()

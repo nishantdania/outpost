@@ -47,7 +47,7 @@ func sshOutpost(ctx context.Context, identifier string) error {
 	if err != nil {
 		return err
 	}
-	remote := "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.local/share/outpost/id_ed25519 root@" + found.IP
+	remote := "ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.local/share/outpost/id_ed25519 root@" + found.IP
 	command := exec.CommandContext(ctx, "ssh", "-t", cfg.SSHHost, remote)
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return command.Run()

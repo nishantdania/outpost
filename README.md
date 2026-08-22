@@ -63,6 +63,7 @@ outpost doctor
 outpost create dev
 outpost list
 outpost ssh dev
+outpost exec dev 'uname -a'
 outpost stop <id>
 outpost start <id>
 outpost delete <id>
