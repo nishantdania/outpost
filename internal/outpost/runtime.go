@@ -97,10 +97,17 @@ func (service *Service) runtimeResources(record Record) (Resources, bool) {
 	}
 	var diskGiB int
 	marker, err := os.ReadFile(filepath.Join(directory, "disk-size"))
-	if err != nil {
-		return Resources{}, false
-	}
-	if _, err := fmt.Sscanf(string(marker), "%dG", &diskGiB); err != nil {
+	if err == nil {
+		if _, err := fmt.Sscanf(string(marker), "%dG", &diskGiB); err != nil {
+			return Resources{}, false
+		}
+	} else if os.IsNotExist(err) {
+		info, err := os.Stat(filepath.Join(directory, "rootfs.ext4"))
+		if err != nil {
+			return Resources{}, false
+		}
+		diskGiB = int((info.Size() + (1 << 30) - 1) >> 30)
+	} else {
 		return Resources{}, false
 	}
 	return Resources{VCPUs: config.Machine.VCPUs, MemoryMiB: config.Machine.MemoryMiB, DiskGiB: diskGiB}, true
