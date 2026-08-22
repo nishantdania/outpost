@@ -22,4 +22,12 @@ func TestCreateAndList(t *testing.T) {
 	if len(records) != 1 || records[0].ID != record.ID {
 		t.Fatalf("records = %#v", records)
 	}
+	deleted, err := service.Delete(context.Background(), record.ID)
+	if err != nil || !deleted {
+		t.Fatalf("Delete() = %v, %v", deleted, err)
+	}
+	records, err = service.List(context.Background())
+	if err != nil || len(records) != 0 {
+		t.Fatalf("records after delete = %#v, %v", records, err)
+	}
 }

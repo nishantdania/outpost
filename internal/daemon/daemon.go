@@ -11,13 +11,15 @@ import (
 
 type CreateFunc func(context.Context, string) (outpost.Record, error)
 type ListFunc func(context.Context) ([]outpost.Record, error)
+type DeleteFunc func(context.Context, string) (bool, error)
 type UpdateFunc func(context.Context) (update.Result, error)
 type UninstallFunc func(context.Context) error
 
-func New(create CreateFunc, list ListFunc, version string, applyUpdate UpdateFunc, uninstall UninstallFunc) http.Handler {
+func New(create CreateFunc, list ListFunc, delete DeleteFunc, version string, applyUpdate UpdateFunc, uninstall UninstallFunc) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /outposts", createHandler(create))
 	mux.HandleFunc("GET /outposts", listHandler(list))
+	mux.HandleFunc("DELETE /outposts/{id}", deleteHandler(delete))
 	mux.HandleFunc("GET /version", versionHandler(version))
 	mux.HandleFunc("POST /update", updateHandler(applyUpdate))
 	mux.HandleFunc("POST /uninstall", uninstallHandler(uninstall))
@@ -51,6 +53,20 @@ func listHandler(list ListFunc) http.HandlerFunc {
 		write(w, struct {
 			Outposts []outpost.Record `json:"outposts"`
 		}{records})
+	}
+}
+func deleteHandler(delete DeleteFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		deleted, err := delete(r.Context(), r.PathValue("id"))
+		if err != nil {
+			http.Error(w, "delete outpost", 500)
+			return
+		}
+		if !deleted {
+			http.Error(w, "outpost not found", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 func versionHandler(version string) http.HandlerFunc {

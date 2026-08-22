@@ -1,0 +1,63 @@
+package outpost
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+type Record struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Service struct {
+	path string
+	mu   sync.Mutex
+}
+
+func New(path string) *Service { return &Service{path: path} }
+
+func (service *Service) load() ([]Record, error) {
+	file, err := os.Open(service.path)
+	if os.IsNotExist(err) {
+		return []Record{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var records []Record
+	if err := json.NewDecoder(file).Decode(&records); err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+func (service *Service) save(records []Record) error {
+	if err := os.MkdirAll(filepath.Dir(service.path), 0o700); err != nil {
+		return err
+	}
+	file, err := os.CreateTemp(filepath.Dir(service.path), ".outposts-")
+	if err != nil {
+		return err
+	}
+	temporary := file.Name()
+	defer os.Remove(temporary)
+	if err := file.Chmod(0o600); err != nil {
+		file.Close()
+		return err
+	}
+	if err := json.NewEncoder(file).Encode(records); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporary, service.path)
+}
