@@ -32,7 +32,8 @@ func create(ctx context.Context, name string, stdout io.Writer) error {
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("daemon returned %s", response.Status)
+		message, _ := io.ReadAll(response.Body)
+		return fmt.Errorf("daemon returned %s: %s", response.Status, strings.TrimSpace(string(message)))
 	}
 	var body struct {
 		ID   string `json:"id"`

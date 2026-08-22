@@ -43,7 +43,7 @@ func createHandler(create CreateFunc) http.HandlerFunc {
 		}
 		record, err := create(r.Context(), body.Name)
 		if err != nil {
-			http.Error(w, "create outpost", 500)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		write(w, record)

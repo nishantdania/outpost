@@ -34,6 +34,7 @@ func (service *Service) Create(_ context.Context, name string) (Record, error) {
 		record.Tap = fmt.Sprintf("outpost-tap%d", index)
 		record.MAC = fmt.Sprintf("06:00:ac:1e:00:%02x", index+2)
 		if err := service.start(&record); err != nil {
+			service.stop(record)
 			return Record{}, err
 		}
 		record.Status = "running"

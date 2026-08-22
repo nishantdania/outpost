@@ -17,7 +17,7 @@ func Run(ctx context.Context) []Check {
 	home, _ := os.UserHomeDir()
 	assets := filepath.Join(home, ".local", "share", "outpost", "assets")
 	checks := []Check{}
-	for _, name := range []string{"/dev/kvm", filepath.Join(assets, "firecracker"), filepath.Join(assets, "vmlinux"), filepath.Join(assets, "rootfs.ext4"), filepath.Join(assets, "manifest.json")} {
+	for _, name := range []string{"/dev/kvm", filepath.Join(assets, "firecracker"), filepath.Join(assets, "vmlinux"), filepath.Join(assets, "rootfs.ext4"), filepath.Join(assets, "manifest.json"), filepath.Join(filepath.Dir(assets), "id_ed25519"), "/sys/class/net/outpost0", "/sys/class/net/outpost-tap0"} {
 		_, err := os.Stat(name)
 		checks = append(checks, Check{Name: name, OK: err == nil, Message: message(err)})
 	}
