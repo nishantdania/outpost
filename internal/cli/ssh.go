@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/nishantdania/outpost/internal/config"
 	"github.com/nishantdania/outpost/internal/outpost"
@@ -47,8 +48,19 @@ func sshOutpost(ctx context.Context, identifier string) error {
 	if err != nil {
 		return err
 	}
-	remote := "ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.local/share/outpost/id_ed25519 root@" + found.IP
-	command := exec.CommandContext(ctx, "ssh", "-t", cfg.SSHHost, remote)
+	key := "~/.local/share/outpost/id_ed25519"
+	var command *exec.Cmd
+	if cfg.SSHHost == "local" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		key = filepath.Join(home, ".local", "share", "outpost", "id_ed25519")
+		command = exec.CommandContext(ctx, "ssh", "-t", "-o", "LogLevel=ERROR", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-i", key, "root@"+found.IP)
+	} else {
+		remote := "ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i " + key + " root@" + found.IP
+		command = exec.CommandContext(ctx, "ssh", "-t", cfg.SSHHost, remote)
+	}
 	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return command.Run()
 }

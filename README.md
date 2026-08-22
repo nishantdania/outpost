@@ -44,6 +44,8 @@ Create `~/.config/outpost/daemon.json` on the server:
 }
 ```
 
+When the CLI runs on the daemon server, use `"daemon_url": "http://localhost:8080"` and `"ssh_host": "local"` to bypass the remote SSH hop.
+
 Enable the daemon:
 
 ```bash

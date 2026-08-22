@@ -62,22 +62,45 @@ func copyToOutpost(ctx context.Context, source, target string, mode os.FileMode,
 	guest := "set -eu; umask 077; destination=$(printf %s " + destination64 + " | base64 -d); parent=$(dirname -- \"$destination\"); mkdir -p -- \"$parent\"; temporary=$(mktemp \"$parent/.outpost-copy.XXXXXX\"); trap 'rm -f \"$temporary\"' EXIT; cat > \"$temporary\"; chmod " + fmt.Sprintf("%03o", mode) + " \"$temporary\"; mv -f -- \"$temporary\" \"$destination\"; trap - EXIT"
 	inner := "ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.local/share/outpost/id_ed25519 root@" + record.IP + " " + shellQuote(guest)
 	remote := inner
+	localSource := source
 	var input *os.File
 	if strings.HasPrefix(source, "host:") {
 		hostSource := strings.TrimPrefix(source, "host:")
 		if hostSource == "" {
 			return fmt.Errorf("host source is required")
 		}
-		source64 := base64.StdEncoding.EncodeToString([]byte(hostSource))
-		remote = "set -e -o pipefail; source=$(printf %s " + source64 + " | base64 -d); case \"$source\" in '~/'*) source=\"$HOME/${source#??}\";; esac; cat -- \"$source\" | " + inner
-	} else if source != "-" {
-		input, err = os.Open(source)
+		if cfg.SSHHost == "local" {
+			if strings.HasPrefix(hostSource, "~/") {
+				home, err := os.UserHomeDir()
+				if err != nil {
+					return err
+				}
+				hostSource = filepath.Join(home, strings.TrimPrefix(hostSource, "~/"))
+			}
+			localSource = hostSource
+		} else {
+			source64 := base64.StdEncoding.EncodeToString([]byte(hostSource))
+			remote = "set -e -o pipefail; source=$(printf %s " + source64 + " | base64 -d); case \"$source\" in '~/'*) source=\"$HOME/${source#??}\";; esac; cat -- \"$source\" | " + inner
+		}
+	}
+	if localSource != "-" && !(strings.HasPrefix(source, "host:") && cfg.SSHHost != "local") {
+		input, err = os.Open(localSource)
 		if err != nil {
 			return err
 		}
 		defer input.Close()
 	}
-	command := exec.CommandContext(ctx, "ssh", cfg.SSHHost, remote)
+	var command *exec.Cmd
+	if cfg.SSHHost == "local" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		key := filepath.Join(home, ".local", "share", "outpost", "id_ed25519")
+		command = exec.CommandContext(ctx, "ssh", "-o", "LogLevel=ERROR", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-i", key, "root@"+record.IP, guest)
+	} else {
+		command = exec.CommandContext(ctx, "ssh", cfg.SSHHost, remote)
+	}
 	if source == "-" {
 		command.Stdin = os.Stdin
 	} else if input != nil {
