@@ -47,6 +47,7 @@ func (service *Service) start(record *Record) error {
 	}
 	record.PID = command.Process.Pid
 	record.Socket = socket
+	go func() { _ = command.Wait(); _ = log.Close() }()
 	return nil
 }
 
