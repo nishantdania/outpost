@@ -9,6 +9,7 @@ import (
 
 type Client struct {
 	DaemonURL string `json:"daemon_url"`
+	SSHHost   string `json:"ssh_host"`
 }
 
 type Daemon struct {

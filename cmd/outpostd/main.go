@@ -12,12 +12,19 @@ import (
 	"github.com/nishantdania/outpost/internal/config"
 	"github.com/nishantdania/outpost/internal/daemon"
 	"github.com/nishantdania/outpost/internal/outpost"
+	"github.com/nishantdania/outpost/internal/setup"
 	"github.com/nishantdania/outpost/internal/update"
 )
 
 var version = "dev"
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--setup" {
+		if err := setup.Run(context.Background()); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	cfg, err := config.LoadDaemon()
 	if err != nil {
 		log.Fatal(err)
