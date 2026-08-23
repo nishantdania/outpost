@@ -1,0 +1,22 @@
+[Unit]
+Description=arkd API daemon
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=arkd
+Group=arkd
+ExecStart=/usr/local/bin/arkd --listen=127.0.0.1:17890
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+StateDirectory=arkd
+RuntimeDirectory=arkd
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
