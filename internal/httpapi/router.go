@@ -1,10 +1,11 @@
 package httpapi
 
-import "net/http"
+import (
+	"net/http"
 
-func newRouter() *http.ServeMux {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/arks", listArks)
+	"github.com/nishantdania/ark/internal/api"
+)
 
-	return mux
+func newRouter() http.Handler {
+	return api.Handler(handler{})
 }

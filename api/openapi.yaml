@@ -1,0 +1,36 @@
+openapi: 3.0.3
+info:
+  title: Ark API
+  version: 1.0.0
+paths:
+  /v1/arks:
+    get:
+      operationId: listArks
+      summary: List Arks
+      responses:
+        "200":
+          description: Arks were listed successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ark"
+components:
+  schemas:
+    Ark:
+      type: object
+      required:
+        - id
+        - name
+        - status
+      properties:
+        id:
+          type: string
+          example: ark_123
+        name:
+          type: string
+          example: investigate-deploy
+        status:
+          type: string
+          example: running

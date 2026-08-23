@@ -5,13 +5,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/nishantdania/ark/internal/api"
 )
 
 func TestListArks(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/v1/arks", nil)
 	rec := httptest.NewRecorder()
 
-	listArks(rec, req)
+	handler{}.ListArks(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -21,7 +23,7 @@ func TestListArks(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want %q", got, "application/json")
 	}
 
-	var arks []string
+	var arks []api.Ark
 	if err := json.Unmarshal(rec.Body.Bytes(), &arks); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
