@@ -5,14 +5,19 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 root=$work/root
 artifacts=$work/artifacts
-mkdir -p "$root" "$artifacts" "$work/bin"
+mkdir -p "$root" "$artifacts" "$work/bin" "$work/standalone"
+cp "$repo/scripts/install-server" "$work/standalone/install-server"
+chmod 755 "$work/standalone/install-server"
+installer=$work/standalone/install-server
 for name in ark arkd ark-vm-launcher firecracker jailer vmlinux rootfs.ext4 default.oci.tar; do printf 'tiny %s\n' "$name" > "$artifacts/$name"; done
+cp "$repo/deploy/systemd/arkd.service" "$artifacts/arkd.service"
+cp "$repo/deploy/systemd/ark-vm-launcher.service" "$artifacts/ark-vm-launcher.service"
 zstd -q --no-progress -19 -f "$artifacts/rootfs.ext4" -o "$artifacts/rootfs.ext4.zst"
 zstd -q --no-progress -19 -f "$artifacts/default.oci.tar" -o "$artifacts/default.oci.tar.zst"
 rm "$artifacts/rootfs.ext4" "$artifacts/default.oci.tar"
 python3 - "$artifacts" <<'PY'
 import hashlib,json,os,sys
-p=sys.argv[1]; names={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
+p=sys.argv[1]; names={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','arkd.service':'arkd.service','ark-vm-launcher.service':'ark-vm-launcher.service'}
 a=[]
 for n,f in names.items():
  b=open(os.path.join(p,f),'rb').read(); a.append({'name':n,'file':f,'sha256':hashlib.sha256(b).hexdigest(),'url':'https://example.test/'+f})
@@ -45,7 +50,7 @@ install_uid=$(id -u)
 install_gid=$(id -g)
 root_uid=4242
 root_gid=4243
-run() { timeout "${ARK_INSTALL_TIMEOUT:-30}" env PATH="$work/bin:$PATH" ARK_REAL_CHOWN="$real_chown" ARK_FAKE_CHOWN_LOG="$work/chown" ARK_REAL_LN="$real_ln" ARK_FAKE_LN_LOG="$work/ln" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$install_uid" ARK_INSTALL_GID="$install_gid" ARK_INSTALL_ROOT_UID="$root_uid" ARK_INSTALL_ROOT_GID="$root_gid" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$install_uid" ARK_INSTALL_HANDOFF_GID="$install_gid" SUDO_UID="$install_uid" SUDO_GID="$install_gid" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$artifacts" ARK_FAKE_LOG="$work/log" ARK_INSTALL_TEST_SYSTEMCTL="${ARK_INSTALL_TEST_SYSTEMCTL:-0}" ARK_SYSTEMCTL_FAIL="${ARK_SYSTEMCTL_FAIL:-0}" ARK_INSTALL_TEST_FAIL_HARDLINK="${ARK_INSTALL_TEST_FAIL_HARDLINK:-0}" ARK_INSTALL_TEST_LOG="$work/order" "$repo/scripts/install-server"; }
+run() { timeout "${ARK_INSTALL_TIMEOUT:-30}" env PATH="$work/bin:$PATH" ARK_REAL_CHOWN="$real_chown" ARK_FAKE_CHOWN_LOG="$work/chown" ARK_REAL_LN="$real_ln" ARK_FAKE_LN_LOG="$work/ln" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$install_uid" ARK_INSTALL_GID="$install_gid" ARK_INSTALL_ROOT_UID="$root_uid" ARK_INSTALL_ROOT_GID="$root_gid" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$install_uid" ARK_INSTALL_HANDOFF_GID="$install_gid" SUDO_UID="$install_uid" SUDO_GID="$install_gid" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$artifacts" ARK_FAKE_LOG="$work/log" ARK_INSTALL_TEST_SYSTEMCTL="${ARK_INSTALL_TEST_SYSTEMCTL:-0}" ARK_SYSTEMCTL_FAIL="${ARK_SYSTEMCTL_FAIL:-0}" ARK_INSTALL_TEST_FAIL_HARDLINK="${ARK_INSTALL_TEST_FAIL_HARDLINK:-0}" ARK_INSTALL_TEST_LOG="$work/order" "$installer"; }
 run
 [ "$(head -n 2 "$work/order" | tr '\n' ' ')" = 'hardlink identities ' ]
 grep -Fqx "$root/srv/ark/state/.ark-hardlink-probe $root/srv/ark/jailer/.ark-hardlink-probe" "$work/ln"
@@ -102,6 +107,10 @@ ARK_VERSION=0.1.0 ARK_OUTPUT_DIR="$work/output" ARK_FIRECRACKER="$artifacts/fire
 [ ! -e "$work/output/release/stale" ]
 [ -f "$work/output/release/rootfs.ext4.zst" ]
 [ -f "$work/output/release/default.oci.tar.zst" ]
+[ -f "$work/output/release/arkd.service" ]
+[ -f "$work/output/release/ark-vm-launcher.service" ]
+[ -x "$work/output/release/install-server" ]
+( cd "$work/output/release" && sha256sum -c checksums.txt )
 [ ! -e "$work/output/release/rootfs.ext4" ]
 [ ! -e "$work/output/release/default.oci.tar" ]
 artifacts=$work/output/release
@@ -165,6 +174,11 @@ fail_preapply() {
 good=$artifacts
 cp -a "$good" "$work/bad"; printf x >> "$work/bad/ark"; artifacts=$work/bad; fail_preapply
 cp -a "$good" "$work/missing"; rm "$work/missing/jailer"; artifacts=$work/missing; fail_preapply
+for name in arkd.service ark-vm-launcher.service; do
+ cp -a "$good" "$work/missing-$name"; rm "$work/missing-$name/$name"; artifacts=$work/missing-$name; fail_preapply
+ cp -a "$good" "$work/corrupt-$name"; printf x >> "$work/corrupt-$name/$name"; artifacts=$work/corrupt-$name; fail_preapply
+done
+cp -a "$good" "$work/swapped-services"; mv "$work/swapped-services/arkd.service" "$work/swapped-services/service.tmp"; mv "$work/swapped-services/ark-vm-launcher.service" "$work/swapped-services/arkd.service"; mv "$work/swapped-services/service.tmp" "$work/swapped-services/ark-vm-launcher.service"; artifacts=$work/swapped-services; fail_preapply
 cp -a "$good" "$work/corrupt-compression"; printf x >> "$work/corrupt-compression/rootfs.ext4.zst"; artifacts=$work/corrupt-compression; fail_preapply
 cp -a "$good" "$work/invalid-compression"; printf x > "$work/invalid-compression/rootfs.ext4.zst"; artifacts=$work/invalid-compression python3 - <<'PY'
 import hashlib,json,os
@@ -205,15 +219,20 @@ PY
 done
 artifacts=$work/symlink-manifest; cp -a "$good" "$artifacts"; mv "$artifacts/assets.json" "$artifacts/real.json"; ln -s real.json "$artifacts/assets.json"; fail_preapply
 rm -rf "$root"; mkdir "$root"; artifacts=$work/symlink; cp -a "$good" "$artifacts"; rm "$artifacts/jailer"; ln -s ark "$artifacts/jailer"; fail_preapply
+for name in arkd.service ark-vm-launcher.service; do
+ artifacts=$work/symlink-$name; cp -a "$good" "$artifacts"; rm "$artifacts/$name"; ln -s ark "$artifacts/$name"; fail_preapply
+done
 artifacts=$good; rm -rf "$root"; mkdir "$root"; ARK_INSTALL_TEST_FAIL_HARDLINK=1 run >/dev/null 2>&1 && { echo 'hardlink failure accepted' >&2; exit 1; }
 artifacts=$good; ARK_INSTALL_TEST_SYSTEMCTL=1 ARK_SYSTEMCTL_FAIL=1 run >/dev/null 2>&1 && { echo 'systemctl failure accepted' >&2; exit 1; }
+artifacts=$good; run
+grep -Fqx 'User=arkd' "$root/etc/systemd/system/arkd.service"
 grep -q 'daemon-reload' "$work/log"
-invalid_input() { rm -rf "$root"; mkdir "$root"; if env PATH="$work/bin:$PATH" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$(id -u)" ARK_INSTALL_GID="$(id -g)" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$(id -u)" ARK_INSTALL_HANDOFF_GID="$(id -g)" SUDO_UID="$(id -u)" SUDO_GID="$(id -g)" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$good" "$@" "$repo/scripts/install-server" >/dev/null 2>&1; then echo 'invalid input accepted' >&2; exit 1; fi; [ ! -e "$root/usr" ]; }
+invalid_input() { rm -rf "$root"; mkdir "$root"; if env PATH="$work/bin:$PATH" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$(id -u)" ARK_INSTALL_GID="$(id -g)" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$(id -u)" ARK_INSTALL_HANDOFF_GID="$(id -g)" SUDO_UID="$(id -u)" SUDO_GID="$(id -g)" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$good" "$@" "$installer" >/dev/null 2>&1; then echo 'invalid input accepted' >&2; exit 1; fi; [ ! -e "$root/usr" ]; }
 invalid_input 'ARK_UPLINK=eth0|bad'
 invalid_input ARK_DNS=not-an-ip
 invalid_input 'ARK_LISTEN=0.0.0.0:17890'
 invalid_input 'ARK_CLIENT_HANDOFF=/etc/../outside'
 rm -rf "$root"; mkdir "$root"
-if PATH="$work/bin:$PATH" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$(id -u)" ARK_INSTALL_GID="$(id -g)" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_RELEASE_URL=https://example.test ARK_ASSETS_MANIFEST_SHA256=xyz "$repo/scripts/install-server" >/dev/null 2>&1; then echo 'malformed remote checksum accepted' >&2; exit 1; fi
+if PATH="$work/bin:$PATH" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$(id -u)" ARK_INSTALL_GID="$(id -g)" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_RELEASE_URL=https://example.test ARK_ASSETS_MANIFEST_SHA256=xyz "$installer" >/dev/null 2>&1; then echo 'malformed remote checksum accepted' >&2; exit 1; fi
 [ ! -e "$root/usr" ]
 printf '%s\n' 'TestInstallServerIntegration'
