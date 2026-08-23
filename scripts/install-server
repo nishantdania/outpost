@@ -1,0 +1,280 @@
+#!/bin/sh
+set -eu
+root=${ARK_INSTALL_ROOT:-}
+test_mode=${ARK_INSTALL_TEST:-0}
+log_event() { [ -z "${ARK_INSTALL_TEST_LOG:-}" ] || printf '%s\n' "$1" >> "$ARK_INSTALL_TEST_LOG"; }
+[ "$test_mode" != 1 ] || [ -n "$root" ] || { echo 'ARK_INSTALL_ROOT is required' >&2; exit 1; }
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+version=${ARK_VERSION:?ARK_VERSION is required}
+prefix=${ARK_PREFIX:-/usr/local}
+state=${ARK_STATE_DIR:-/var/lib/arkd}
+launcher_state=${ARK_LAUNCHER_STATE_DIR:-/srv/ark/state}
+runtime=${ARK_RUNTIME_DIR:-/run/ark}
+jail=${ARK_JAILER_DIR:-/srv/ark/jailer}
+config=${ARK_CONFIG_DIR:-/etc/arkd}
+listen=${ARK_LISTEN:-127.0.0.1:17890}
+[ "$prefix:$state:$launcher_state:$runtime:$jail:$config" = "/usr/local:/var/lib/arkd:/srv/ark/state:/run/ark:/srv/ark/jailer:/etc/arkd" ] || { echo 'path overrides are unsupported' >&2; exit 1; }
+uplink=${ARK_UPLINK:?ARK_UPLINK is required}
+dns=${ARK_DNS:-1.1.1.1}
+handoff=${ARK_CLIENT_HANDOFF:-}
+server=${ARK_SERVER:-http://$listen}
+python3 - "$prefix" "$state" "$launcher_state" "$runtime" "$jail" "$config" "$handoff" "$listen" "$uplink" "$dns" "$server" <<'PY'
+import ipaddress,re,sys,urllib.parse
+*paths,listen,uplink,dns,server=sys.argv[1:]
+for p in paths:
+ if p and (not re.fullmatch(r'/[A-Za-z0-9._/-]*',p) or '//' in p or '/./' in p+'/' or '/../' in p+'/' or (len(p)>1 and p.endswith('/'))): raise SystemExit('invalid absolute path')
+if not re.fullmatch(r'(127\.0\.0\.1|localhost|(?:[0-9]{1,3}\.){3}[0-9]{1,3}):[1-9][0-9]{0,4}',listen): raise SystemExit('invalid listen address')
+host,port=listen.rsplit(':',1)
+if host not in ('localhost','127.0.0.1'): ipaddress.IPv4Address(host)
+if int(port)>65535: raise SystemExit('invalid listen port')
+if not re.fullmatch(r'[A-Za-z0-9_.-]{1,15}',uplink): raise SystemExit('invalid uplink')
+ipaddress.IPv4Address(dns)
+u=urllib.parse.urlsplit(server)
+if u.scheme not in ('http','https') or not u.hostname or u.username or u.password or u.path not in ('','/') or u.query or u.fragment or not re.fullmatch(r'[A-Za-z0-9.:-]+',u.netloc): raise SystemExit('invalid ARK_SERVER')
+if host=='0.0.0.0' and server=='http://'+listen: raise SystemExit('ARK_SERVER is required for wildcard listen')
+PY
+[ -z "${ARK_ASSETS_DIR:-}" ] || [ "$ARK_ASSETS_DIR" = "$prefix/lib/ark" ] || { echo 'ARK_ASSETS_DIR is unsupported' >&2; exit 1; }
+for value in "$prefix" "$state" "$launcher_state" "$runtime" "$jail" "$config"; do case "$value" in /*) ;; *) echo 'all paths must be absolute' >&2; exit 1;; esac; done
+if [ "$test_mode" != 1 ]; then
+ [ "$(id -u)" = 0 ] || { echo 'must run as root' >&2; exit 1; }
+ [ "$(uname -s)" = Linux ] || { echo 'Linux is required' >&2; exit 1; }
+ case "$(uname -m)" in x86_64) :;; *) echo 'unsupported architecture' >&2; exit 1;; esac
+ for command in ip nft e2fsck resize2fs debugfs ssh-keygen ssh scp rsync sha256sum install useradd usermod groupadd getent systemctl python3 base64 curl zstd; do command -v "$command" >/dev/null 2>&1 || { echo "missing $command" >&2; exit 1; }; done
+ if ! { [ -r /dev/kvm ] && [ -c /dev/net/tun ] && [ -c /dev/userfaultfd ] && [ -f /sys/fs/cgroup/cgroup.controllers ]; }; then
+  echo 'KVM, TUN, userfaultfd, and cgroup v2 are required' >&2
+  exit 1
+ fi
+ [ "$(cat /proc/sys/net/ipv4/ip_forward)" = 1 ] || { echo 'IPv4 forwarding must be enabled' >&2; exit 1; }
+fi
+if [ "$test_mode" = 1 ]; then
+ handoff_home=${ARK_INSTALL_HANDOFF_HOME:?ARK_INSTALL_HANDOFF_HOME is required in test mode}; handoff_uid=${ARK_INSTALL_HANDOFF_UID:?ARK_INSTALL_HANDOFF_UID is required in test mode}; handoff_gid=${ARK_INSTALL_HANDOFF_GID:?ARK_INSTALL_HANDOFF_GID is required in test mode}
+elif [ -n "${SUDO_UID:-}" ] && [ -n "${SUDO_GID:-}" ]; then
+ user_record=$(getent passwd "$SUDO_UID") || { echo 'invalid sudo user' >&2; exit 1; }
+ IFS=: read -r _ _ handoff_uid handoff_gid _ handoff_home _ <<EOF
+$user_record
+EOF
+ if ! { [ "$handoff_uid:$handoff_gid" = "$SUDO_UID:$SUDO_GID" ] && [ -n "$handoff_home" ]; }; then
+  echo 'invalid sudo user' >&2
+  exit 1
+ fi
+else
+ handoff_home=/root; handoff_uid=0; handoff_gid=0
+fi
+[ -n "$handoff" ] || handoff=$handoff_home/.config/ark/server.env
+case "$handoff" in /*) ;; *) echo 'invalid client handoff path' >&2; exit 1;; esac
+source=${ARK_ARTIFACT_DIR:-}
+stage="$root/.ark-install-stage.$$"
+cleanup() { rm -rf "$stage"; }
+trap cleanup EXIT HUP INT TERM
+mkdir -p "$stage"
+if [ -z "$source" ]; then
+ base=${ARK_RELEASE_URL:?ARK_RELEASE_URL is required when ARK_ARTIFACT_DIR is unset}
+ want=${ARK_ASSETS_MANIFEST_SHA256:?ARK_ASSETS_MANIFEST_SHA256 is required for remote installation}
+ case "$base" in https://*) ;; *) echo 'ARK_RELEASE_URL must use HTTPS' >&2; exit 1;; esac
+ [ "${#want}" -eq 64 ] || { echo 'invalid manifest checksum' >&2; exit 1; }
+ case "$want" in *[!0-9a-f]*) echo 'invalid manifest checksum' >&2; exit 1;; esac
+ curl --fail --location --proto '=https' --tlsv1.2 -o "$stage/assets.json" "$base/assets.json"
+ actual=$(sha256sum "$stage/assets.json" | awk '{print $1}'); [ "$actual" = "$want" ] || { echo 'manifest checksum mismatch' >&2; exit 1; }
+ source=$stage
+ python3 - "$source/assets.json" "$version" <<'PY' | while IFS=' ' read -r file url; do
+import json,re,sys,urllib.parse
+def pairs(v):
+ d={}
+ for k,x in v:
+  if k in d: raise ValueError('duplicate key')
+  d[k]=x
+ return d
+m=json.load(open(sys.argv[1]),object_pairs_hook=pairs); required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
+if set(m)!= {'version','architecture','assets'} or m['version']!=sys.argv[2] or m['architecture']!='amd64' or len(m['assets'])!=len(required): raise SystemExit('invalid remote manifest')
+seen=set()
+for a in m['assets']:
+ if not isinstance(a,dict) or set(a)!= {'name','file','sha256','url'} or required.get(a.get('name'))!=a.get('file') or a['file'] in seen or not re.fullmatch(r'[a-f0-9]{64}',a['sha256']): raise SystemExit('invalid remote manifest')
+ u=urllib.parse.urlsplit(a['url'])
+ if u.scheme!='https' or not u.netloc or u.username or u.password or u.query or u.fragment or not re.fullmatch(r'/[A-Za-z0-9._~/%+-]*',u.path): raise SystemExit('invalid remote manifest')
+ seen.add(a['file']); print(a['file'],a['url'])
+PY
+  curl --fail --location --proto '=https' --tlsv1.2 -o "$source/$file" "$url"
+ done
+fi
+python3 - "$source" "$version" "$stage/verified" <<'PY'
+import hashlib,json,os,re,stat,sys,urllib.parse
+source,version,out=sys.argv[1:]
+required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
+try:
+ if stat.S_ISLNK(os.lstat(source+'/assets.json').st_mode): raise ValueError('symlink manifest')
+ fd=os.open(source+'/assets.json',os.O_RDONLY|os.O_NOFOLLOW)
+ try:
+  before=os.fstat(fd)
+  if not stat.S_ISREG(before.st_mode): raise ValueError('invalid manifest')
+  d=os.read(fd,before.st_size)
+  after=os.fstat(fd)
+  if (before.st_dev,before.st_ino,before.st_mode,before.st_size)!=(after.st_dev,after.st_ino,after.st_mode,after.st_size): raise ValueError('manifest changed while reading')
+ finally: os.close(fd)
+ def pairs(v):
+  x={}
+  for k,n in v:
+   if k in x: raise ValueError('duplicate key')
+   x[k]=n
+  return x
+ o=json.loads(d,object_pairs_hook=pairs)
+except Exception as e: raise SystemExit('invalid manifest: '+str(e))
+if set(o)!= {'version','architecture','assets'} or o['version'] != version or o['architecture'] != 'amd64' or not isinstance(o['assets'],list) or len(o['assets']) != len(required): raise SystemExit('invalid asset manifest')
+seen=set(); files=set(); safe=re.compile(r'^[a-z0-9][a-z0-9._-]*$'); dig=re.compile(r'^[a-f0-9]{64}$')
+os.mkdir(out)
+open(os.path.join(out,'assets.json'),'xb').write(d)
+for a in o['assets']:
+ u=urllib.parse.urlsplit(a.get('url',''))
+ if not isinstance(a,dict) or set(a)!={'name','file','sha256','url'} or required.get(a.get('name')) != a.get('file') or a['name'] in seen or a['file'] in files or not safe.fullmatch(a['file']) or not dig.fullmatch(a['sha256']) or u.scheme!='https' or not u.netloc or u.username or u.password or u.query or u.fragment or not re.fullmatch(r'/[A-Za-z0-9._~/%+-]*',u.path): raise SystemExit('invalid asset manifest')
+ p=os.path.join(source,a['file'])
+ fd=os.open(p, os.O_RDONLY|os.O_NOFOLLOW)
+ try:
+  before=os.fstat(fd)
+  if not stat.S_ISREG(before.st_mode): raise ValueError('invalid asset source')
+  target=os.path.join(out,a['file'])
+  h=hashlib.sha256()
+  with os.fdopen(fd,'rb',closefd=False) as src, open(target,'xb') as dst:
+   while True:
+    chunk=src.read(1024*1024)
+    if not chunk: break
+    h.update(chunk); dst.write(chunk)
+  after=os.fstat(fd)
+  if h.hexdigest()!=a['sha256']:
+   os.unlink(target); raise ValueError('checksum mismatch: '+a['file'])
+  if (before.st_dev,before.st_ino,before.st_mode,before.st_size)!=(after.st_dev,after.st_ino,after.st_mode,after.st_size):
+   os.unlink(target); raise ValueError('asset changed while reading')
+ finally: os.close(fd)
+ seen.add(a['name']); files.add(a['file'])
+PY
+python3 - "$stage/verified" "${ARK_ROOTFS_MAX_BYTES:-8589934592}" "${ARK_OCI_MAX_BYTES:-8589934592}" <<'PY'
+import os,subprocess,sys
+root,rootfs_max,oci_max=sys.argv[1:]
+for source,target,limit in (('rootfs.ext4.zst','rootfs.ext4',rootfs_max),('default.oci.tar.zst','default.oci.tar',oci_max)):
+ try: limit=int(limit)
+ except ValueError: raise SystemExit('invalid expansion limit')
+ if limit < 1: raise SystemExit('invalid expansion limit')
+ source=os.path.join(root,source); target=os.path.join(root,target)
+ infd=os.open(source,os.O_RDONLY|os.O_NOFOLLOW)
+ outfd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+ total=0
+ process=None
+ zeros=b'\0'*(1024*1024)
+ try:
+  process=subprocess.Popen(['zstd','-d','-q','-c'],stdin=infd,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+  while True:
+   chunk=process.stdout.read(1024*1024)
+   if not chunk: break
+   total+=len(chunk)
+   if total>limit: process.kill(); process.wait(); raise ValueError('expansion limit exceeded')
+   if chunk==zeros[:len(chunk)]:
+    os.lseek(outfd,len(chunk),os.SEEK_CUR)
+    continue
+   offset=0
+   while offset<len(chunk):
+    written=os.write(outfd,chunk[offset:])
+    if written<=0: raise ValueError('failed to write expanded asset')
+    offset+=written
+  if process.wait()!=0: raise ValueError('invalid compressed asset')
+  os.ftruncate(outfd,total)
+  os.fsync(outfd)
+ except Exception:
+  if process is not None and process.poll() is None: process.kill(); process.wait()
+  os.unlink(target); raise
+ finally:
+  os.close(infd); os.close(outfd)
+PY
+assets_dir=$prefix/lib/ark
+launcher_assets_dir=$assets_dir/launcher
+for path in "$launcher_state" "$jail"; do install -d -m 0750 "$root$path"; done
+probe="$root$launcher_state/.ark-hardlink-probe"; : > "$probe"
+if [ "${ARK_INSTALL_TEST_FAIL_HARDLINK:-0}" = 1 ] || ! ln "$probe" "$root$jail/.ark-hardlink-probe"; then rm -f "$probe" "$root$jail/.ark-hardlink-probe"; echo 'launcher state and jail must support hardlinks' >&2; exit 1; fi
+rm -f "$probe" "$root$jail/.ark-hardlink-probe"
+log_event hardlink
+log_event identities
+if [ "$test_mode" != 1 ]; then
+ getent group arkd >/dev/null || groupadd --system arkd
+ getent group arkvm >/dev/null || groupadd --system arkvm
+ id arkd >/dev/null 2>&1 || useradd --system --gid arkd --home-dir /nonexistent --shell /usr/sbin/nologin arkd
+ id arkvm >/dev/null 2>&1 || useradd --system --gid arkvm --home-dir /nonexistent --shell /usr/sbin/nologin arkvm
+ usermod -L arkd; usermod -L arkvm
+ if command -v podman >/dev/null 2>&1; then
+  command -v newuidmap >/dev/null 2>&1 || { echo 'newuidmap is required for rootless Podman' >&2; exit 1; }
+  command -v newgidmap >/dev/null 2>&1 || { echo 'newgidmap is required for rootless Podman' >&2; exit 1; }
+  allocate_subid() {
+   file=$1
+   python3 - "$file" <<'PY'
+import sys
+used=[]
+try:
+ for line in open(sys.argv[1]):
+  parts=line.strip().split(':')
+  if len(parts)==3 and parts[1].isdigit() and parts[2].isdigit(): used.append((int(parts[1]),int(parts[1])+int(parts[2])))
+except FileNotFoundError: pass
+start=100000
+while any(start < end and start+65536 > begin for begin,end in used): start+=65536
+print(f'{start}-{start+65535}')
+PY
+  }
+  grep -q '^arkd:' /etc/subuid || usermod --add-subuids "$(allocate_subid /etc/subuid)" arkd
+  grep -q '^arkd:' /etc/subgid || usermod --add-subgids "$(allocate_subid /etc/subgid)" arkd
+ fi
+ owner_arkd=arkd:arkd; owner_static=root:arkd; owner_launcher=root:arkd; owner_vm=root:arkvm; owner_root=root:root
+else owner_arkd=${ARK_INSTALL_UID:-0}:${ARK_INSTALL_GID:-0}; root_uid=${ARK_INSTALL_ROOT_UID:-${ARK_INSTALL_UID:-0}}; root_gid=${ARK_INSTALL_ROOT_GID:-${ARK_INSTALL_GID:-0}}; owner_static=$root_uid:${ARK_INSTALL_GID:-0}; owner_launcher=$owner_arkd; owner_vm=${ARK_INSTALL_ARKVM_UID:-${ARK_INSTALL_UID:-0}}:${ARK_INSTALL_ARKVM_GID:-${ARK_INSTALL_GID:-0}}; owner_root=$root_uid:$root_gid; fi
+for path in "$state" "$launcher_state" "$jail" "$runtime" "$config" "$assets_dir" "$launcher_assets_dir" "$state/images" "$state/images/default" "$state/podman" "$runtime/podman" "/etc/systemd/system"; do install -d -m 0750 "$root$path"; done
+chown "$owner_arkd" "$root$state" "$root$config" "$root$state/images" "$root$state/images/default" "$root$state/podman" "$root$runtime/podman"
+chown "$owner_static" "$root$assets_dir"
+chown "$owner_launcher" "$root$launcher_state" "$root$runtime"
+chown "$owner_vm" "$root$jail" "$root$launcher_assets_dir"
+install -d -m 0755 "$root$prefix/bin"
+install -m 0755 "$stage/verified/ark" "$root$prefix/bin/.ark.new.$$"
+install -m 0750 "$stage/verified/arkd" "$root$assets_dir/.arkd.new.$$"
+for name in default.oci.tar assets.json; do install -m 0640 "$stage/verified/$name" "$root$assets_dir/.$name.new.$$"; done
+for name in ark-vm-launcher firecracker jailer; do install -m 0750 "$stage/verified/$name" "$root$launcher_assets_dir/.$name.new.$$"; done
+install -m 0640 "$stage/verified/vmlinux" "$root$launcher_assets_dir/.vmlinux.new.$$"
+install -m 0640 "$stage/verified/rootfs.ext4" "$root$state/images/default/.rootfs.ext4.new.$$"
+chown "$owner_static" "$root$assets_dir/.arkd.new.$$" "$root$assets_dir/.default.oci.tar.new.$$" "$root$assets_dir/.assets.json.new.$$"
+chown "$owner_arkd" "$root$state/images/default/.rootfs.ext4.new.$$"
+chown "$owner_vm" "$root$launcher_assets_dir/.ark-vm-launcher.new.$$" "$root$launcher_assets_dir/.firecracker.new.$$" "$root$launcher_assets_dir/.jailer.new.$$" "$root$launcher_assets_dir/.vmlinux.new.$$"
+mv "$root$prefix/bin/.ark.new.$$" "$root$prefix/bin/ark"
+mv "$root$assets_dir/.arkd.new.$$" "$root$assets_dir/arkd"
+for name in default.oci.tar assets.json; do mv "$root$assets_dir/.$name.new.$$" "$root$assets_dir/$name"; done
+for name in ark-vm-launcher firecracker jailer vmlinux; do mv "$root$launcher_assets_dir/.$name.new.$$" "$root$launcher_assets_dir/$name"; done
+rm -f "$root$assets_dir/ark-vm-launcher" "$root$assets_dir/firecracker" "$root$assets_dir/jailer" "$root$assets_dir/vmlinux"
+mv "$root$state/images/default/.rootfs.ext4.new.$$" "$root$state/images/default/rootfs.ext4"
+if [ ! -s "$root$config/token" ]; then umask 077; head -c 32 /dev/urandom | base64 > "$root$config/token"; fi
+chmod 0600 "$root$config/token"; chown "$owner_arkd" "$root$config/token"
+cat > "$root$config/arkd.env" <<EOF
+ARKD_TOKEN=$(cat "$root$config/token")
+ARK_LAUNCHER_SOCKET=$runtime/vm-launcher.sock
+HOME=$state/podman
+XDG_DATA_HOME=$state/podman
+XDG_RUNTIME_DIR=$runtime/podman
+CONTAINERS_STORAGE_CONF=$config/storage.conf
+CONTAINERS_CONF=$config/containers.conf
+EOF
+chmod 0600 "$root$config/arkd.env"; chown "$owner_arkd" "$root$config/arkd.env"
+cat > "$root$config/storage.conf" <<EOF
+[storage]
+driver = "overlay"
+runroot = "$runtime/podman/storage"
+graphroot = "$state/podman/storage"
+EOF
+chmod 0600 "$root$config/storage.conf"; chown "$owner_arkd" "$root$config/storage.conf"
+cat > "$root$config/containers.conf" <<EOF
+[engine]
+cgroup_manager = "cgroupfs"
+events_logger = "file"
+EOF
+chmod 0640 "$root$config/containers.conf"; chown "$owner_static" "$root$config/containers.conf"
+cat > "$root$config/launcher.env" <<EOF
+ARK_UPLINK=$uplink
+ARK_DNS=$dns
+EOF
+chmod 0600 "$root$config/launcher.env"; chown "$owner_root" "$root$config/launcher.env"
+sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" -e "s|@LISTEN@|$listen|g" "$script_dir/deploy/systemd/arkd.service" > "$root/etc/systemd/system/arkd.service"
+sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@LAUNCHER_STATE@|$launcher_state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" "$script_dir/deploy/systemd/ark-vm-launcher.service" > "$root/etc/systemd/system/ark-vm-launcher.service"
+chmod 0644 "$root/etc/systemd/system/arkd.service" "$root/etc/systemd/system/ark-vm-launcher.service"
+install -d -m 0700 "$root$(dirname "$handoff")"
+chown "$handoff_uid:$handoff_gid" "$root$(dirname "$handoff")"
+printf 'ARK_SERVER=%s\nARK_TOKEN=%s\n' "$server" "$(cat "$root$config/token")" > "$root$handoff"
+chmod 0600 "$root$handoff"; chown "$handoff_uid:$handoff_gid" "$root$handoff"
+if [ "$test_mode" != 1 ] || [ "${ARK_INSTALL_TEST_SYSTEMCTL:-0}" = 1 ]; then systemctl daemon-reload; systemctl enable ark-vm-launcher.service arkd.service; systemctl restart ark-vm-launcher.service arkd.service; fi

@@ -1,0 +1,13 @@
+Port 22
+Protocol 2
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PermitEmptyPasswords no
+X11Forwarding no
+PrintMotd no
+Subsystem sftp /usr/lib/openssh/sftp-server

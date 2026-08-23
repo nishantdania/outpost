@@ -1,0 +1,205 @@
+openapi: 3.0.3
+info:
+  title: Ark API
+  version: 1.0.0
+security:
+  - bearerAuth: []
+paths:
+  /v1/arks:
+    get:
+      operationId: listArks
+      summary: List Arks
+      responses:
+        "200":
+          description: Arks were listed successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: "#/components/schemas/Ark"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "500": {$ref: "#/components/responses/ServerError"}
+    post:
+      operationId: createArk
+      summary: Create an Ark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CreateArkRequest"}
+      responses:
+        "201":
+          description: Ark was created successfully.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Ark"}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "500": {$ref: "#/components/responses/ServerError"}
+  /v1/arks/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      operationId: getArk
+      summary: Get an Ark
+      responses:
+        "200":
+          description: Ark was found.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Ark"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "500": {$ref: "#/components/responses/ServerError"}
+    delete:
+      operationId: deleteArk
+      summary: Delete an Ark
+      responses:
+        "200":
+          description: Ark was deleted successfully.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Ark"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "500": {$ref: "#/components/responses/ServerError"}
+  /v1/arks/{name}/start:
+    post:
+      operationId: startArk
+      summary: Start an Ark
+      parameters:
+        - $ref: "#/components/parameters/ArkName"
+      responses:
+        "200":
+          description: Ark was started successfully.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Ark"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "500": {$ref: "#/components/responses/ServerError"}
+  /v1/arks/{name}/stop:
+    post:
+      operationId: stopArk
+      summary: Stop an Ark
+      parameters:
+        - $ref: "#/components/parameters/ArkName"
+      responses:
+        "200":
+          description: Ark was stopped successfully.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Ark"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "500": {$ref: "#/components/responses/ServerError"}
+  /v1/images:
+    get:
+      operationId: listImages
+      responses: {"200": {description: Images, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/Image"}}}}}, "401": {$ref: "#/components/responses/Unauthorized"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+    post:
+      operationId: importImage
+      parameters: [{name: tag, in: query, required: true, schema: {type: string}}]
+      requestBody: {required: true, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+      responses: {"201": {description: Image, content: {application/json: {schema: {$ref: "#/components/schemas/Image"}}}}, "400": {$ref: "#/components/responses/InvalidRequest"}, "401": {$ref: "#/components/responses/Unauthorized"}, "413": {$ref: "#/components/responses/TooLarge"}, "415": {$ref: "#/components/responses/UnsupportedMediaType"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+  /v1/images/build:
+    post:
+      operationId: buildImage
+      parameters: [{name: tag, in: query, required: true, schema: {type: string}}]
+      requestBody: {required: true, content: {application/x-tar: {schema: {type: string, format: binary}}}}
+      responses: {"201": {description: Image, content: {application/json: {schema: {$ref: "#/components/schemas/Image"}}}}, "400": {$ref: "#/components/responses/InvalidRequest"}, "401": {$ref: "#/components/responses/Unauthorized"}, "413": {$ref: "#/components/responses/TooLarge"}, "415": {$ref: "#/components/responses/UnsupportedMediaType"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+  /v1/images/{reference}:
+    parameters: [{name: reference, in: path, required: true, schema: {type: string}}]
+    get:
+      operationId: getImage
+      responses: {"200": {description: Image, content: {application/json: {schema: {$ref: "#/components/schemas/Image"}}}}, "400": {$ref: "#/components/responses/InvalidRequest"}, "401": {$ref: "#/components/responses/Unauthorized"}, "404": {$ref: "#/components/responses/NotFound"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+    delete:
+      operationId: deleteImage
+      responses: {"204": {description: Deleted}, "400": {$ref: "#/components/responses/InvalidRequest"}, "401": {$ref: "#/components/responses/Unauthorized"}, "404": {$ref: "#/components/responses/NotFound"}, "409": {$ref: "#/components/responses/Conflict"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+  /v1/images/gc:
+    post:
+      operationId: gcImages
+      responses: {"200": {description: Removed digests, content: {application/json: {schema: {type: array, items: {type: string}}}}}, "401": {$ref: "#/components/responses/Unauthorized"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    ArkName:
+      name: name
+      in: path
+      required: true
+      schema: {type: string}
+  responses:
+    Unauthorized:
+      description: Bearer credentials are missing or invalid.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    InvalidRequest:
+      description: Request is invalid.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    Conflict:
+      description: Ark lifecycle operation conflicts with its current state.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    NotFound:
+      description: Ark was not found.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    TooLarge:
+      description: Request body is too large.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    UnsupportedMediaType:
+      description: Request content type is unsupported.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    Unavailable:
+      description: Image operations are unavailable.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    ServerError:
+      description: Server failed to process the request.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+  schemas:
+    Ark:
+      type: object
+      required: [id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, created_at, updated_at]
+      properties:
+        id: {type: string, example: 550e8400-e29b-41d4-a716-446655440000}
+        name: {type: string, example: investigate-deploy}
+        image_id: {type: string, example: default}
+        vcpus: {type: integer, minimum: 1, maximum: 32, example: 2}
+        memory_mib: {type: integer, minimum: 128, maximum: 131072, example: 4096}
+        disk_gib: {type: integer, minimum: 1, maximum: 1024, example: 8}
+        desired_state: {type: string, enum: [running, stopped, deleted]}
+        status: {type: string, enum: [provisioning, running, stopping, stopped, deleting, failed]}
+        guest_ip: {type: string}
+        failure: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    CreateArkRequest:
+      type: object
+      required: [name, image_id, vcpus, memory_mib, disk_gib]
+      properties:
+        name: {type: string, minLength: 1, example: investigate-deploy}
+        image_id: {type: string, minLength: 1, example: default}
+        vcpus: {type: integer, minimum: 1, maximum: 32, example: 2}
+        memory_mib: {type: integer, minimum: 128, maximum: 131072, example: 4096}
+        disk_gib: {type: integer, minimum: 1, maximum: 1024, example: 8}
+        ssh_public_key: {type: string, minLength: 1}
+    Image:
+      type: object
+      required: [digest, size_bytes, tags, created_at]
+      properties:
+        digest: {type: string}
+        size_bytes: {type: integer}
+        tags: {type: array, items: {type: string}}
+        created_at: {type: string, format: date-time}
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}

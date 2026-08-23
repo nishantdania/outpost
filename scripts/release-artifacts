@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+version=${ARK_VERSION:?ARK_VERSION is required}
+arch=${ARK_ARCH:-amd64}
+[ "$arch" = amd64 ] || { echo "unsupported architecture: $arch" >&2; exit 1; }
+out=${ARK_OUTPUT_DIR:-dist}
+release=$out/release
+rm -rf "$release"
+mkdir -p "$release"
+copy() { cp "$1" "$release/$2"; }
+copy "$out/ark" ark
+copy "$out/arkd" arkd
+copy "$out/ark-vm-launcher" ark-vm-launcher
+copy "${ARK_FIRECRACKER:?ARK_FIRECRACKER is required}" firecracker
+copy "${ARK_JAILER:?ARK_JAILER is required}" jailer
+copy "${ARK_KERNEL:?ARK_KERNEL is required}" vmlinux
+zstd -q --no-progress -19 -c "$out/ark-default-$version-$arch.ext4" > "$release/rootfs.ext4.zst"
+zstd -q --no-progress -19 -c "$out/ark-default-$version-$arch.oci.tar" > "$release/default.oci.tar.zst"
+[ "$(wc -c < "$release/rootfs.ext4.zst")" -le 1610612736 ] || { echo 'compressed rootfs exceeds release size limit' >&2; exit 1; }
+[ "$(wc -c < "$release/default.oci.tar.zst")" -le 1610612736 ] || { echo 'compressed OCI archive exceeds release size limit' >&2; exit 1; }
+python3 - "$release" "$version" "$arch" <<'PY'
+import hashlib,json,os,sys
+root,version,arch=sys.argv[1:]
+files={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
+assets=[]
+for name,file in files.items():
+ published=file
+ h=hashlib.sha256()
+ with open(os.path.join(root,published),'rb') as f:
+  for b in iter(lambda:f.read(1024*1024),b''): h.update(b)
+ assets.append({'name':name,'file':file,'sha256':h.hexdigest(),'url':'https://github.com/nishantdania/ark/releases/download/v'+version+'/'+published})
+with open(os.path.join(root,'assets.json'),'w') as f: json.dump({'version':version,'architecture':arch,'assets':assets},f,sort_keys=True,separators=(',',':'))
+PY
+( cd "$release" && sha256sum ark arkd ark-vm-launcher firecracker jailer vmlinux rootfs.ext4.zst default.oci.tar.zst assets.json > checksums.txt )

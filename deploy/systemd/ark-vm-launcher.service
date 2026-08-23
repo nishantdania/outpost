@@ -1,0 +1,31 @@
+[Unit]
+Description=Ark privileged VM launcher
+After=network-online.target local-fs.target
+Wants=network-online.target
+RequiresMountsFor=@STATE@ /srv/ark
+
+[Service]
+Type=exec
+User=root
+Group=arkd
+EnvironmentFile=@CONFIG@/launcher.env
+ExecStart=@PREFIX@/lib/ark/launcher/ark-vm-launcher --socket=@RUNTIME@/vm-launcher.sock --state-dir=@LAUNCHER_STATE@ --runtime-dir=@RUNTIME@ --jailer-base=@JAIL@ --firecracker=@PREFIX@/lib/ark/launcher/firecracker --jailer=@PREFIX@/lib/ark/launcher/jailer --kernel=@PREFIX@/lib/ark/launcher/vmlinux --default-rootfs=@STATE@/images/default/rootfs.ext4 --uplink=${ARK_UPLINK} --dns=${ARK_DNS}
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=3min
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/ark @RUNTIME@ /sys/fs/cgroup
+ReadOnlyPaths=@PREFIX@/lib/ark/launcher @STATE@/images/default
+PrivateDevices=false
+DeviceAllow=/dev/kvm rwm
+DeviceAllow=/dev/net/tun rwm
+DeviceAllow=/dev/userfaultfd rwm
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_MKNOD CAP_KILL CAP_SYS_RESOURCE CAP_SETUID CAP_SETGID CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SYS_PTRACE
+AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_MKNOD CAP_KILL CAP_SYS_RESOURCE CAP_SETUID CAP_SETGID CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SYS_PTRACE
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+manifest=${1:-deploy/toolchain.json}
+if [ "$manifest" = deploy/toolchain.json ]; then sha256sum -c deploy/toolchain.sha256 >/dev/null; fi
+python3 - "$manifest" <<'PY'
+import json,re,sys,urllib.parse
+def pairs(v):
+ d={}
+ for k,x in v:
+  if k in d: raise ValueError('duplicate key')
+  d[k]=x
+ return d
+with open(sys.argv[1]) as f: x=json.load(f,object_pairs_hook=pairs)
+if set(x)!= {'version','architecture','ubuntu','firecracker','kernel'} or x['architecture']!='amd64' or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',x['version']) or not re.fullmatch(r'ubuntu@sha256:[a-f0-9]{64}',x['ubuntu']): raise SystemExit('invalid toolchain manifest')
+with open('images/default/manifest.json') as f: image=json.load(f,object_pairs_hook=pairs)
+if set(image)!={'architecture','base','snapshot','packages'} or image['architecture']!='amd64' or image['base']!=x['ubuntu'] or not re.fullmatch(r'[0-9]{8}T[0-9]{6}Z',image['snapshot']) or not isinstance(image['packages'],list) or not image['packages'] or any(not re.fullmatch(r'[a-z0-9+.-]+=[^\s=]+',p) for p in image['packages']): raise SystemExit('invalid default image manifest')
+dockerfile=open('images/default/Dockerfile').read()
+if not dockerfile.startswith('FROM '+image['base']+'\n') or 'snapshot.ubuntu.com/ubuntu/'+image['snapshot']+'/' not in dockerfile or any(p not in dockerfile for p in image['packages']): raise SystemExit('default image inputs disagree')
+if x['firecracker']['url']!='https://github.com/firecracker-microvm/firecracker/releases/download/v1.16.1/firecracker-v1.16.1-x86_64.tgz' or x['kernel']['url']!='https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20260819-0a745def42dd-0/x86_64/vmlinux-6.18.41': raise SystemExit('unsupported Firecracker or kernel input')
+for name in ('firecracker','kernel'):
+ v=x[name]
+ if set(v)!= {'url','sha256'} or not re.fullmatch(r'[a-f0-9]{64}',v['sha256']): raise SystemExit('invalid toolchain manifest')
+ u=urllib.parse.urlsplit(v['url'])
+ if u.scheme!='https' or not u.netloc or u.username or u.password or u.query or u.fragment: raise SystemExit('invalid toolchain manifest')
+PY
