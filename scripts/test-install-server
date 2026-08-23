@@ -77,6 +77,8 @@ grep -Fqx 'events_logger = "file"' "$root/etc/arkd/containers.conf"
 test -x "$root/usr/local/lib/ark/arkd"
 grep -Fqx 'User=arkd' "$root/etc/systemd/system/arkd.service"
 grep -Fqx 'Delegate=yes' "$root/etc/systemd/system/arkd.service"
+grep -Fqx 'NoNewPrivileges=false' "$root/etc/systemd/system/arkd.service"
+grep -Fqx 'NoNewPrivileges=true' "$root/etc/systemd/system/ark-vm-launcher.service"
 grep -q '^ExecStart=/usr/local/lib/ark/arkd ' "$root/etc/systemd/system/arkd.service"
 grep -q '^ExecStart=/usr/local/lib/ark/launcher/ark-vm-launcher ' "$root/etc/systemd/system/ark-vm-launcher.service"
 grep -q -- '--state-dir=/srv/ark/state' "$root/etc/systemd/system/ark-vm-launcher.service"
@@ -109,6 +111,8 @@ ARK_VERSION=0.1.0 ARK_OUTPUT_DIR="$work/output" ARK_FIRECRACKER="$artifacts/fire
 [ -f "$work/output/release/default.oci.tar.zst" ]
 [ -f "$work/output/release/arkd.service" ]
 [ -f "$work/output/release/ark-vm-launcher.service" ]
+grep -Fqx 'NoNewPrivileges=false' "$work/output/release/arkd.service"
+grep -Fqx 'NoNewPrivileges=true' "$work/output/release/ark-vm-launcher.service"
 [ -x "$work/output/release/install-server" ]
 ( cd "$work/output/release" && sha256sum -c checksums.txt )
 [ ! -e "$work/output/release/rootfs.ext4" ]
