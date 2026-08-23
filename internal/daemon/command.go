@@ -21,6 +21,12 @@ func parseConfig(args []string) (Config, error) {
 		":17890",
 		"HTTP listen address",
 	)
+	flags.StringVar(
+		&config.DatabasePath,
+		"database",
+		"./ark.db",
+		"SQLite database path",
+	)
 
 	if err := flags.Parse(args); err != nil {
 		return Config{}, err

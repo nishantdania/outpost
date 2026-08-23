@@ -22,6 +22,7 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().StringVar(&options.serverURL, "server", "http://127.0.0.1:17890", "arkd server URL")
 	root.PersistentFlags().StringVarP(&options.output, "output", "o", "table", "Output format: table or json")
 	root.PersistentFlags().BoolVar(&options.noColor, "no-color", false, "Disable color output")
+	root.AddCommand(newCreateCmd(options))
 	root.AddCommand(newListCmd(options))
 
 	return root

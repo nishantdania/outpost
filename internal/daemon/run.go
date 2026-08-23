@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nishantdania/ark/internal/ark"
 	"github.com/nishantdania/ark/internal/httpapi"
 )
 
@@ -22,7 +23,13 @@ func Run(config Config) error {
 }
 
 func run(ctx context.Context, config Config) error {
-	return runServer(ctx, httpapi.NewServer(config.ListenAddr))
+	store, err := ark.Open(ctx, config.DatabasePath)
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	return runServer(ctx, httpapi.NewServer(config.ListenAddr, store))
 }
 
 type server interface {

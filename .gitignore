@@ -1,3 +1,6 @@
 # Build outputs
 /ark
 /arkd
+
+# Local daemon database
+/ark.db*

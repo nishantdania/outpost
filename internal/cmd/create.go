@@ -10,18 +10,18 @@ import (
 	"github.com/nishantdania/ark/internal/output"
 )
 
-func newListCmd(options *rootOptions) *cobra.Command {
+func newCreateCmd(options *rootOptions) *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List Arks",
-		Args:  cobra.NoArgs,
+		Use:   "create <name>",
+		Short: "Create an Ark",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			arkdClient, err := client.New(options.serverURL)
 			if err != nil {
 				return fmt.Errorf("create arkd client: %w", err)
 			}
 
-			arks, err := arkdClient.ListArks(cmd.Context())
+			created, err := arkdClient.CreateArk(cmd.Context(), args[0])
 			if err != nil {
 				return err
 			}
@@ -35,20 +35,7 @@ func newListCmd(options *rootOptions) *cobra.Command {
 				return err
 			}
 
-			return writer.Write(arks, arkTable(arks))
+			return writer.Write(created, arkTable([]api.Ark{created}))
 		},
 	}
-}
-
-func arkTable(arks []api.Ark) output.Table {
-	table := output.Table{
-		Headers: []string{"ID", "NAME"},
-		Rows:    make([][]string, 0, len(arks)),
-	}
-
-	for _, ark := range arks {
-		table.Rows = append(table.Rows, []string{ark.Id, ark.Name})
-	}
-
-	return table
 }

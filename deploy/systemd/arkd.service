@@ -7,7 +7,7 @@ After=network-online.target
 Type=exec
 User=arkd
 Group=arkd
-ExecStart=/usr/local/bin/arkd --listen=127.0.0.1:17890
+ExecStart=/usr/local/bin/arkd --listen=127.0.0.1:17890 --database=/var/lib/arkd/ark.db
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=15s

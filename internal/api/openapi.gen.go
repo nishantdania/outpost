@@ -6,6 +6,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,15 +18,26 @@ import (
 
 // Ark defines model for Ark.
 type Ark struct {
-	// Id Example: ark_123
+	// Id Example: 550e8400-e29b-41d4-a716-446655440000
 	Id string `json:"id"`
 
 	// Name Example: investigate-deploy
 	Name string `json:"name"`
-
-	// Status Example: running
-	Status string `json:"status"`
 }
+
+// CreateArkRequest defines model for CreateArkRequest.
+type CreateArkRequest struct {
+	// Name Example: investigate-deploy
+	Name string `json:"name"`
+}
+
+// Error defines model for Error.
+type Error struct {
+	Error string `json:"error"`
+}
+
+// CreateArkJSONRequestBody defines body for CreateArk for application/json ContentType.
+type CreateArkJSONRequestBody = CreateArkRequest
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -105,6 +117,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/arks (the `ListArks` operationId).
 	ListArks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateArkWithBody Create an Ark
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
+	CreateArkWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateArk Create an Ark
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
+	CreateArk(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListArks List Arks
@@ -112,6 +138,40 @@ type ClientInterface interface {
 // Corresponds with GET /v1/arks (the `ListArks` operationId).
 func (c *Client) ListArks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListArksRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateArkWithBody Create an Ark
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/arks (the `CreateArk` operationId).
+func (c *Client) CreateArkWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateArkRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateArk Create an Ark
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/arks (the `CreateArk` operationId).
+func (c *Client) CreateArk(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateArkRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +205,46 @@ func NewListArksRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewCreateArkRequest calls the generic CreateArk builder with application/json body
+func NewCreateArkRequest(server string, body CreateArkJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateArkRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateArkRequestWithBody constructs an http.Request for the CreateArk method, with any body, and a specified content type
+func NewCreateArkRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/arks")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -199,6 +299,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/arks (the `ListArks` operationId).
 	ListArksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListArksResponse, error)
+
+	// CreateArkWithBodyWithResponse Create an Ark
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
+	CreateArkWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateArkResponse, error)
+
+	// CreateArkWithResponse Create an Ark
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
+	CreateArkWithResponse(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateArkResponse, error)
 }
 
 type ListArksResponse struct {
@@ -206,11 +320,18 @@ type ListArksResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *[]Ark
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r ListArksResponse) GetJSON200() *[]Ark {
 	return r.JSON200
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListArksResponse) GetJSON500() *Error {
+	return r.JSON500
 }
 
 // GetBody returns the raw response body bytes
@@ -242,6 +363,61 @@ func (r ListArksResponse) ContentType() string {
 	return ""
 }
 
+type CreateArkResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Ark
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateArkResponse) GetJSON201() *Ark {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateArkResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r CreateArkResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateArkResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateArkResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateArkResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateArkResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListArksWithResponse List Arks
 //
 // Returns a wrapper object for the known response body format(s).
@@ -253,6 +429,32 @@ func (c *ClientWithResponses) ListArksWithResponse(ctx context.Context, reqEdito
 		return nil, err
 	}
 	return ParseListArksResponse(rsp)
+}
+
+// CreateArkWithBodyWithResponse Create an Ark
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/arks (the `CreateArk` operationId).
+func (c *ClientWithResponses) CreateArkWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateArkResponse, error) {
+	rsp, err := c.CreateArkWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateArkResponse(rsp)
+}
+
+// CreateArkWithResponse Create an Ark
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/arks (the `CreateArk` operationId).
+func (c *ClientWithResponses) CreateArkWithResponse(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateArkResponse, error) {
+	rsp, err := c.CreateArk(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateArkResponse(rsp)
 }
 
 // ParseListArksResponse parses an HTTP response from a ListArksWithResponse call
@@ -276,6 +478,53 @@ func ParseListArksResponse(rsp *http.Response) (*ListArksResponse, error) {
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateArkResponse parses an HTTP response from a CreateArkWithResponse call
+func ParseCreateArkResponse(rsp *http.Response) (*CreateArkResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateArkResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Ark
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil
@@ -286,6 +535,9 @@ type ServerInterface interface {
 	// ListArks List Arks
 	// (GET /v1/arks)
 	ListArks(w http.ResponseWriter, r *http.Request)
+	// CreateArk Create an Ark
+	// (POST /v1/arks)
+	CreateArk(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -302,6 +554,20 @@ func (siw *ServerInterfaceWrapper) ListArks(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListArks(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateArk operation middleware
+func (siw *ServerInterfaceWrapper) CreateArk(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateArk(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -432,6 +698,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/arks", wrapper.ListArks)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/arks", wrapper.CreateArk)
 
 	return m
 }

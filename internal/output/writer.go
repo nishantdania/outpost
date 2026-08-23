@@ -18,13 +18,6 @@ const (
 	FormatJSON  Format = "json"
 )
 
-type ColumnStyle int
-
-const (
-	ColumnStyleDefault ColumnStyle = iota
-	ColumnStyleStatus
-)
-
 type Options struct {
 	Format  string
 	Out     io.Writer
@@ -32,9 +25,8 @@ type Options struct {
 }
 
 type Table struct {
-	Headers      []string
-	Rows         [][]string
-	ColumnStyles map[int]ColumnStyle
+	Headers []string
+	Rows    [][]string
 }
 
 type Writer struct {
@@ -86,7 +78,7 @@ func (w *Writer) writeTable(table Table) error {
 	widths := make([]int, maxColumns(rows))
 	for rowIndex, row := range rows {
 		for columnIndex, value := range row {
-			widths[columnIndex] = max(widths[columnIndex], lipgloss.Width(w.renderCell(table, rowIndex == 0 && len(table.Headers) > 0, columnIndex, value)))
+			widths[columnIndex] = max(widths[columnIndex], lipgloss.Width(w.renderCell(rowIndex == 0 && len(table.Headers) > 0, value)))
 		}
 	}
 
@@ -97,7 +89,7 @@ func (w *Writer) writeTable(table Table) error {
 				value = row[columnIndex]
 			}
 
-			rendered := w.renderCell(table, rowIndex == 0 && len(table.Headers) > 0, columnIndex, value)
+			rendered := w.renderCell(rowIndex == 0 && len(table.Headers) > 0, value)
 			if _, err := fmt.Fprint(w.out, rendered); err != nil {
 				return err
 			}
@@ -116,30 +108,12 @@ func (w *Writer) writeTable(table Table) error {
 	return nil
 }
 
-func (w *Writer) renderCell(table Table, isHeader bool, column int, value string) string {
-	if w.renderer == nil {
+func (w *Writer) renderCell(isHeader bool, value string) string {
+	if w.renderer == nil || !isHeader {
 		return value
 	}
 
-	if isHeader {
-		return w.renderer.NewStyle().Bold(true).Foreground(lipgloss.Color("12")).Render(value)
-	}
-
-	if table.ColumnStyles[column] != ColumnStyleStatus {
-		return value
-	}
-
-	style := w.renderer.NewStyle().Bold(true).Padding(0, 1)
-	switch strings.ToLower(value) {
-	case "running":
-		return style.Foreground(lipgloss.Color("10")).Render(value)
-	case "pending", "queued":
-		return style.Foreground(lipgloss.Color("11")).Render(value)
-	case "failed", "error":
-		return style.Foreground(lipgloss.Color("9")).Render(value)
-	default:
-		return style.Foreground(lipgloss.Color("8")).Render(value)
-	}
+	return w.renderer.NewStyle().Bold(true).Foreground(lipgloss.Color("12")).Render(value)
 }
 
 func shouldStyle(out io.Writer, noColor bool) bool {

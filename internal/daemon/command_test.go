@@ -7,16 +7,19 @@ func TestParseConfig(t *testing.T) {
 		name     string
 		args     []string
 		wantAddr string
+		wantDB   string
 		wantErr  bool
 	}{
 		{
-			name:     "default listen address",
+			name:     "default configuration",
 			wantAddr: ":17890",
+			wantDB:   "./ark.db",
 		},
 		{
-			name:     "custom listen address",
-			args:     []string{"--listen", ":8080"},
+			name:     "custom configuration",
+			args:     []string{"--listen", ":8080", "--database", "data/ark.db"},
 			wantAddr: ":8080",
+			wantDB:   "data/ark.db",
 		},
 		{
 			name:    "unknown flag",
@@ -35,6 +38,10 @@ func TestParseConfig(t *testing.T) {
 
 			if err == nil && config.ListenAddr != tt.wantAddr {
 				t.Fatalf("ListenAddr = %q, want %q", config.ListenAddr, tt.wantAddr)
+			}
+
+			if err == nil && config.DatabasePath != tt.wantDB {
+				t.Fatalf("DatabasePath = %q, want %q", config.DatabasePath, tt.wantDB)
 			}
 		})
 	}

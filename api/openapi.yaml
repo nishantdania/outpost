@@ -16,6 +16,40 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Ark"
+        "500":
+          description: Server failed to list Arks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createArk
+      summary: Create an Ark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateArkRequest"
+      responses:
+        "201":
+          description: Ark was created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ark"
+        "400":
+          description: Request is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Server failed to create an Ark.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     Ark:
@@ -23,14 +57,26 @@ components:
       required:
         - id
         - name
-        - status
       properties:
         id:
           type: string
-          example: ark_123
+          example: 550e8400-e29b-41d4-a716-446655440000
         name:
           type: string
           example: investigate-deploy
-        status:
+    CreateArkRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
           type: string
-          example: running
+          minLength: 1
+          example: investigate-deploy
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string

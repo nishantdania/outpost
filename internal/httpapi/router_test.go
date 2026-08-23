@@ -7,7 +7,7 @@ import (
 )
 
 func TestRouter(t *testing.T) {
-	router := newRouter()
+	router := newRouter(newTestStore(t))
 
 	tests := []struct {
 		name   string
@@ -23,7 +23,7 @@ func TestRouter(t *testing.T) {
 		},
 		{
 			name:   "wrong method",
-			method: http.MethodPost,
+			method: http.MethodPut,
 			path:   "/v1/arks",
 			want:   http.StatusMethodNotAllowed,
 		},

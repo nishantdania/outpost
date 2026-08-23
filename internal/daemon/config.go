@@ -1,5 +1,6 @@
 package daemon
 
 type Config struct {
-	ListenAddr string
+	ListenAddr   string
+	DatabasePath string
 }

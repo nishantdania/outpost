@@ -33,7 +33,7 @@ func TestListArks(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"id":"ark_123","name":"investigate-deploy","status":"running"}]`))
+		_, _ = w.Write([]byte(`[{"id":"ark_123","name":"investigate-deploy"}]`))
 	}))
 	defer server.Close()
 
@@ -48,9 +48,8 @@ func TestListArks(t *testing.T) {
 	}
 
 	want := []api.Ark{{
-		Id:     "ark_123",
-		Name:   "investigate-deploy",
-		Status: "running",
+		Id:   "ark_123",
+		Name: "investigate-deploy",
 	}}
 	if !reflect.DeepEqual(arks, want) {
 		t.Fatalf("ListArks() = %v, want %v", arks, want)

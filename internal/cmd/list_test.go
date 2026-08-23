@@ -20,7 +20,7 @@ func TestListCommandWritesJSON(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"id":"ark_123","name":"investigate-deploy","status":"running"}]`))
+		_, _ = w.Write([]byte(`[{"id":"ark_123","name":"investigate-deploy"}]`))
 	}))
 	defer server.Close()
 
