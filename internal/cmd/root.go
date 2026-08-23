@@ -52,7 +52,7 @@ func newRootCmd() *cobra.Command {
 		PersistentPreRunE: func(*cobra.Command, []string) error { return options.initErr },
 	}
 
-	root.PersistentFlags().StringVar(&options.serverURL, "server", "http://127.0.0.1:17890", "arkd server URL")
+	root.PersistentFlags().StringVar(&options.serverURL, "server", envString("ARK_SERVER", "http://127.0.0.1:17890"), "arkd server URL")
 	root.PersistentFlags().StringVar(&options.token, "token", os.Getenv("ARK_TOKEN"), "arkd bearer token")
 	root.PersistentFlags().StringVarP(&options.output, "output", "o", "table", "Output format: table or json")
 	root.PersistentFlags().BoolVar(&options.noColor, "no-color", false, "Disable color output")
@@ -71,6 +71,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newExecCmd(options))
 	root.AddCommand(newCopyCmd(options))
 	root.AddCommand(newSyncCmd(options))
+	root.AddCommand(newDoctorCmd(options))
 
 	return root
 }

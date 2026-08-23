@@ -8,19 +8,18 @@ After=network-online.target ark-vm-launcher.service
 Type=exec
 User=arkd
 Group=arkd
-EnvironmentFile=/etc/arkd/arkd.env
+EnvironmentFile=@CONFIG@/arkd.env
 UMask=0077
-ExecStart=/usr/local/bin/arkd --listen=127.0.0.1:17890 --database=/var/lib/arkd/ark.db
+ExecStart=@PREFIX@/lib/ark/arkd --listen=@LISTEN@ --database=@STATE@/ark.db
 Restart=on-failure
 RestartSec=5s
-TimeoutStopSec=15s
-StateDirectory=arkd
-RuntimeDirectory=arkd
+TimeoutStopSec=30s
 SupplementaryGroups=arkd
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
+ReadWritePaths=@STATE@ @RUNTIME@
 
 [Install]
 WantedBy=multi-user.target

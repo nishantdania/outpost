@@ -2,6 +2,20 @@ package cmd
 
 import "testing"
 
+func TestRootCommandUsesServerEnvironment(t *testing.T) {
+	t.Setenv("ARK_SERVER", "https://handoff.example")
+	root := newRootCmd()
+	if got, _ := root.PersistentFlags().GetString("server"); got != "https://handoff.example" {
+		t.Fatalf("server = %q", got)
+	}
+	if err := root.PersistentFlags().Set("server", "https://override.example"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := root.PersistentFlags().GetString("server"); got != "https://override.example" {
+		t.Fatalf("server override = %q", got)
+	}
+}
+
 func TestRootCommandHasListCommand(t *testing.T) {
 	root := newRootCmd()
 

@@ -11,12 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	assetmanifest "github.com/nishantdania/ark/internal/assets"
+	"github.com/nishantdania/ark/internal/doctor"
 	"github.com/nishantdania/ark/internal/launcher"
 )
 
 func main() {
 	config := launcher.DefaultConfig()
-	assets := launcher.FirecrackerConfig{StateDir: config.StateDir, RuntimeDir: config.RuntimeDir, JailerBase: "/srv/ark/jailer", Firecracker: "/usr/local/lib/ark/firecracker", Jailer: "/usr/local/lib/ark/jailer", Kernel: "/usr/local/lib/ark/vmlinux", DefaultRootFS: "/var/lib/arkd/images/default/rootfs.ext4", Uplink: "eth0", DNS: "1.1.1.1"}
+	assets := launcher.FirecrackerConfig{StateDir: config.StateDir, RuntimeDir: config.RuntimeDir, JailerBase: "/srv/ark/jailer", Firecracker: "/usr/local/lib/ark/launcher/firecracker", Jailer: "/usr/local/lib/ark/launcher/jailer", Kernel: "/usr/local/lib/ark/launcher/vmlinux", DefaultRootFS: "/var/lib/arkd/images/default/rootfs.ext4", Uplink: "eth0", DNS: "1.1.1.1"}
 	flag.StringVar(&config.SocketPath, "socket", config.SocketPath, "launcher Unix socket")
 	flag.StringVar(&config.StateDir, "state-dir", config.StateDir, "launcher state directory")
 	flag.StringVar(&config.RuntimeDir, "runtime-dir", config.RuntimeDir, "launcher runtime directory")
@@ -28,7 +30,43 @@ func main() {
 	flag.StringVar(&assets.DefaultRootFS, "default-rootfs", assets.DefaultRootFS, "trusted default rootfs")
 	flag.StringVar(&assets.Uplink, "uplink", assets.Uplink, "host uplink interface")
 	flag.StringVar(&assets.DNS, "dns", assets.DNS, "guest DNS server")
+	doctorMode := flag.Bool("doctor", false, "check server requirements")
+	doctorOnline := flag.Bool("doctor-online", false, "check running services and launcher socket")
+	doctorJSON := flag.Bool("doctor-json", false, "write doctor JSON")
 	flag.Parse()
+	if *doctorMode {
+		manifest, err := assetmanifest.Load("/usr/local/lib/ark/assets.json")
+		if err != nil {
+			log.Print(err)
+			os.Exit(1)
+		}
+		files := map[string]string{}
+		checksums := map[string]string{}
+		for _, item := range manifest.Assets {
+			path := "/usr/local/lib/ark/" + item.File
+			if item.File == "ark" {
+				path = "/usr/local/bin/ark"
+			}
+			if item.File == "ark-vm-launcher" || item.File == "firecracker" || item.File == "jailer" || item.File == "vmlinux" {
+				path = "/usr/local/lib/ark/launcher/" + item.File
+			}
+			if item.File == "rootfs.ext4" {
+				path = "/var/lib/arkd/images/default/rootfs.ext4"
+			}
+			files[item.Name] = path
+			checksums[item.Name] = item.SHA256
+		}
+		report := doctor.Server(doctor.OSProbe{}, doctor.ServerConfig{StateDir: config.StateDir, JailerDir: assets.JailerBase, RuntimeDir: config.RuntimeDir, Assets: files, Manifest: checksums, Uplink: assets.Uplink, Socket: config.SocketPath, Online: *doctorOnline, Users: []string{"arkd", "arkvm"}, Groups: []string{"arkd", "arkvm"}, SocketUser: "root", SocketGroup: "arkd", Directories: []doctor.Directory{{Path: "/var/lib/arkd", Mode: 0750, User: "arkd", Group: "arkd"}, {Path: config.StateDir, Mode: 0750, User: "root", Group: "arkd"}, {Path: assets.JailerBase, Mode: 0750, User: "root", Group: "arkvm"}, {Path: config.RuntimeDir, Mode: 0750, User: "root", Group: "arkd"}, {Path: "/usr/local/lib/ark", Mode: 0750, User: "root", Group: "arkd"}, {Path: "/usr/local/lib/ark/launcher", Mode: 0750, User: "root", Group: "arkvm"}}, Units: []string{"/etc/systemd/system/arkd.service", "/etc/systemd/system/ark-vm-launcher.service"}})
+		if *doctorJSON {
+			err = report.JSON(os.Stdout)
+		} else {
+			report.Text(os.Stdout)
+		}
+		if err != nil || report.Failed() {
+			os.Exit(1)
+		}
+		return
+	}
 	if config.AllowedUID < 0 {
 		account, err := user.Lookup("arkd")
 		if err != nil {

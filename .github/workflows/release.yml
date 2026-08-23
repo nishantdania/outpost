@@ -1,0 +1,48 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-go@0a12f3f0efbdaaf50c5f7d0c2e9760d1b9c5b4e1
+        with:
+          go-version: '1.27.0'
+      - run: scripts/verify-toolchain
+      - run: go generate ./...
+      - run: test -z "$(gofmt -l $(find . -name '*.go' -not -path './internal/api/openapi.gen.go'))"
+      - run: go test ./...
+      - run: go vet ./...
+      - run: git diff --check
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck scripts/install-server scripts/release-artifacts scripts/test-install-server scripts/verify-toolchain images/default/build.sh images/default/test-reproducible
+      - run: scripts/test-install-server
+      - run: ARK_VERSION=0.1.0 ARK_ROOTFS_SIZE=1G SOURCE_DATE_EPOCH=1700000000 images/default/test-reproducible
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-go@0a12f3f0efbdaaf50c5f7d0c2e9760d1b9c5b4e1
+        with:
+          go-version: '1.27.0'
+      - run: mkdir -p dist/input dist
+      - run: scripts/verify-toolchain
+      - run: python3 -c 'import json; x=json.load(open("deploy/toolchain.json")); print("FC_URL="+x["firecracker"]["url"]); print("FC_SHA="+x["firecracker"]["sha256"]); print("KERNEL_URL="+x["kernel"]["url"]); print("KERNEL_SHA="+x["kernel"]["sha256"])' >> "$GITHUB_ENV"
+      - run: curl --fail --location --proto '=https' --tlsv1.2 -o dist/input/firecracker.tgz "$FC_URL" && echo "$FC_SHA  dist/input/firecracker.tgz" | sha256sum -c - && tar -C dist/input -xzf dist/input/firecracker.tgz
+      - run: curl --fail --location --proto '=https' --tlsv1.2 -o dist/input/vmlinux "$KERNEL_URL" && echo "$KERNEL_SHA  dist/input/vmlinux" | sha256sum -c -
+      - run: go build -trimpath -ldflags='-buildid=' -o dist/ark ./cmd/ark && go build -trimpath -ldflags='-buildid=' -o dist/arkd ./cmd/arkd && go build -trimpath -ldflags='-buildid=' -o dist/ark-vm-launcher ./cmd/ark-vm-launcher
+      - run: ARK_VERSION=${GITHUB_REF_NAME#v} ARK_OUTPUT_DIR=dist SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) images/default/build.sh
+      - run: ARK_VERSION=${GITHUB_REF_NAME#v} ARK_OUTPUT_DIR=dist ARK_FIRECRACKER=dist/input/release-v1.16.1-x86_64/firecracker-v1.16.1-x86_64 ARK_JAILER=dist/input/release-v1.16.1-x86_64/jailer-v1.16.1-x86_64 ARK_KERNEL=dist/input/vmlinux scripts/release-artifacts
+      - run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: gh release upload "$GITHUB_REF_NAME" dist/release/* --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

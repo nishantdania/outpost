@@ -27,7 +27,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{SocketPath: "/run/ark/vm-launcher.sock", StateDir: "/var/lib/ark-vm-launcher", RuntimeDir: "/run/ark", SocketGID: -1}
+	return Config{SocketPath: "/run/ark/vm-launcher.sock", StateDir: "/srv/ark/state", RuntimeDir: "/run/ark", SocketGID: -1}
 }
 
 type Server struct {
