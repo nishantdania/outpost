@@ -25,6 +25,12 @@ func newCreateCmd(options *rootOptions) *cobra.Command {
 				return fmt.Errorf("read SSH public key: %w", err)
 			}
 			input.SSHPublicKey = strings.TrimSpace(string(key))
+		} else {
+			key, err := options.ssh.EnsureIdentity(cmd.Context(), options.runner)
+			if err != nil {
+				return err
+			}
+			input.SSHPublicKey = key
 		}
 		if input.MemoryMiB, err = parseMemoryMiB(memory); err != nil {
 			return fmt.Errorf("parse memory: %w", err)

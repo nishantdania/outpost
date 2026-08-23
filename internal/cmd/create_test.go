@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/nishantdania/ark/internal/api"
@@ -40,8 +41,12 @@ func TestCreateCommand(t *testing.T) {
 	}))
 	defer server.Close()
 
+	keyPath := t.TempDir() + "/id.pub"
+	if err := os.WriteFile(keyPath, []byte("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE6h6qf1VbwtwXQs48PeBo5oX5o2r2mR5rZJ6oTQxrTD test\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	root := newRootCmd()
-	root.SetArgs([]string{"--server", server.URL, "--output", "json", "create", "--memory", "4G", "--disk", "8G", "demo"})
+	root.SetArgs([]string{"--server", server.URL, "--output", "json", "create", "--memory", "4G", "--disk", "8G", "--ssh-public-key", keyPath, "demo"})
 
 	var output bytes.Buffer
 	root.SetOut(&output)
