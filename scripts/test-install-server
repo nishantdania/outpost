@@ -52,6 +52,24 @@ root_uid=4242
 root_gid=4243
 run() { timeout "${ARK_INSTALL_TIMEOUT:-30}" env PATH="$work/bin:$PATH" ARK_REAL_CHOWN="$real_chown" ARK_FAKE_CHOWN_LOG="$work/chown" ARK_REAL_LN="$real_ln" ARK_FAKE_LN_LOG="$work/ln" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$install_uid" ARK_INSTALL_GID="$install_gid" ARK_INSTALL_ROOT_UID="$root_uid" ARK_INSTALL_ROOT_GID="$root_gid" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$install_uid" ARK_INSTALL_HANDOFF_GID="$install_gid" SUDO_UID="$install_uid" SUDO_GID="$install_gid" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$artifacts" ARK_FAKE_LOG="$work/log" ARK_INSTALL_TEST_SYSTEMCTL="${ARK_INSTALL_TEST_SYSTEMCTL:-0}" ARK_SYSTEMCTL_FAIL="${ARK_SYSTEMCTL_FAIL:-0}" ARK_INSTALL_TEST_FAIL_HARDLINK="${ARK_INSTALL_TEST_FAIL_HARDLINK:-0}" ARK_INSTALL_TEST_LOG="$work/order" "$installer"; }
 run
+python3 - "$root/usr/local/lib/ark/assets.json" "$root" <<'PY'
+import hashlib,json,os,sys
+manifest,root=sys.argv[1:]
+m=json.load(open(manifest))
+want={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4','default':'default.oci.tar'}
+if set(m)!= {'version','architecture','assets'} or m['version']!='0.1.0' or m['architecture']!='amd64' or len(m['assets'])!=8: raise SystemExit('invalid installed runtime manifest')
+actual={a['name']:a for a in m['assets']}
+if set(actual)!=set(want) or any(set(a)!={'name','file','sha256','url'} or a['file']!=want[n] for n,a in actual.items()): raise SystemExit('runtime manifest has wrong assets')
+paths={'ark':'/usr/local/bin/ark','arkd':'/usr/local/lib/ark/arkd','ark-vm-launcher':'/usr/local/lib/ark/launcher/ark-vm-launcher','firecracker':'/usr/local/lib/ark/launcher/firecracker','jailer':'/usr/local/lib/ark/launcher/jailer','vmlinux':'/usr/local/lib/ark/launcher/vmlinux','rootfs.ext4':'/var/lib/arkd/images/default/rootfs.ext4','default':'/usr/local/lib/ark/default.oci.tar'}
+urls=dict(want); urls['rootfs.ext4']='rootfs.ext4.zst'; urls['default']='default.oci.tar.zst'
+for name,path in paths.items():
+ if actual[name]['url']!='https://example.test/'+urls[name]: raise SystemExit('runtime URL was not derived from bootstrap '+name)
+
+ with open(root+path,'rb') as f: got=hashlib.sha256(f.read()).hexdigest()
+ if actual[name]['sha256']!=got: raise SystemExit('runtime digest does not match installed '+name)
+if {'arkd.service','ark-vm-launcher.service'} & set(actual): raise SystemExit('bootstrap-only assets installed in runtime manifest')
+PY
+[ "$(stat -c %a "$root/usr/local/lib/ark/assets.json")" = 640 ]
 [ "$(head -n 2 "$work/order" | tr '\n' ' ')" = 'hardlink identities ' ]
 grep -Fqx "$root/srv/ark/state/.ark-hardlink-probe $root/srv/ark/jailer/.ark-hardlink-probe" "$work/ln"
 grep -Fqx "$root_uid:$install_gid $root/usr/local/lib/ark" "$work/chown"
@@ -111,6 +129,16 @@ ARK_VERSION=0.1.0 ARK_OUTPUT_DIR="$work/output" ARK_FIRECRACKER="$artifacts/fire
 [ -f "$work/output/release/default.oci.tar.zst" ]
 [ -f "$work/output/release/arkd.service" ]
 [ -f "$work/output/release/ark-vm-launcher.service" ]
+python3 - "$work/output/release/assets.json" <<'PY'
+import hashlib,json,os,sys
+p=sys.argv[1]; m=json.load(open(p))
+want={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','arkd.service':'arkd.service','ark-vm-launcher.service':'ark-vm-launcher.service'}
+actual={a['name']:a for a in m['assets']}
+if len(m['assets'])!=10 or set(actual)!=set(want) or any(a['file']!=want[n] for n,a in actual.items()): raise SystemExit('invalid bootstrap manifest')
+for name,a in actual.items():
+ with open(os.path.join(os.path.dirname(p),a['file']),'rb') as f: got=hashlib.sha256(f.read()).hexdigest()
+ if a['sha256']!=got: raise SystemExit('bootstrap digest mismatch: '+name)
+PY
 grep -Fqx 'NoNewPrivileges=false' "$work/output/release/arkd.service"
 grep -Fqx 'NoNewPrivileges=true' "$work/output/release/ark-vm-launcher.service"
 [ -x "$work/output/release/install-server" ]

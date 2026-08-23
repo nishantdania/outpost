@@ -17,8 +17,8 @@ func manifest(t *testing.T, body string) string {
 }
 func valid() string {
 	items := []string{}
-	for n, f := range required {
-		items = append(items, `{"name":"`+n+`","file":"`+f+`","sha256":"`+strings.Repeat("a", 64)+`","url":"https://example.test/`+f+`"}`)
+	for _, asset := range []struct{ name, file, url string }{{"ark", "ark", "ark"}, {"arkd", "arkd", "arkd"}, {"ark-vm-launcher", "ark-vm-launcher", "ark-vm-launcher"}, {"firecracker", "firecracker", "firecracker"}, {"jailer", "jailer", "jailer"}, {"vmlinux", "vmlinux", "vmlinux"}, {"rootfs.ext4", "rootfs.ext4", "rootfs.ext4.zst"}, {"default", "default.oci.tar", "default.oci.tar.zst"}} {
+		items = append(items, `{"name":"`+asset.name+`","file":"`+asset.file+`","sha256":"`+strings.Repeat("a", 64)+`","url":"https://example.test/`+asset.url+`"}`)
 	}
 	return `{"version":"1","architecture":"amd64","assets":[` + strings.Join(items, ",") + `]}`
 }
@@ -35,7 +35,7 @@ func TestLoadRejectsMalformedAndTrailing(t *testing.T) {
 	}
 }
 func TestLoadRejectsMissingExtraAndDuplicate(t *testing.T) {
-	for _, body := range []string{strings.Replace(valid(), `,"url":"https://example.test/default.oci.tar"}`, `}`, 1), strings.Replace(valid(), `]}`, `,{"name":"extra","file":"extra","sha256":"`+strings.Repeat("a", 64)+`","url":"https://example.test/extra"}]}`, 1), strings.Replace(valid(), `"name":"arkd"`, `"name":"ark"`, 1), strings.Replace(valid(), `"file":"arkd"`, `"file":"ark"`, 1)} {
+	for _, body := range []string{strings.Replace(valid(), `,"url":"https://example.test/default.oci.tar.zst"}`, `}`, 1), strings.Replace(valid(), `]}`, `,{"name":"extra","file":"extra","sha256":"`+strings.Repeat("a", 64)+`","url":"https://example.test/extra"}]}`, 1), strings.Replace(valid(), `"name":"arkd"`, `"name":"ark"`, 1), strings.Replace(valid(), `"file":"arkd"`, `"file":"ark"`, 1)} {
 		if _, err := Load(manifest(t, body)); err == nil {
 			t.Fatal("accepted invalid set")
 		}

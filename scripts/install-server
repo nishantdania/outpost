@@ -120,7 +120,7 @@ except Exception as e: raise SystemExit('invalid manifest: '+str(e))
 if set(o)!= {'version','architecture','assets'} or o['version'] != version or o['architecture'] != 'amd64' or not isinstance(o['assets'],list) or len(o['assets']) != len(required): raise SystemExit('invalid asset manifest')
 seen=set(); files=set(); safe=re.compile(r'^[a-z0-9][a-z0-9._-]*$'); dig=re.compile(r'^[a-f0-9]{64}$')
 os.mkdir(out)
-open(os.path.join(out,'assets.json'),'xb').write(d)
+open(os.path.join(out,'bootstrap-assets.json'),'xb').write(d)
 for a in o['assets']:
  u=urllib.parse.urlsplit(a.get('url',''))
  if not isinstance(a,dict) or set(a)!={'name','file','sha256','url'} or required.get(a.get('name')) != a.get('file') or a['name'] in seen or a['file'] in files or not safe.fullmatch(a['file']) or not dig.fullmatch(a['sha256']) or u.scheme!='https' or not u.netloc or u.username or u.password or u.query or u.fragment or not re.fullmatch(r'/[A-Za-z0-9._~/%+-]*',u.path): raise SystemExit('invalid asset manifest')
@@ -180,6 +180,61 @@ for source,target,limit in (('rootfs.ext4.zst','rootfs.ext4',rootfs_max),('defau
   os.unlink(target); raise
  finally:
   os.close(infd); os.close(outfd)
+PY
+python3 - "$stage/verified" <<'PY'
+import hashlib,json,os,stat,sys
+root=sys.argv[1]
+runtime=(('ark','ark','ark'),('arkd','arkd','arkd'),('ark-vm-launcher','ark-vm-launcher','ark-vm-launcher'),('firecracker','firecracker','firecracker'),('jailer','jailer','jailer'),('vmlinux','vmlinux','vmlinux'),('rootfs.ext4','rootfs.ext4','rootfs.ext4'),('default','default.oci.tar','default.oci.tar'))
+def pairs(v):
+ d={}
+ for k,x in v:
+  if k in d: raise ValueError('duplicate key')
+  d[k]=x
+ return d
+def read_regular(path):
+ fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+ try:
+  before=os.fstat(fd)
+  if not stat.S_ISREG(before.st_mode): raise ValueError('invalid staged manifest')
+  chunks=[]
+  while True:
+   chunk=os.read(fd,1024*1024)
+   if not chunk: break
+   chunks.append(chunk)
+  after=os.fstat(fd)
+  if (before.st_dev,before.st_ino,before.st_mode,before.st_size)!=(after.st_dev,after.st_ino,after.st_mode,after.st_size): raise ValueError('staged manifest changed while reading')
+  return b''.join(chunks)
+ finally: os.close(fd)
+release=json.loads(read_regular(os.path.join(root,'bootstrap-assets.json')),object_pairs_hook=pairs)
+by_name={a['name']:a for a in release['assets']}
+def digest(path):
+ fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+ try:
+  before=os.fstat(fd)
+  if not stat.S_ISREG(before.st_mode): raise ValueError('invalid staged asset')
+  h=hashlib.sha256()
+  while True:
+   chunk=os.read(fd,1024*1024)
+   if not chunk: break
+   h.update(chunk)
+  after=os.fstat(fd)
+  if (before.st_dev,before.st_ino,before.st_mode,before.st_size)!=(after.st_dev,after.st_ino,after.st_mode,after.st_size): raise ValueError('staged asset changed while reading')
+  return h.hexdigest()
+ finally: os.close(fd)
+assets=[]
+for name,file,staged in runtime:
+ release_asset=by_name[name]
+ assets.append({'name':name,'file':file,'sha256':digest(os.path.join(root,staged)),'url':release_asset['url']})
+data=json.dumps({'version':release['version'],'architecture':'amd64','assets':assets},sort_keys=True,separators=(',',':')).encode()
+fd=os.open(os.path.join(root,'assets.json'),os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+try:
+ offset=0
+ while offset<len(data):
+  written=os.write(fd,data[offset:])
+  if written<=0: raise ValueError('failed to write runtime manifest')
+  offset+=written
+ os.fsync(fd)
+finally: os.close(fd)
 PY
 assets_dir=$prefix/lib/ark
 launcher_assets_dir=$assets_dir/launcher
