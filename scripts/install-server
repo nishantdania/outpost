@@ -39,8 +39,11 @@ if [ "$test_mode" != 1 ]; then
  [ "$(id -u)" = 0 ] || { echo 'must run as root' >&2; exit 1; }
  [ "$(uname -s)" = Linux ] || { echo 'Linux is required' >&2; exit 1; }
  case "$(uname -m)" in x86_64) :;; *) echo 'unsupported architecture' >&2; exit 1;; esac
- for command in ip nft e2fsck resize2fs debugfs ssh-keygen ssh scp rsync sha256sum install useradd usermod groupadd getent systemctl python3 base64 curl; do command -v "$command" >/dev/null 2>&1 || { echo "missing $command" >&2; exit 1; }; done
- [ -r /dev/kvm ] && [ -c /dev/net/tun ] && [ -c /dev/userfaultfd ] && [ -f /sys/fs/cgroup/cgroup.controllers ] || { echo 'KVM, TUN, userfaultfd, and cgroup v2 are required' >&2; exit 1; }
+ for command in ip nft e2fsck resize2fs debugfs ssh-keygen ssh scp rsync sha256sum install useradd usermod groupadd getent systemctl python3 base64 curl zstd; do command -v "$command" >/dev/null 2>&1 || { echo "missing $command" >&2; exit 1; }; done
+ if ! { [ -r /dev/kvm ] && [ -c /dev/net/tun ] && [ -c /dev/userfaultfd ] && [ -f /sys/fs/cgroup/cgroup.controllers ]; }; then
+  echo 'KVM, TUN, userfaultfd, and cgroup v2 are required' >&2
+  exit 1
+ fi
  [ "$(cat /proc/sys/net/ipv4/ip_forward)" = 1 ] || { echo 'IPv4 forwarding must be enabled' >&2; exit 1; }
 fi
 if [ "$test_mode" = 1 ]; then
@@ -50,7 +53,10 @@ elif [ -n "${SUDO_UID:-}" ] && [ -n "${SUDO_GID:-}" ]; then
  IFS=: read -r _ _ handoff_uid handoff_gid _ handoff_home _ <<EOF
 $user_record
 EOF
- [ "$handoff_uid:$handoff_gid" = "$SUDO_UID:$SUDO_GID" ] && [ -n "$handoff_home" ] || { echo 'invalid sudo user' >&2; exit 1; }
+ if ! { [ "$handoff_uid:$handoff_gid" = "$SUDO_UID:$SUDO_GID" ] && [ -n "$handoff_home" ]; }; then
+  echo 'invalid sudo user' >&2
+  exit 1
+ fi
 else
  handoff_home=/root; handoff_uid=0; handoff_gid=0
 fi
@@ -78,7 +84,7 @@ def pairs(v):
   if k in d: raise ValueError('duplicate key')
   d[k]=x
  return d
-m=json.load(open(sys.argv[1]),object_pairs_hook=pairs); required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4','default':'default.oci.tar'}
+m=json.load(open(sys.argv[1]),object_pairs_hook=pairs); required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
 if set(m)!= {'version','architecture','assets'} or m['version']!=sys.argv[2] or m['architecture']!='amd64' or len(m['assets'])!=len(required): raise SystemExit('invalid remote manifest')
 seen=set()
 for a in m['assets']:
@@ -93,7 +99,7 @@ fi
 python3 - "$source" "$version" "$stage/verified" <<'PY'
 import hashlib,json,os,re,stat,sys,urllib.parse
 source,version,out=sys.argv[1:]
-required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4','default':'default.oci.tar'}
+required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
 try:
  if stat.S_ISLNK(os.lstat(source+'/assets.json').st_mode): raise ValueError('symlink manifest')
  fd=os.open(source+'/assets.json',os.O_RDONLY|os.O_NOFOLLOW)
@@ -138,6 +144,43 @@ for a in o['assets']:
    os.unlink(target); raise ValueError('asset changed while reading')
  finally: os.close(fd)
  seen.add(a['name']); files.add(a['file'])
+PY
+python3 - "$stage/verified" "${ARK_ROOTFS_MAX_BYTES:-8589934592}" "${ARK_OCI_MAX_BYTES:-8589934592}" <<'PY'
+import os,subprocess,sys
+root,rootfs_max,oci_max=sys.argv[1:]
+for source,target,limit in (('rootfs.ext4.zst','rootfs.ext4',rootfs_max),('default.oci.tar.zst','default.oci.tar',oci_max)):
+ try: limit=int(limit)
+ except ValueError: raise SystemExit('invalid expansion limit')
+ if limit < 1: raise SystemExit('invalid expansion limit')
+ source=os.path.join(root,source); target=os.path.join(root,target)
+ infd=os.open(source,os.O_RDONLY|os.O_NOFOLLOW)
+ outfd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+ total=0
+ process=None
+ zeros=b'\0'*(1024*1024)
+ try:
+  process=subprocess.Popen(['zstd','-d','-q','-c'],stdin=infd,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
+  while True:
+   chunk=process.stdout.read(1024*1024)
+   if not chunk: break
+   total+=len(chunk)
+   if total>limit: process.kill(); process.wait(); raise ValueError('expansion limit exceeded')
+   if chunk==zeros[:len(chunk)]:
+    os.lseek(outfd,len(chunk),os.SEEK_CUR)
+    continue
+   offset=0
+   while offset<len(chunk):
+    written=os.write(outfd,chunk[offset:])
+    if written<=0: raise ValueError('failed to write expanded asset')
+    offset+=written
+  if process.wait()!=0: raise ValueError('invalid compressed asset')
+  os.ftruncate(outfd,total)
+  os.fsync(outfd)
+ except Exception:
+  if process is not None and process.poll() is None: process.kill(); process.wait()
+  os.unlink(target); raise
+ finally:
+  os.close(infd); os.close(outfd)
 PY
 assets_dir=$prefix/lib/ark
 launcher_assets_dir=$assets_dir/launcher

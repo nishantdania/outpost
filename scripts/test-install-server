@@ -7,9 +7,12 @@ root=$work/root
 artifacts=$work/artifacts
 mkdir -p "$root" "$artifacts" "$work/bin"
 for name in ark arkd ark-vm-launcher firecracker jailer vmlinux rootfs.ext4 default.oci.tar; do printf 'tiny %s\n' "$name" > "$artifacts/$name"; done
+zstd -q --no-progress -19 -f "$artifacts/rootfs.ext4" -o "$artifacts/rootfs.ext4.zst"
+zstd -q --no-progress -19 -f "$artifacts/default.oci.tar" -o "$artifacts/default.oci.tar.zst"
+rm "$artifacts/rootfs.ext4" "$artifacts/default.oci.tar"
 python3 - "$artifacts" <<'PY'
 import hashlib,json,os,sys
-p=sys.argv[1]; names={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4','default':'default.oci.tar'}
+p=sys.argv[1]; names={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
 a=[]
 for n,f in names.items():
  b=open(os.path.join(p,f),'rb').read(); a.append({'name':n,'file':f,'sha256':hashlib.sha256(b).hexdigest(),'url':'https://example.test/'+f})
@@ -42,7 +45,7 @@ install_uid=$(id -u)
 install_gid=$(id -g)
 root_uid=4242
 root_gid=4243
-run() { PATH="$work/bin:$PATH" ARK_REAL_CHOWN="$real_chown" ARK_FAKE_CHOWN_LOG="$work/chown" ARK_REAL_LN="$real_ln" ARK_FAKE_LN_LOG="$work/ln" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$install_uid" ARK_INSTALL_GID="$install_gid" ARK_INSTALL_ROOT_UID="$root_uid" ARK_INSTALL_ROOT_GID="$root_gid" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$install_uid" ARK_INSTALL_HANDOFF_GID="$install_gid" SUDO_UID="$install_uid" SUDO_GID="$install_gid" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$artifacts" ARK_FAKE_LOG="$work/log" ARK_INSTALL_TEST_SYSTEMCTL="${ARK_INSTALL_TEST_SYSTEMCTL:-0}" ARK_SYSTEMCTL_FAIL="${ARK_SYSTEMCTL_FAIL:-0}" ARK_INSTALL_TEST_FAIL_HARDLINK="${ARK_INSTALL_TEST_FAIL_HARDLINK:-0}" ARK_INSTALL_TEST_LOG="$work/order" "$repo/scripts/install-server"; }
+run() { timeout "${ARK_INSTALL_TIMEOUT:-30}" env PATH="$work/bin:$PATH" ARK_REAL_CHOWN="$real_chown" ARK_FAKE_CHOWN_LOG="$work/chown" ARK_REAL_LN="$real_ln" ARK_FAKE_LN_LOG="$work/ln" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$install_uid" ARK_INSTALL_GID="$install_gid" ARK_INSTALL_ROOT_UID="$root_uid" ARK_INSTALL_ROOT_GID="$root_gid" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$install_uid" ARK_INSTALL_HANDOFF_GID="$install_gid" SUDO_UID="$install_uid" SUDO_GID="$install_gid" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$artifacts" ARK_FAKE_LOG="$work/log" ARK_INSTALL_TEST_SYSTEMCTL="${ARK_INSTALL_TEST_SYSTEMCTL:-0}" ARK_SYSTEMCTL_FAIL="${ARK_SYSTEMCTL_FAIL:-0}" ARK_INSTALL_TEST_FAIL_HARDLINK="${ARK_INSTALL_TEST_FAIL_HARDLINK:-0}" ARK_INSTALL_TEST_LOG="$work/order" "$repo/scripts/install-server"; }
 run
 [ "$(head -n 2 "$work/order" | tr '\n' ' ')" = 'hardlink identities ' ]
 grep -Fqx "$root/srv/ark/state/.ark-hardlink-probe $root/srv/ark/jailer/.ark-hardlink-probe" "$work/ln"
@@ -89,14 +92,18 @@ if grep -q 'SupplementaryGroups=arkvm' "$root/etc/systemd/system/arkd.service"; 
 if grep -q -- '--firecracker=/usr/local/lib/ark/firecracker' "$root/etc/systemd/system/ark-vm-launcher.service"; then exit 1; fi
 mkdir -p "$work/output"
 for name in ark arkd ark-vm-launcher; do cp "$artifacts/$name" "$work/output/$name"; done
-cp "$artifacts/rootfs.ext4" "$work/output/ark-default-0.1.0-amd64.ext4"
-cp "$artifacts/default.oci.tar" "$work/output/ark-default-0.1.0-amd64.oci.tar"
+printf 'tiny rootfs.ext4\n' > "$work/output/ark-default-0.1.0-amd64.ext4"
+printf 'tiny default.oci.tar\n' > "$work/output/ark-default-0.1.0-amd64.oci.tar"
 ARK_VERSION=0.1.0 ARK_OUTPUT_DIR="$work/output" ARK_FIRECRACKER="$artifacts/firecracker" ARK_JAILER="$artifacts/jailer" ARK_KERNEL="$artifacts/vmlinux" "$repo/scripts/release-artifacts"
 first=$(sha256sum "$work/output/release/assets.json" "$work/output/release/checksums.txt")
 printf stale > "$work/output/release/stale"
 ARK_VERSION=0.1.0 ARK_OUTPUT_DIR="$work/output" ARK_FIRECRACKER="$artifacts/firecracker" ARK_JAILER="$artifacts/jailer" ARK_KERNEL="$artifacts/vmlinux" "$repo/scripts/release-artifacts"
 [ "$first" = "$(sha256sum "$work/output/release/assets.json" "$work/output/release/checksums.txt")" ]
 [ ! -e "$work/output/release/stale" ]
+[ -f "$work/output/release/rootfs.ext4.zst" ]
+[ -f "$work/output/release/default.oci.tar.zst" ]
+[ ! -e "$work/output/release/rootfs.ext4" ]
+[ ! -e "$work/output/release/default.oci.tar" ]
 artifacts=$work/output/release
 run
 token=$(cat "$root/etc/arkd/token")
@@ -120,16 +127,54 @@ grep -q 'EnvironmentFile=/etc/arkd/launcher.env' "$root/etc/systemd/system/ark-v
 [ -d "$root/srv/ark/state" ]
 [ ! -e "$root/var/lib/ark-vm-launcher" ]
 [ -f "$root/usr/local/lib/ark/default.oci.tar" ]
+grep -Fqx 'tiny default.oci.tar' "$root/usr/local/lib/ark/default.oci.tar"
+grep -Fqx 'tiny rootfs.ext4' "$root/var/lib/arkd/images/default/rootfs.ext4"
+[ ! -e /usr/local/lib/ark/default.oci.tar ]
+cp -a "$artifacts" "$work/sparse"; artifacts=$work/sparse
+artifacts=$artifacts python3 - <<'PY'
+import hashlib,json,os,subprocess
+p=os.environ['artifacts']; raw=p+'/rootfs.raw'
+with open(raw,'wb') as f:
+ f.write(b'head'); f.truncate(64*1024*1024); f.seek(64*1024*1024-4); f.write(b'tail')
+subprocess.run(['zstd','-q','--no-progress','-19','-f',raw,'-o',p+'/rootfs.ext4.zst'],check=True)
+os.unlink(raw)
+m=json.load(open(p+'/assets.json'))
+for a in m['assets']:
+ if a['file']=='rootfs.ext4.zst': a['sha256']=hashlib.sha256(open(p+'/'+a['file'],'rb').read()).hexdigest()
+open(p+'/assets.json','w').write(json.dumps(m,separators=(',',':')))
+PY
+rm -rf "$root"; mkdir "$root"; ARK_INSTALL_TIMEOUT=10 run
+[ "$(stat -c %s "$root/var/lib/arkd/images/default/rootfs.ext4")" = 67108864 ]
+[ "$(stat -c %b "$root/var/lib/arkd/images/default/rootfs.ext4")" -lt 8192 ]
+python3 - "$root/var/lib/arkd/images/default/rootfs.ext4" <<'PY'
+import sys
+with open(sys.argv[1],'rb') as f:
+ if f.read(4)!=b'head': raise SystemExit('bad sparse rootfs head')
+ f.seek(-4,2)
+ if f.read()!=b'tail': raise SystemExit('bad sparse rootfs tail')
+PY
+artifacts=$work/output/release
 [ ! -e /usr/local/lib/ark/default.oci.tar ]
 [ ! -e /usr/local/bin/ark ]
 fail_preapply() {
  rm -rf "$root"; mkdir "$root"
  if run >/dev/null 2>&1; then echo "accepted invalid manifest" >&2; exit 1; fi
  [ ! -e "$root/usr" ] || { echo "applied before preflight" >&2; exit 1; }
+ if find "$root" -maxdepth 1 -name '.ark-install-stage.*' -print -quit | grep -q .; then echo "staged files not cleaned" >&2; exit 1; fi
 }
 good=$artifacts
 cp -a "$good" "$work/bad"; printf x >> "$work/bad/ark"; artifacts=$work/bad; fail_preapply
 cp -a "$good" "$work/missing"; rm "$work/missing/jailer"; artifacts=$work/missing; fail_preapply
+cp -a "$good" "$work/corrupt-compression"; printf x >> "$work/corrupt-compression/rootfs.ext4.zst"; artifacts=$work/corrupt-compression; fail_preapply
+cp -a "$good" "$work/invalid-compression"; printf x > "$work/invalid-compression/rootfs.ext4.zst"; artifacts=$work/invalid-compression python3 - <<'PY'
+import hashlib,json,os
+p=os.environ['artifacts']; m=json.load(open(p+'/assets.json'))
+for a in m['assets']:
+ if a['file']=='rootfs.ext4.zst': a['sha256']=hashlib.sha256(open(p+'/'+a['file'],'rb').read()).hexdigest()
+open(p+'/assets.json','w').write(json.dumps(m,separators=(',',':')))
+PY
+artifacts=$work/invalid-compression; fail_preapply
+artifacts=$good; ARK_ROOTFS_MAX_BYTES=1 fail_preapply
 cp -a "$good" "$work/duplicate"; artifacts=$work/duplicate python3 - <<'PY'
 import json,os
 p=os.environ['artifacts']+'/assets.json'; x=json.load(open(p)); x['assets'].append(x['assets'][0]); open(p,'w').write(json.dumps(x))
