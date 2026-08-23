@@ -42,12 +42,12 @@ func newListCmd(options *rootOptions) *cobra.Command {
 
 func arkTable(arks []api.Ark) output.Table {
 	table := output.Table{
-		Headers: []string{"ID", "NAME"},
+		Headers: []string{"NAME"},
 		Rows:    make([][]string, 0, len(arks)),
 	}
 
 	for _, ark := range arks {
-		table.Rows = append(table.Rows, []string{ark.Id, ark.Name})
+		table.Rows = append(table.Rows, []string{ark.Name})
 	}
 
 	return table

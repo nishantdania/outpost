@@ -17,10 +17,7 @@ func TestCreateArkAndListArks(t *testing.T) {
 	store := newTestStore(t)
 	handler := handler{store: store}
 
-	createReq := httptest.NewRequest(http.MethodPost, "/v1/arks", strings.NewReader(`{"name":"demo"}`))
-	createRec := httptest.NewRecorder()
-	handler.CreateArk(createRec, createReq)
-
+	createRec := createArk(t, handler, "demo")
 	if createRec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, want %d", createRec.Code, http.StatusCreated)
 	}
@@ -48,6 +45,37 @@ func TestCreateArkAndListArks(t *testing.T) {
 	if len(arks) != 1 || arks[0] != created {
 		t.Fatalf("listed Arks = %v, want %v", arks, created)
 	}
+}
+
+func TestCreateArkRejectsDuplicateName(t *testing.T) {
+	handler := handler{store: newTestStore(t)}
+
+	if rec := createArk(t, handler, "demo"); rec.Code != http.StatusCreated {
+		t.Fatalf("first create status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	second := createArk(t, handler, "Demo")
+	if second.Code != http.StatusConflict {
+		t.Fatalf("second create status = %d, want %d", second.Code, http.StatusConflict)
+	}
+
+	var response api.Error
+	if err := json.Unmarshal(second.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if response.Error != ark.ErrNameTaken.Error() {
+		t.Fatalf("error = %q, want %q", response.Error, ark.ErrNameTaken)
+	}
+}
+
+func createArk(t *testing.T, handler handler, name string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/arks", strings.NewReader(`{"name":"`+name+`"}`))
+	rec := httptest.NewRecorder()
+	handler.CreateArk(rec, req)
+
+	return rec
 }
 
 func newTestStore(t *testing.T) *ark.Store {

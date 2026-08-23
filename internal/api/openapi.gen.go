@@ -370,6 +370,8 @@ type CreateArkResponse struct {
 	JSON201 *Ark
 	// JSON400 the response for an HTTP 400 `application/json` response
 	JSON400 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *Error
 }
@@ -382,6 +384,11 @@ func (r CreateArkResponse) GetJSON201() *Ark {
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
 func (r CreateArkResponse) GetJSON400() *Error {
 	return r.JSON400
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateArkResponse) GetJSON409() *Error {
+	return r.JSON409
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -517,6 +524,13 @@ func ParseCreateArkResponse(rsp *http.Response) (*CreateArkResponse, error) {
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Error

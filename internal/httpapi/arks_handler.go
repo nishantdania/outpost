@@ -39,6 +39,10 @@ func (h handler) CreateArk(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
 		return
 	}
+	if errors.Is(err, ark.ErrNameTaken) {
+		writeJSON(w, http.StatusConflict, api.Error{Error: err.Error()})
+		return
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "failed to create ark"})
 		return

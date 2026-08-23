@@ -15,8 +15,10 @@ func Execute() error {
 func newRootCmd() *cobra.Command {
 	options := &rootOptions{}
 	root := &cobra.Command{
-		Use:   "ark",
-		Short: "Create and manage Arks",
+		Use:           "ark",
+		Short:         "Create and manage Arks",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 
 	root.PersistentFlags().StringVar(&options.serverURL, "server", "http://127.0.0.1:17890", "arkd server URL")

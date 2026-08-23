@@ -13,7 +13,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var ErrNameRequired = errors.New("ark name is required")
+var (
+	ErrNameRequired = errors.New("ark name is required")
+	ErrNameTaken    = errors.New("ark name is already in use")
+)
 
 type Store struct {
 	db *sql.DB
@@ -53,15 +56,24 @@ func (s *Store) Create(ctx context.Context, name string) (Ark, error) {
 		ID:   uuid.NewString(),
 		Name: name,
 	}
-	if _, err := s.db.ExecContext(ctx, "INSERT INTO arks (id, name) VALUES (?, ?)", ark.ID, ark.Name); err != nil {
+	result, err := s.db.ExecContext(ctx, "INSERT OR IGNORE INTO arks (id, name) VALUES (?, ?)", ark.ID, ark.Name)
+	if err != nil {
 		return Ark{}, fmt.Errorf("insert ark: %w", err)
+	}
+
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return Ark{}, fmt.Errorf("check inserted ark: %w", err)
+	}
+	if inserted == 0 {
+		return Ark{}, ErrNameTaken
 	}
 
 	return ark, nil
 }
 
 func (s *Store) List(ctx context.Context) ([]Ark, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name FROM arks ORDER BY rowid")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name FROM arks ORDER BY name COLLATE NOCASE")
 	if err != nil {
 		return nil, fmt.Errorf("query arks: %w", err)
 	}

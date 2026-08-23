@@ -48,6 +48,23 @@ func TestStoreCreatesAndListsArks(t *testing.T) {
 	}
 }
 
+func TestStoreRejectsDuplicateName(t *testing.T) {
+	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	if _, err := store.Create(context.Background(), "demo"); err != nil {
+		t.Fatalf("first Create() error = %v", err)
+	}
+
+	_, err = store.Create(context.Background(), "Demo")
+	if !errors.Is(err, ErrNameTaken) {
+		t.Fatalf("second Create() error = %v, want %v", err, ErrNameTaken)
+	}
+}
+
 func TestStoreRejectsBlankName(t *testing.T) {
 	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
 	if err != nil {

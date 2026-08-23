@@ -18,6 +18,9 @@ func (c *Client) CreateArk(ctx context.Context, name string) (api.Ark, error) {
 		if response.JSON400 != nil {
 			return api.Ark{}, fmt.Errorf("create ark: %s", response.JSON400.Error)
 		}
+		if response.JSON409 != nil {
+			return api.Ark{}, fmt.Errorf("create ark: %s", response.JSON409.Error)
+		}
 		return api.Ark{}, fmt.Errorf("create ark: unexpected response status: %s", response.Status())
 	}
 
