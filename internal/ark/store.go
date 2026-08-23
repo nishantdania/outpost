@@ -15,10 +15,11 @@ import (
 )
 
 var (
-	ErrNameRequired     = errors.New("ark name is required")
-	ErrNameTaken        = errors.New("ark name is already in use")
-	ErrNotFound         = errors.New("ark not found")
-	ErrInvalidResources = errors.New("ark resources must be positive")
+	ErrNameRequired        = errors.New("ark name is required")
+	ErrNameTaken           = errors.New("ark name is already in use")
+	ErrNotFound            = errors.New("ark not found")
+	ErrInvalidResources    = errors.New("ark resources must be positive")
+	ErrInvalidSSHPublicKey = errors.New("SSH public key is invalid")
 )
 
 type Store struct{ db *sql.DB }
@@ -57,12 +58,15 @@ func (s *Store) CreateWith(ctx context.Context, input CreateInput) (Ark, error) 
 	if input.Name == "" {
 		return Ark{}, ErrNameRequired
 	}
-	if input.ImageID == "" || input.VCPUs < MinVCPUs || input.VCPUs > MaxVCPUs || input.MemoryMiB < MinMemoryMiB || input.MemoryMiB > MaxMemoryMiB || input.DiskGiB < MinDiskGiB || input.DiskGiB > MaxDiskGiB {
+	if err := ValidateSSHPublicKey(input.SSHPublicKey); err != nil {
+		return Ark{}, err
+	}
+	if input.ImageID != DefaultImageID || input.VCPUs < MinVCPUs || input.VCPUs > MaxVCPUs || input.MemoryMiB < MinMemoryMiB || input.MemoryMiB > MaxMemoryMiB || input.DiskGiB < MinDiskGiB || input.DiskGiB > MaxDiskGiB {
 		return Ark{}, ErrInvalidResources
 	}
 	now := time.Now().UTC()
-	a := Ark{ID: uuid.NewString(), Name: input.Name, ImageID: input.ImageID, VCPUs: input.VCPUs, MemoryMiB: input.MemoryMiB, DiskGiB: input.DiskGiB, DesiredState: DesiredRunning, Status: StatusProvisioning, CreatedAt: now, UpdatedAt: now}
-	result, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO arks (id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.ID, a.Name, a.ImageID, a.VCPUs, a.MemoryMiB, a.DiskGiB, a.DesiredState, a.Status, a.GuestIP, a.Failure, timestamp(a.CreatedAt), timestamp(a.UpdatedAt))
+	a := Ark{ID: uuid.NewString(), Name: input.Name, ImageID: input.ImageID, VCPUs: input.VCPUs, MemoryMiB: input.MemoryMiB, DiskGiB: input.DiskGiB, SSHPublicKey: input.SSHPublicKey, DesiredState: DesiredRunning, Status: StatusProvisioning, CreatedAt: now, UpdatedAt: now}
+	result, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO arks (id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, ssh_public_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.ID, a.Name, a.ImageID, a.VCPUs, a.MemoryMiB, a.DiskGiB, a.DesiredState, a.Status, a.GuestIP, a.Failure, a.SSHPublicKey, timestamp(a.CreatedAt), timestamp(a.UpdatedAt))
 	if err != nil {
 		return Ark{}, fmt.Errorf("insert ark: %w", err)
 	}
@@ -155,7 +159,7 @@ func (s *Store) delete(ctx context.Context, query, value string) (Ark, error) {
 	return a, nil
 }
 
-const arkColumns = `id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, created_at, updated_at`
+const arkColumns = `id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, ssh_public_key, created_at, updated_at`
 const arkSelect = `SELECT ` + arkColumns + ` FROM arks`
 
 type rowScanner interface{ Scan(...any) error }
@@ -163,7 +167,7 @@ type rowScanner interface{ Scan(...any) error }
 func scanArk(row rowScanner) (Ark, error) {
 	var a Ark
 	var createdAt, updatedAt string
-	err := row.Scan(&a.ID, &a.Name, &a.ImageID, &a.VCPUs, &a.MemoryMiB, &a.DiskGiB, &a.DesiredState, &a.Status, &a.GuestIP, &a.Failure, &createdAt, &updatedAt)
+	err := row.Scan(&a.ID, &a.Name, &a.ImageID, &a.VCPUs, &a.MemoryMiB, &a.DiskGiB, &a.DesiredState, &a.Status, &a.GuestIP, &a.Failure, &a.SSHPublicKey, &createdAt, &updatedAt)
 	if err != nil {
 		return Ark{}, err
 	}

@@ -1,6 +1,11 @@
 package ark
 
-import "time"
+import (
+	"strings"
+	"time"
+
+	"golang.org/x/crypto/ssh"
+)
 
 const (
 	DefaultImageID   = "default"
@@ -37,14 +42,39 @@ type Ark struct {
 	Status       string
 	GuestIP      string
 	Failure      string
+	SSHPublicKey string
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
 
 type CreateInput struct {
-	Name      string
-	ImageID   string
-	VCPUs     int
-	MemoryMiB int
-	DiskGiB   int
+	Name         string
+	ImageID      string
+	VCPUs        int
+	MemoryMiB    int
+	DiskGiB      int
+	SSHPublicKey string
+}
+
+func ValidateSSHPublicKey(value string) error {
+	if value == "" {
+		return nil
+	}
+	if strings.ContainsAny(value, "\r\n") {
+		return ErrInvalidSSHPublicKey
+	}
+	key, comment, options, rest, err := ssh.ParseAuthorizedKey([]byte(value))
+	if err != nil || len(options) != 0 || len(strings.TrimSpace(string(rest))) != 0 {
+		return ErrInvalidSSHPublicKey
+	}
+	fields := strings.Fields(value)
+	if len(fields) < 2 || fields[0] != key.Type() || strings.ContainsAny(comment, "\r\n") {
+		return ErrInvalidSSHPublicKey
+	}
+	switch key.Type() {
+	case ssh.KeyAlgoED25519, ssh.KeyAlgoRSA, ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521:
+		return nil
+	default:
+		return ErrInvalidSSHPublicKey
+	}
 }

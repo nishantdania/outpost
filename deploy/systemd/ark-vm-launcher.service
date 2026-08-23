@@ -19,7 +19,12 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/srv/ark/jailer
+ReadWritePaths=/srv/ark/jailer /var/lib/ark-vm-launcher /run/ark /sys/fs/cgroup
+PrivateDevices=false
+DeviceAllow=/dev/kvm rw
+DeviceAllow=/dev/net/tun rw
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_MKNOD CAP_KILL CAP_SYS_RESOURCE CAP_SETUID CAP_SETGID CAP_CHOWN CAP_DAC_OVERRIDE
+AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_MKNOD CAP_KILL CAP_SYS_RESOURCE CAP_SETUID CAP_SETGID CAP_CHOWN CAP_DAC_OVERRIDE
 
 [Install]
 WantedBy=multi-user.target

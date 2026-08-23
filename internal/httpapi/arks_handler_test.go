@@ -70,6 +70,32 @@ func TestCreateArkRejectsDuplicateName(t *testing.T) {
 	}
 }
 
+func TestCreateArkReturnsDistinctInvalidKeyBadRequest(t *testing.T) {
+	handler := testHandler(t, newTestStore(t))
+	for _, key := range []string{
+		"ssh-ed25519 !!!",
+		"ssh-rsa AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+	} {
+		body, err := json.Marshal(map[string]any{"name": "demo", "image_id": "default", "vcpus": 2, "memory_mib": 4096, "disk_gib": 8, "ssh_public_key": key})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/v1/arks", strings.NewReader(string(body)))
+		rec := httptest.NewRecorder()
+		handler.CreateArk(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("key %q status = %d", key, rec.Code)
+		}
+		var response api.Error
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if response.Error != ark.ErrInvalidSSHPublicKey.Error() {
+			t.Fatalf("error = %q", response.Error)
+		}
+	}
+}
+
 func TestCreateArkRejectsOutOfBoundsResources(t *testing.T) {
 	handler := testHandler(t, newTestStore(t))
 	req := httptest.NewRequest(http.MethodPost, "/v1/arks", strings.NewReader(`{"name":"demo","image_id":"default","vcpus":33,"memory_mib":4096,"disk_gib":8}`))

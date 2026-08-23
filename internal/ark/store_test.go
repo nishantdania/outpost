@@ -91,6 +91,23 @@ func TestStoreRejectsDuplicateName(t *testing.T) {
 	}
 }
 
+func TestStoreRejectsMalformedAndMismatchedSSHPublicKeys(t *testing.T) {
+	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for _, key := range []string{
+		"ssh-ed25519 !!!",
+		"ssh-rsa AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+	} {
+		_, err := store.CreateWith(context.Background(), CreateInput{Name: "demo", ImageID: DefaultImageID, VCPUs: DefaultVCPUs, MemoryMiB: DefaultMemoryMiB, DiskGiB: DefaultDiskGiB, SSHPublicKey: key})
+		if !errors.Is(err, ErrInvalidSSHPublicKey) {
+			t.Fatalf("key %q error = %v", key, err)
+		}
+	}
+}
+
 func TestStoreRejectsBlankName(t *testing.T) {
 	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
 	if err != nil {

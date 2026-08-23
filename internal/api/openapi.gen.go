@@ -116,7 +116,8 @@ type CreateArkRequest struct {
 	MemoryMib int `json:"memory_mib"`
 
 	// Name Example: investigate-deploy
-	Name string `json:"name"`
+	Name         string  `json:"name"`
+	SshPublicKey *string `json:"ssh_public_key,omitempty"`
 
 	// Vcpus Example: 2
 	Vcpus int `json:"vcpus"`

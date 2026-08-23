@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -14,10 +15,17 @@ import (
 
 func newCreateCmd(options *rootOptions) *cobra.Command {
 	input := client.CreateArkInput{ImageID: ark.DefaultImageID, VCPUs: ark.DefaultVCPUs, MemoryMiB: ark.DefaultMemoryMiB, DiskGiB: ark.DefaultDiskGiB}
-	memory, disk := "4G", "8G"
+	memory, disk, publicKeyPath := "4G", "8G", ""
 	command := &cobra.Command{Use: "create <name>", Short: "Create an Ark", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		var err error
 		input.Name = args[0]
+		if publicKeyPath != "" {
+			key, err := os.ReadFile(publicKeyPath)
+			if err != nil {
+				return fmt.Errorf("read SSH public key: %w", err)
+			}
+			input.SSHPublicKey = strings.TrimSpace(string(key))
+		}
 		if input.MemoryMiB, err = parseMemoryMiB(memory); err != nil {
 			return fmt.Errorf("parse memory: %w", err)
 		}
@@ -42,6 +50,7 @@ func newCreateCmd(options *rootOptions) *cobra.Command {
 	command.Flags().IntVar(&input.VCPUs, "cpus", input.VCPUs, "virtual CPUs")
 	command.Flags().StringVar(&memory, "memory", memory, "memory (MiB, M, MB, G, or GB)")
 	command.Flags().StringVar(&disk, "disk", disk, "disk (GiB, G, or GB)")
+	command.Flags().StringVar(&publicKeyPath, "ssh-public-key", publicKeyPath, "SSH public key file")
 	return command
 }
 

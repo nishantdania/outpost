@@ -153,6 +153,7 @@ components:
         vcpus: {type: integer, minimum: 1, maximum: 32, example: 2}
         memory_mib: {type: integer, minimum: 128, maximum: 131072, example: 4096}
         disk_gib: {type: integer, minimum: 1, maximum: 1024, example: 8}
+        ssh_public_key: {type: string, minLength: 1}
     Error:
       type: object
       required: [error]

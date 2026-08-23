@@ -42,8 +42,8 @@ func (h handler) CreateArk(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, api.Error{Error: "invalid request body"})
 		return
 	}
-	created, err := h.service.Create(r.Context(), ark.CreateInput{Name: request.Name, ImageID: request.ImageId, VCPUs: request.Vcpus, MemoryMiB: request.MemoryMib, DiskGiB: request.DiskGib})
-	if errors.Is(err, ark.ErrNameRequired) || errors.Is(err, ark.ErrInvalidResources) {
+	created, err := h.service.Create(r.Context(), ark.CreateInput{Name: request.Name, ImageID: request.ImageId, VCPUs: request.Vcpus, MemoryMiB: request.MemoryMib, DiskGiB: request.DiskGib, SSHPublicKey: stringValue(request.SshPublicKey)})
+	if errors.Is(err, ark.ErrNameRequired) || errors.Is(err, ark.ErrInvalidResources) || errors.Is(err, ark.ErrInvalidSSHPublicKey) {
 		writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
 		return
 	}
@@ -82,6 +82,13 @@ func (h handler) lifecycle(w http.ResponseWriter, action func() (ark.Ark, error)
 	}
 	writeJSON(w, http.StatusOK, apiArk(a))
 }
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
 func notFound(w http.ResponseWriter) {
 	writeJSON(w, http.StatusNotFound, api.Error{Error: ark.ErrNotFound.Error()})
 }

@@ -12,11 +12,12 @@ const Version = 1
 var imageID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 
 type VMSpec struct {
-	ID        string `json:"id"`
-	ImageID   string `json:"image_id"`
-	VCPUs     int    `json:"vcpus"`
-	MemoryMiB int    `json:"memory_mib"`
-	DiskGiB   int    `json:"disk_gib"`
+	ID           string `json:"id"`
+	ImageID      string `json:"image_id"`
+	VCPUs        int    `json:"vcpus"`
+	MemoryMiB    int    `json:"memory_mib"`
+	DiskGiB      int    `json:"disk_gib"`
+	SSHPublicKey string `json:"ssh_public_key"`
 }
 
 type CreateRequest struct {
@@ -76,7 +77,7 @@ func ValidateID(request IDRequest) error {
 }
 
 func validSpec(spec VMSpec) bool {
-	return validID(spec.ID) && imageID.MatchString(spec.ImageID) &&
+	return validID(spec.ID) && imageID.MatchString(spec.ImageID) && ark.ValidateSSHPublicKey(spec.SSHPublicKey) == nil &&
 		spec.VCPUs >= ark.MinVCPUs && spec.VCPUs <= ark.MaxVCPUs &&
 		spec.MemoryMiB >= ark.MinMemoryMiB && spec.MemoryMiB <= ark.MaxMemoryMiB &&
 		spec.DiskGiB >= ark.MinDiskGiB && spec.DiskGiB <= ark.MaxDiskGiB

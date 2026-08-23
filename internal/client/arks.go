@@ -10,8 +10,8 @@ import (
 )
 
 type CreateArkInput struct {
-	Name, ImageID             string
-	VCPUs, MemoryMiB, DiskGiB int
+	Name, ImageID, SSHPublicKey string
+	VCPUs, MemoryMiB, DiskGiB   int
 }
 
 func (c *Client) CreateArk(ctx context.Context, name string) (api.Ark, error) {
@@ -19,12 +19,19 @@ func (c *Client) CreateArk(ctx context.Context, name string) (api.Ark, error) {
 }
 
 func (c *Client) CreateArkWith(ctx context.Context, input CreateArkInput) (api.Ark, error) {
-	response, err := c.api.CreateArkWithResponse(ctx, api.CreateArkRequest{Name: input.Name, ImageId: input.ImageID, Vcpus: input.VCPUs, MemoryMib: input.MemoryMiB, DiskGib: input.DiskGiB})
+	response, err := c.api.CreateArkWithResponse(ctx, api.CreateArkRequest{Name: input.Name, ImageId: input.ImageID, Vcpus: input.VCPUs, MemoryMib: input.MemoryMiB, DiskGib: input.DiskGiB, SshPublicKey: stringPointer(input.SSHPublicKey)})
 	if err != nil {
 		return api.Ark{}, fmt.Errorf("create ark: %w", err)
 	}
 	return createdResponse(response.StatusCode(), response.Status(), response.JSON201, response.JSON400, response.JSON409)
 }
+func stringPointer(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
 func (c *Client) DeleteArk(ctx context.Context, name string) (api.Ark, error) {
 	response, err := c.api.DeleteArkWithResponse(ctx, name)
 	if err != nil {
