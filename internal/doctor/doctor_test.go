@@ -5,7 +5,9 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -208,6 +210,93 @@ func TestServerAssetChecksAreStreamingAndSorted(t *testing.T) {
 	}
 	if strings.Join(got, ",") != "a,z" {
 		t.Fatal(got)
+	}
+}
+func TestOptionalChecksDoNotFailAndRenderWarnings(t *testing.T) {
+	report := Report{Checks: []Check{{Name: "optional", Optional: true, Detail: "missing"}}}
+	if report.Failed() {
+		t.Fatal("optional check failed report")
+	}
+	var text, json strings.Builder
+	report.Text(&text)
+	if !strings.Contains(text.String(), "warn") {
+		t.Fatal(text.String())
+	}
+	if err := report.JSON(&json); err != nil || !strings.Contains(json.String(), `"optional":true`) {
+		t.Fatalf("%v %s", err, json.String())
+	}
+}
+func TestImageBuildChecksAbsentPartialAndValid(t *testing.T) {
+	absent := imageBuildChecks(fake{})
+	if len(absent) != 1 || absent[0].OK || !absent[0].Optional {
+		t.Fatalf("%+v", absent)
+	}
+	partial := imageBuildChecks(fake{commands: map[string]bool{"podman": true}})
+	if partial[len(partial)-1].OK {
+		t.Fatal("partial podman passed")
+	}
+	files := map[string]fs.FileInfo{}
+	for _, path := range []string{"/etc/arkd/storage.conf", "/etc/arkd/containers.conf"} {
+		files[path] = info{mode: 0640}
+	}
+	for _, path := range []string{"/var/lib/arkd/images", "/var/lib/arkd/podman/storage", "/run/ark/podman/storage"} {
+		files[path] = info{mode: fs.ModeDir | 0750}
+	}
+	valid := fullFake{fake: fake{files: files, data: map[string][]byte{"/etc/subuid": []byte("arkd:100000:65536\n"), "/etc/subgid": []byte("arkd:200000:65536\n"), "/etc/arkd/storage.conf": []byte("[storage]\n"), "/etc/arkd/containers.conf": []byte("cgroup_manager = \"cgroupfs\"\n")}, commands: map[string]bool{"podman": true, "newuidmap": true, "newgidmap": true, "fuse-overlayfs": true}}}
+	valid.files["/var/lib/arkd/podman/storage"] = info{mode: fs.ModeDir | 0700}
+	valid.files["/run/ark/podman/storage"] = info{mode: fs.ModeDir | 0700}
+	checks := imageBuildChecks(valid)
+	if !checks[len(checks)-1].OK {
+		t.Fatalf("%+v", checks)
+	}
+	found := map[string]bool{}
+	for _, check := range checks {
+		found[check.Name] = true
+	}
+	if !found["image-graphroot"] || !found["image-runroot"] {
+		t.Fatalf("%+v", checks)
+	}
+	for _, data := range [][]byte{[]byte("arkd:100000:65535\n"), []byte("arkd:nope:65536\n")} {
+		valid.data["/etc/subuid"] = data
+		if imageBuildChecks(valid)[len(checks)-1].OK {
+			t.Fatalf("accepted %q", data)
+		}
+	}
+}
+
+func TestOSProbeAccessDirectories(t *testing.T) {
+	dir := t.TempDir()
+	probe := OSProbe{}
+	if err := probe.Access(dir); err != nil {
+		t.Fatalf("writable directory: %v", err)
+	}
+	if err := os.Chmod(dir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0700)
+	if os.Geteuid() != 0 {
+		if err := probe.Access(dir); err == nil {
+			t.Fatal("read-only directory was writable")
+		}
+	}
+}
+func TestOSProbeAccessAcceptsCharacterDevice(t *testing.T) {
+	if err := (OSProbe{}).Access("/dev/null"); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestOSProbeAccessRejectsDirectorySymlink(t *testing.T) {
+	outside := t.TempDir()
+	link := filepath.Join(t.TempDir(), "images")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := (OSProbe{}).Access(link); err == nil {
+		t.Fatal("symlink accepted")
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("outside changed: %v %v", entries, err)
 	}
 }
 func TestOSProbeHardlink(t *testing.T) {

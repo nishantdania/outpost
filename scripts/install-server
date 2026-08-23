@@ -153,10 +153,31 @@ if [ "$test_mode" != 1 ]; then
  id arkd >/dev/null 2>&1 || useradd --system --gid arkd --home-dir /nonexistent --shell /usr/sbin/nologin arkd
  id arkvm >/dev/null 2>&1 || useradd --system --gid arkvm --home-dir /nonexistent --shell /usr/sbin/nologin arkvm
  usermod -L arkd; usermod -L arkvm
+ if command -v podman >/dev/null 2>&1; then
+  command -v newuidmap >/dev/null 2>&1 || { echo 'newuidmap is required for rootless Podman' >&2; exit 1; }
+  command -v newgidmap >/dev/null 2>&1 || { echo 'newgidmap is required for rootless Podman' >&2; exit 1; }
+  allocate_subid() {
+   file=$1
+   python3 - "$file" <<'PY'
+import sys
+used=[]
+try:
+ for line in open(sys.argv[1]):
+  parts=line.strip().split(':')
+  if len(parts)==3 and parts[1].isdigit() and parts[2].isdigit(): used.append((int(parts[1]),int(parts[1])+int(parts[2])))
+except FileNotFoundError: pass
+start=100000
+while any(start < end and start+65536 > begin for begin,end in used): start+=65536
+print(f'{start}-{start+65535}')
+PY
+  }
+  grep -q '^arkd:' /etc/subuid || usermod --add-subuids "$(allocate_subid /etc/subuid)" arkd
+  grep -q '^arkd:' /etc/subgid || usermod --add-subgids "$(allocate_subid /etc/subgid)" arkd
+ fi
  owner_arkd=arkd:arkd; owner_static=root:arkd; owner_launcher=root:arkd; owner_vm=root:arkvm; owner_root=root:root
 else owner_arkd=${ARK_INSTALL_UID:-0}:${ARK_INSTALL_GID:-0}; root_uid=${ARK_INSTALL_ROOT_UID:-${ARK_INSTALL_UID:-0}}; root_gid=${ARK_INSTALL_ROOT_GID:-${ARK_INSTALL_GID:-0}}; owner_static=$root_uid:${ARK_INSTALL_GID:-0}; owner_launcher=$owner_arkd; owner_vm=${ARK_INSTALL_ARKVM_UID:-${ARK_INSTALL_UID:-0}}:${ARK_INSTALL_ARKVM_GID:-${ARK_INSTALL_GID:-0}}; owner_root=$root_uid:$root_gid; fi
-for path in "$state" "$launcher_state" "$jail" "$runtime" "$config" "$assets_dir" "$launcher_assets_dir" "$state/images/default" "/etc/systemd/system"; do install -d -m 0750 "$root$path"; done
-chown "$owner_arkd" "$root$state" "$root$config" "$root$state/images/default"
+for path in "$state" "$launcher_state" "$jail" "$runtime" "$config" "$assets_dir" "$launcher_assets_dir" "$state/images" "$state/images/default" "$state/podman" "$runtime/podman" "/etc/systemd/system"; do install -d -m 0750 "$root$path"; done
+chown "$owner_arkd" "$root$state" "$root$config" "$root$state/images" "$root$state/images/default" "$root$state/podman" "$root$runtime/podman"
 chown "$owner_static" "$root$assets_dir"
 chown "$owner_launcher" "$root$launcher_state" "$root$runtime"
 chown "$owner_vm" "$root$jail" "$root$launcher_assets_dir"
@@ -181,8 +202,26 @@ chmod 0600 "$root$config/token"; chown "$owner_arkd" "$root$config/token"
 cat > "$root$config/arkd.env" <<EOF
 ARKD_TOKEN=$(cat "$root$config/token")
 ARK_LAUNCHER_SOCKET=$runtime/vm-launcher.sock
+HOME=$state/podman
+XDG_DATA_HOME=$state/podman
+XDG_RUNTIME_DIR=$runtime/podman
+CONTAINERS_STORAGE_CONF=$config/storage.conf
+CONTAINERS_CONF=$config/containers.conf
 EOF
 chmod 0600 "$root$config/arkd.env"; chown "$owner_arkd" "$root$config/arkd.env"
+cat > "$root$config/storage.conf" <<EOF
+[storage]
+driver = "overlay"
+runroot = "$runtime/podman/storage"
+graphroot = "$state/podman/storage"
+EOF
+chmod 0600 "$root$config/storage.conf"; chown "$owner_arkd" "$root$config/storage.conf"
+cat > "$root$config/containers.conf" <<EOF
+[engine]
+cgroup_manager = "cgroupfs"
+events_logger = "file"
+EOF
+chmod 0640 "$root$config/containers.conf"; chown "$owner_static" "$root$config/containers.conf"
 cat > "$root$config/launcher.env" <<EOF
 ARK_UPLINK=$uplink
 ARK_DNS=$dns

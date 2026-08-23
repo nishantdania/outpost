@@ -5,4 +5,6 @@ type Config struct {
 	DatabasePath   string
 	Token          string
 	LauncherSocket string
+	ImageStore     string
+	DefaultOCI     string
 }

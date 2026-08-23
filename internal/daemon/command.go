@@ -19,6 +19,8 @@ func parseConfig(args []string) (Config, error) {
 	flags.StringVar(&config.DatabasePath, "database", "./ark.db", "SQLite database path")
 	flags.StringVar(&config.Token, "token", os.Getenv("ARKD_TOKEN"), "bearer token (or ARKD_TOKEN)")
 	flags.StringVar(&config.LauncherSocket, "launcher-socket", "/run/ark/vm-launcher.sock", "VM launcher Unix socket")
+	flags.StringVar(&config.ImageStore, "image-store", "/var/lib/arkd/images", "custom image store")
+	flags.StringVar(&config.DefaultOCI, "default-oci", "/usr/local/lib/ark/default.oci.tar", "default OCI archive")
 	if err := flags.Parse(args); err != nil {
 		return Config{}, err
 	}

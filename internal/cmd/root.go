@@ -72,6 +72,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newCopyCmd(options))
 	root.AddCommand(newSyncCmd(options))
 	root.AddCommand(newDoctorCmd(options))
+	root.AddCommand(newImageCmd(options))
 
 	return root
 }

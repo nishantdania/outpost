@@ -78,10 +78,25 @@ type ProcessController interface {
 	Signal(int, os.Signal) error
 }
 
-type OSProcessController struct{}
+type OSProcessController struct {
+	ReadFile func(string) ([]byte, error)
+	Stat     func(string) (os.FileInfo, error)
+}
 
-func (OSProcessController) Inspect(pid int, jailRoot, executable string) (ProcessInfo, error) {
-	stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+func (p OSProcessController) readFile(path string) ([]byte, error) {
+	if p.ReadFile != nil {
+		return p.ReadFile(path)
+	}
+	return os.ReadFile(path)
+}
+func (p OSProcessController) stat(path string) (os.FileInfo, error) {
+	if p.Stat != nil {
+		return p.Stat(path)
+	}
+	return os.Stat(path)
+}
+func (p OSProcessController) Inspect(pid int, jailRoot, executable string) (ProcessInfo, error) {
+	stat, err := p.readFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
 	if errors.Is(err, os.ErrNotExist) {
 		return ProcessInfo{}, nil
 	}
@@ -96,19 +111,25 @@ func (OSProcessController) Inspect(pid int, jailRoot, executable string) (Proces
 		return ProcessInfo{}, nil
 	}
 	info := ProcessInfo{Exists: true, StartTime: start}
-	procRoot, err := os.Stat(filepath.Join("/proc", strconv.Itoa(pid), "root"))
+	procRoot, err := p.stat(filepath.Join("/proc", strconv.Itoa(pid), "root"))
+	if errors.Is(err, os.ErrNotExist) {
+		return ProcessInfo{}, nil
+	}
 	if err != nil {
 		return info, nil
 	}
-	expectedRoot, err := os.Stat(jailRoot)
+	expectedRoot, err := p.stat(jailRoot)
 	if err != nil || !os.SameFile(procRoot, expectedRoot) {
 		return info, nil
 	}
-	procExecutable, err := os.Stat(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
+	procExecutable, err := p.stat(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
+	if errors.Is(err, os.ErrNotExist) {
+		return ProcessInfo{}, nil
+	}
 	if err != nil {
 		return info, nil
 	}
-	expectedExecutable, err := os.Stat(filepath.Join(jailRoot, executable))
+	expectedExecutable, err := p.stat(filepath.Join(jailRoot, executable))
 	if err != nil || !os.SameFile(procExecutable, expectedExecutable) {
 		return info, nil
 	}
@@ -132,10 +153,14 @@ type FirecrackerConfig struct {
 	Jailer        string
 	Kernel        string
 	DefaultRootFS string
+	ImageStore    string
 	Uplink        string
 	DNS           string
 	ArkVMUID      int
 	ArkVMGID      int
+	ArkdUID       int
+	ArkdGID       int
+	MaxImageBytes int64
 	Runner        CommandRunner
 	Launcher      ProcessLauncher
 	Processes     ProcessController
@@ -218,6 +243,9 @@ var interfaceName = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,15}$`)
 var executableName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,255}$`)
 
 func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error) {
+	if config.ImageStore == "" {
+		config.ImageStore = filepath.Dir(config.DefaultRootFS)
+	}
 	if config.Runner == nil {
 		config.Runner = OSRunner{}
 	}
@@ -230,6 +258,12 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 	if config.SSHTimeout == 0 {
 		config.SSHTimeout = 2 * time.Minute
 	}
+	if config.MaxImageBytes == 0 {
+		config.MaxImageBytes = 8 << 30
+	}
+	if config.ArkdUID == 0 && config.ArkdGID == 0 {
+		config.ArkdUID, config.ArkdGID = -1, -1
+	}
 	if config.PIDTimeout == 0 {
 		config.PIDTimeout = 10 * time.Second
 	}
@@ -239,7 +273,7 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 	if config.PollInterval == 0 {
 		config.PollInterval = 50 * time.Millisecond
 	}
-	for _, path := range []string{config.StateDir, config.RuntimeDir, config.JailerBase, config.Firecracker, config.Jailer, config.Kernel, config.DefaultRootFS} {
+	for _, path := range []string{config.StateDir, config.RuntimeDir, config.JailerBase, config.Firecracker, config.Jailer, config.Kernel, config.DefaultRootFS, config.ImageStore} {
 		if !safeAbsolutePath(path) {
 			return nil, fmt.Errorf("firecracker configuration: %w", vmapi.ErrInvalid)
 		}
@@ -250,7 +284,7 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 			return nil, fmt.Errorf("trusted asset %q: %w", path, vmapi.ErrInvalid)
 		}
 	}
-	if !interfaceName.MatchString(config.Uplink) || net.ParseIP(config.DNS) == nil || net.ParseIP(config.DNS).To4() == nil || config.ArkVMUID < 0 || config.ArkVMGID < 0 || config.SSHTimeout <= 0 || config.PIDTimeout <= 0 || config.StopTimeout <= 0 || config.PollInterval <= 0 {
+	if !interfaceName.MatchString(config.Uplink) || net.ParseIP(config.DNS) == nil || net.ParseIP(config.DNS).To4() == nil || config.ArkVMUID < 0 || config.ArkVMGID < 0 || config.ArkdUID < -1 || config.ArkdGID < -1 || config.MaxImageBytes <= 0 || config.SSHTimeout <= 0 || config.PIDTimeout <= 0 || config.StopTimeout <= 0 || config.PollInterval <= 0 {
 		return nil, fmt.Errorf("firecracker configuration: %w", vmapi.ErrInvalid)
 	}
 	executable := filepath.Base(config.Firecracker)
@@ -260,13 +294,55 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 	return &FirecrackerRuntime{config: config}, nil
 }
 
+func (r *FirecrackerRuntime) rootfs(id string) (*os.File, error) {
+	path := r.config.DefaultRootFS
+	if id != "default" {
+		if !regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(id) {
+			return nil, vmapi.ErrInvalid
+		}
+		path = filepath.Join(r.config.ImageStore, strings.TrimPrefix(id, "sha256:"), "rootfs.ext4")
+	}
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, vmapi.ErrInvalid
+	}
+	file := os.NewFile(uintptr(fd), path)
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0027 != 0 || info.Size() <= 0 || info.Size() > r.config.MaxImageBytes || info.Mode()&os.ModeSymlink != 0 {
+		file.Close()
+		return nil, vmapi.ErrInvalid
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Nlink != 1 || (r.config.ArkdUID >= 0 && int(stat.Uid) != r.config.ArkdUID) || (r.config.ArkdGID >= 0 && int(stat.Gid) != r.config.ArkdGID) {
+		file.Close()
+		return nil, vmapi.ErrInvalid
+	}
+	if id != "default" {
+		hash := sha256.New()
+		if _, err = io.Copy(hash, file); err != nil || fmt.Sprintf("sha256:%x", hash.Sum(nil)) != id {
+			file.Close()
+			return nil, vmapi.ErrInvalid
+		}
+		if _, err = file.Seek(0, io.SeekStart); err != nil {
+			file.Close()
+			return nil, vmapi.ErrInvalid
+		}
+	}
+	return file, nil
+}
+
 func (r *FirecrackerRuntime) Create(ctx context.Context, spec vmapi.VMSpec) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := vmapi.ValidateCreate(vmapi.CreateRequest{Version: vmapi.Version, Spec: spec}); err != nil || spec.ImageID != "default" {
+	if err := vmapi.ValidateCreate(vmapi.CreateRequest{Version: vmapi.Version, Spec: spec}); err != nil {
 		return vmapi.ErrInvalid
 	}
+	rootfs, err := r.rootfs(spec.ImageID)
+	if err != nil {
+		return vmapi.ErrInvalid
+	}
+	defer rootfs.Close()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, err := r.load(spec.ID); err == nil {
@@ -277,9 +353,9 @@ func (r *FirecrackerRuntime) Create(ctx context.Context, spec vmapi.VMSpec) erro
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	base, err := os.Stat(r.config.DefaultRootFS)
+	base, err := rootfs.Stat()
 	if err != nil {
-		return fmt.Errorf("stat default rootfs: %w", err)
+		return fmt.Errorf("stat rootfs: %w", err)
 	}
 	target := int64(spec.DiskGiB) << 30
 	if target < base.Size() {
@@ -292,7 +368,7 @@ func (r *FirecrackerRuntime) Create(ctx context.Context, spec vmapi.VMSpec) erro
 	if err := os.Chmod(paths.stateDir, 0700); err != nil {
 		return r.failCreate(paths, err)
 	}
-	if _, err := r.run(ctx, "cp", "--reflink=auto", "--sparse=always", r.config.DefaultRootFS, paths.stateDisk); err != nil {
+	if err := copySparse(ctx, rootfs, paths.stateDisk); err != nil {
 		return r.failCreate(paths, err)
 	}
 	if _, err := r.run(ctx, "truncate", "-s", strconv.FormatInt(target, 10), paths.stateDisk); err != nil {
@@ -1041,7 +1117,7 @@ func allocationValid(m manifest) bool {
 }
 
 func manifestValid(m manifest) bool {
-	if vmapi.ValidateCreate(vmapi.CreateRequest{Version: vmapi.Version, Spec: m.Spec}) != nil || m.Spec.ImageID != "default" {
+	if vmapi.ValidateCreate(vmapi.CreateRequest{Version: vmapi.Version, Spec: m.Spec}) != nil || (m.Spec.ImageID != "default" && !regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(m.Spec.ImageID)) {
 		return false
 	}
 	allocationEmpty := m.Tap == "" && m.Gateway == "" && m.GuestIP == ""
@@ -1279,6 +1355,83 @@ func validID(id string) bool {
 
 func safeAbsolutePath(path string) bool {
 	return filepath.IsAbs(path) && filepath.Clean(path) == path && path != string(filepath.Separator)
+}
+
+func copySparse(ctx context.Context, source *os.File, target string) (err error) {
+	info, err := source.Stat()
+	if err != nil {
+		return err
+	}
+	output, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		output.Close()
+		if err != nil {
+			os.Remove(target)
+		}
+	}()
+	buffer := make([]byte, 128<<10)
+	copyRange := func(start, end int64) error {
+		if _, seekErr := source.Seek(start, io.SeekStart); seekErr != nil {
+			return seekErr
+		}
+		if _, seekErr := output.Seek(start, io.SeekStart); seekErr != nil {
+			return seekErr
+		}
+		remaining := end - start
+		for remaining > 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			want := int64(len(buffer))
+			if remaining < want {
+				want = remaining
+			}
+			n, readErr := source.Read(buffer[:want])
+			if n > 0 {
+				if _, writeErr := output.Write(buffer[:n]); writeErr != nil {
+					return writeErr
+				}
+				remaining -= int64(n)
+			}
+			if readErr != nil {
+				if readErr == io.EOF && remaining == 0 {
+					break
+				}
+				return readErr
+			}
+		}
+		return nil
+	}
+	for offset := int64(0); offset < info.Size(); {
+		data, seekErr := syscall.Seek(int(source.Fd()), offset, 3)
+		if seekErr != nil {
+			if seekErr == syscall.ENXIO {
+				break
+			}
+			if offset == 0 && (seekErr == syscall.EINVAL || seekErr == syscall.ENOTSUP) {
+				return copyRange(0, info.Size())
+			}
+			return seekErr
+		}
+		hole, seekErr := syscall.Seek(int(source.Fd()), data, 4)
+		if seekErr != nil {
+			return seekErr
+		}
+		if err := copyRange(data, hole); err != nil {
+			return err
+		}
+		offset = hole
+	}
+	if err = output.Truncate(info.Size()); err != nil {
+		return err
+	}
+	if err = output.Sync(); err != nil {
+		return err
+	}
+	return output.Close()
 }
 
 func copyFile(src, dst string, uid, gid int, mode os.FileMode) error {

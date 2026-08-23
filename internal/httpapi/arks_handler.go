@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/nishantdania/ark/internal/api"
 	"github.com/nishantdania/ark/internal/ark"
@@ -51,12 +52,127 @@ func (h handler) CreateArk(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, api.Error{Error: err.Error()})
 		return
 	}
+	if errors.Is(err, ark.ErrInvalidImage) || errors.Is(err, ark.ErrImageNotFound) {
+		writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
+		return
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "failed to create ark"})
 		return
 	}
 	writeJSON(w, http.StatusCreated, apiArk(created))
 }
+func (h handler) ListImages(w http.ResponseWriter, r *http.Request) {
+	images, err := h.service.Images(r.Context())
+	if errors.Is(err, service.ErrImagesUnavailable) {
+		writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
+		return
+	}
+	if err != nil {
+		writeJSON(w, 500, api.Error{Error: "failed to list images"})
+		return
+	}
+	out := make([]api.Image, 0, len(images))
+	for _, v := range images {
+		out = append(out, apiImage(v))
+	}
+	writeJSON(w, 200, out)
+}
+func (h handler) GetImage(w http.ResponseWriter, r *http.Request, ref string) {
+	image, err := h.service.Image(r.Context(), ref)
+	if errors.Is(err, service.ErrImagesUnavailable) {
+		writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
+		return
+	}
+	if errors.Is(err, ark.ErrImageNotFound) {
+		notFound(w)
+		return
+	}
+	if err != nil {
+		writeJSON(w, 400, api.Error{Error: "invalid image"})
+		return
+	}
+	writeJSON(w, 200, apiImage(image))
+}
+func (h handler) BuildImage(w http.ResponseWriter, r *http.Request, p api.BuildImageParams) {
+	h.uploadImage(w, r, p.Tag, true)
+}
+func (h handler) ImportImage(w http.ResponseWriter, r *http.Request, p api.ImportImageParams) {
+	h.uploadImage(w, r, p.Tag, false)
+}
+func (h handler) uploadImage(w http.ResponseWriter, r *http.Request, tag string, build bool) {
+	want := "application/octet-stream"
+	limit := int64(256 << 20)
+	if build {
+		want, limit = "application/x-tar", 64<<20
+	}
+	if r.Header.Get("Content-Type") != want {
+		writeJSON(w, http.StatusUnsupportedMediaType, api.Error{Error: "invalid image content type"})
+		return
+	}
+	defer r.Body.Close()
+	body := http.MaxBytesReader(w, r.Body, limit+1)
+	var image ark.Image
+	var err error
+	if build {
+		image, err = h.service.BuildImage(r.Context(), body, tag)
+	} else {
+		image, err = h.service.ImportImage(r.Context(), body, tag)
+	}
+	if err != nil {
+		if errors.Is(err, service.ErrImagesUnavailable) {
+			writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
+			return
+		}
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) || strings.Contains(err.Error(), "exceeds limit") {
+			writeJSON(w, http.StatusRequestEntityTooLarge, api.Error{Error: "image input exceeds limit"})
+			return
+		}
+		if errors.Is(err, ark.ErrInvalidImage) {
+			writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "image operation failed"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, apiImage(image))
+}
+func (h handler) DeleteImage(w http.ResponseWriter, r *http.Request, ref string) {
+	if err := h.service.RemoveImage(r.Context(), ref); err != nil {
+		if errors.Is(err, service.ErrImagesUnavailable) {
+			writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
+			return
+		}
+		if errors.Is(err, ark.ErrImageNotFound) {
+			notFound(w)
+			return
+		}
+		if errors.Is(err, ark.ErrInvalidImage) {
+			writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusConflict, api.Error{Error: "image cannot be removed"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+func (h handler) GcImages(w http.ResponseWriter, r *http.Request) {
+	ids, err := h.service.GCImages(r.Context())
+	if err != nil {
+		if errors.Is(err, service.ErrImagesUnavailable) {
+			writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "image GC failed"})
+		return
+	}
+	writeJSON(w, 200, ids)
+}
+func apiImage(v ark.Image) api.Image {
+	return api.Image{Digest: v.Digest, SizeBytes: int(v.Size), Tags: v.Tags, CreatedAt: v.CreatedAt}
+}
+
 func (h handler) StartArk(w http.ResponseWriter, r *http.Request, name api.ArkName) {
 	h.lifecycle(w, func() (ark.Ark, error) { return h.service.Start(r.Context(), name) }, "start")
 }

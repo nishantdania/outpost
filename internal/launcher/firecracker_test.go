@@ -3,6 +3,7 @@ package launcher
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -280,6 +281,62 @@ func seedVM(t *testing.T, r *FirecrackerRuntime, spec vmapi.VMSpec, withAllocati
 	return m
 }
 
+func TestCustomRootFSValidationAndHeldCopy(t *testing.T) {
+	r := testRuntime(t, nil)
+	content := []byte("verified image bytes")
+	digest := fmt.Sprintf("sha256:%x", sha256.Sum256(content))
+	path := filepath.Join(r.config.ImageStore, strings.TrimPrefix(digest, "sha256:"), "rootfs.ext4")
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, content, 0640); err != nil {
+		t.Fatal(err)
+	}
+	file, err := r.rootfs(digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	replacement := path + ".replacement"
+	if err := os.WriteFile(replacement, []byte("replacement"), 0640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, path); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "disk")
+	if err := copySparse(t.Context(), file, target); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil || string(got) != string(content) {
+		t.Fatalf("held copy = %q, %v", got, err)
+	}
+	r.config.ArkdUID = os.Getuid() + 1
+	if rejected, err := r.rootfs(digest); err == nil {
+		rejected.Close()
+		t.Fatal("wrong owner accepted")
+	}
+	r.config.ArkdUID = -1
+	for _, test := range []struct {
+		name   string
+		change func()
+	}{
+		{"mode", func() { os.Chmod(path, 0644) }},
+		{"hardlink", func() { os.Chmod(path, 0640); os.Link(path, path+".link") }},
+		{"oversize", func() { os.Remove(path + ".link"); os.Truncate(path, r.config.MaxImageBytes+1) }},
+		{"symlink", func() { os.Truncate(path, int64(len(content))); os.Remove(path); os.Symlink(target, path) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			test.change()
+			if file, err := r.rootfs(digest); err == nil {
+				file.Close()
+				t.Fatal("invalid custom image accepted")
+			}
+		})
+	}
+}
+
 func TestCreateAcceptsE2fsckExitOneAndNeverCreatesJail(t *testing.T) {
 	var calls []commandCall
 	r := testRuntime(t, func(config *FirecrackerConfig) {
@@ -314,7 +371,7 @@ func TestCreateCommandSequenceInodeMetadataAndRollback(t *testing.T) {
 			t.Fatal(err)
 		}
 		paths := r.vmPaths(spec.ID)
-		wantPrefix := []string{"cp", "truncate", "e2fsck", "resize2fs"}
+		wantPrefix := []string{"truncate", "e2fsck", "resize2fs"}
 		for i, want := range wantPrefix {
 			if calls[i].name != want {
 				t.Fatalf("command %d = %s, want %s", i, calls[i].name, want)
@@ -367,7 +424,7 @@ func TestCreateCommandSequenceInodeMetadataAndRollback(t *testing.T) {
 		if _, err := os.Stat(r.vmPaths(spec.ID).stateDir); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("state was not rolled back: %v", err)
 		}
-		if len(calls) != 2 || calls[0].name != "cp" || calls[1].name != "truncate" {
+		if len(calls) != 1 || calls[0].name != "truncate" {
 			t.Fatalf("calls = %#v", calls)
 		}
 	})
@@ -854,6 +911,68 @@ func TestShutdownContinuesAfterUnsafeVM(t *testing.T) {
 	}
 	if _, err := os.Stat(stalePaths.jailIDDir); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("stale jail remains: %v", err)
+	}
+}
+
+func TestOSProcessInspectTreatsProcDisappearanceAsMissing(t *testing.T) {
+	jail := t.TempDir()
+	executable := filepath.Join(jail, "firecracker")
+	if err := os.WriteFile(executable, []byte("x"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	procRoot, procExe := "/proc/77/root", "/proc/77/exe"
+	for _, missing := range []string{procRoot, procExe} {
+		controller := OSProcessController{
+			ReadFile: func(string) ([]byte, error) { return []byte("77 (firecracker) R " + strings.Repeat("0 ", 20)), nil },
+			Stat: func(name string) (os.FileInfo, error) {
+				if name == missing {
+					return nil, os.ErrNotExist
+				}
+				if name == procRoot {
+					return os.Stat(jail)
+				}
+				if name == procExe {
+					return os.Stat(executable)
+				}
+				return os.Stat(name)
+			},
+		}
+		info, err := controller.Inspect(77, jail, "firecracker")
+		if err != nil || info.Exists || info.Verified {
+			t.Fatalf("%s = %+v, %v", missing, info, err)
+		}
+	}
+}
+func TestOSProcessInspectKeepsPermissionAndReuseUnverified(t *testing.T) {
+	jail := t.TempDir()
+	executable := filepath.Join(jail, "firecracker")
+	if err := os.WriteFile(executable, []byte("x"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	procRoot, procExe := "/proc/77/root", "/proc/77/exe"
+	for _, permission := range []bool{true, false} {
+		controller := OSProcessController{
+			ReadFile: func(string) ([]byte, error) { return []byte("77 (firecracker) R " + strings.Repeat("0 ", 20)), nil },
+			Stat: func(name string) (os.FileInfo, error) {
+				if name == procRoot && permission {
+					return nil, os.ErrPermission
+				}
+				if name == procRoot {
+					return os.Stat(jail)
+				}
+				if name == procExe && !permission {
+					return os.Stat(jail)
+				}
+				if name == procExe {
+					return os.Stat(executable)
+				}
+				return os.Stat(name)
+			},
+		}
+		info, err := controller.Inspect(77, jail, "firecracker")
+		if err != nil || !info.Exists || info.Verified || info.StartTime == "" {
+			t.Fatalf("permission %v = %+v, %v", permission, info, err)
+		}
 	}
 }
 

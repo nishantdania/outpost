@@ -1,9 +1,11 @@
 package doctor
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,7 +16,10 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 var sha256Pattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
@@ -35,11 +40,37 @@ func (OSProbe) LookupUser(name string) (*user.User, error)   { return user.Looku
 func (OSProbe) LookupGroup(name string) (*user.Group, error) { return user.LookupGroup(name) }
 func (OSProbe) Run(name string, args ...string) error        { return exec.Command(name, args...).Run() }
 func (OSProbe) Access(path string) error {
-	file, err := os.OpenFile(path, os.O_RDWR, 0)
-	if err == nil {
-		err = file.Close()
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
 	}
-	return err
+	if info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("symlink is not writable storage")
+	}
+	if !info.IsDir() {
+		fd, err := unix.Open(path, unix.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		if err != nil {
+			return err
+		}
+		return unix.Close(fd)
+	}
+	dir, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(dir)
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return err
+	}
+	name := ".ark-doctor-" + hex.EncodeToString(random[:])
+	file, err := unix.Openat(dir, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
+	if err != nil {
+		return err
+	}
+	closeErr := unix.Close(file)
+	removeErr := unix.Unlinkat(dir, name, 0)
+	return errors.Join(closeErr, removeErr)
 }
 func (OSProbe) Hardlink(state, jail string) error {
 	source, err := os.CreateTemp(state, ".ark-hardlink-")
@@ -53,9 +84,10 @@ func (OSProbe) Hardlink(state, jail string) error {
 }
 
 type Check struct {
-	Name   string `json:"name"`
-	OK     bool   `json:"ok"`
-	Detail string `json:"detail"`
+	Name     string `json:"name"`
+	OK       bool   `json:"ok"`
+	Optional bool   `json:"optional"`
+	Detail   string `json:"detail"`
 }
 
 type Report struct {
@@ -64,7 +96,7 @@ type Report struct {
 
 func (r Report) Failed() bool {
 	for _, check := range r.Checks {
-		if !check.OK {
+		if !check.OK && !check.Optional {
 			return true
 		}
 	}
@@ -91,6 +123,9 @@ func (r Report) Text(w io.Writer) {
 		status := "ok"
 		if !check.OK {
 			status = "fail"
+			if check.Optional {
+				status = "warn"
+			}
 		}
 		fmt.Fprintf(w, "%-5s %-20s %s\n", status, check.Name, check.Detail)
 	}
@@ -162,9 +197,97 @@ func Server(p Probe, config ServerConfig) Report {
 	for _, name := range names {
 		checks = append(checks, checksum(p, name, config.Assets[name], config.Manifest[name]))
 	}
+	checks = append(checks, imageBuildChecks(p)...)
 	return Report{Checks: checks}
 }
 
+func imageBuildChecks(p Probe) []Check {
+	if _, err := p.LookPath("podman"); err != nil {
+		return []Check{{Name: "image-build", Optional: true, Detail: "podman is not installed"}}
+	}
+	checks := []Check{{Name: "podman", OK: true, Optional: true, Detail: "command available"}}
+	for _, name := range []string{"newuidmap", "newgidmap", "fuse-overlayfs"} {
+		check := command(p, name)
+		check.Optional = true
+		checks = append(checks, check)
+	}
+	for _, path := range []string{"/etc/arkd/storage.conf", "/etc/arkd/containers.conf", "/var/lib/arkd/images", "/var/lib/arkd/podman/storage", "/run/ark/podman/storage"} {
+		check := regularOrDirectory(p, path)
+		check.Optional = true
+		checks = append(checks, check)
+	}
+	for _, path := range []string{"/etc/subuid", "/etc/subgid"} {
+		check := subID(p, path)
+		check.Optional = true
+		checks = append(checks, check)
+	}
+	ok := true
+	for _, check := range checks {
+		if !check.OK {
+			ok = false
+		}
+	}
+	checks = append(checks, Check{Name: "image-build", OK: ok, Optional: true, Detail: "rootless image build prerequisites"})
+	return checks
+}
+func imageCheckName(path string) string {
+	switch path {
+	case "/var/lib/arkd/podman/storage":
+		return "image-graphroot"
+	case "/run/ark/podman/storage":
+		return "image-runroot"
+	default:
+		return "image-" + filepath.Base(path)
+	}
+}
+func regularOrDirectory(p Probe, path string) Check {
+	name := imageCheckName(path)
+	info, err := p.Stat(path)
+	if err != nil {
+		return Check{Name: name, Detail: err.Error()}
+	}
+	if path == "/etc/arkd/storage.conf" || path == "/etc/arkd/containers.conf" {
+		if !info.Mode().IsRegular() || info.Mode().Perm() > 0640 {
+			return Check{Name: name, Detail: "unsafe file"}
+		}
+		data, err := p.ReadFile(path)
+		want := "[storage]"
+		if path == "/etc/arkd/containers.conf" {
+			want = `cgroup_manager = "cgroupfs"`
+		}
+		if err != nil || !strings.Contains(string(data), want) {
+			return Check{Name: name, Detail: "configuration is incomplete"}
+		}
+	} else if !info.IsDir() || (path == "/var/lib/arkd/images" && info.Mode().Perm() != 0750) || (path != "/var/lib/arkd/images" && info.Mode().Perm() != 0700 && info.Mode().Perm() != 0750) {
+		return Check{Name: name, Detail: "wrong directory mode"}
+	}
+	if strings.HasPrefix(path, "/var/lib/arkd/") || strings.HasPrefix(path, "/run/ark/") {
+		if q, ok := p.(interface{ Access(string) error }); ok {
+			if err := q.Access(path); err != nil {
+				return Check{Name: name, Detail: err.Error()}
+			}
+		}
+	}
+	return Check{Name: name, OK: true, Detail: path}
+}
+func subID(p Probe, path string) Check {
+	data, err := p.ReadFile(path)
+	if err != nil {
+		return Check{Name: "image-" + filepath.Base(path), Detail: err.Error()}
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		parts := strings.Split(line, ":")
+		if len(parts) != 3 || parts[0] != "arkd" {
+			continue
+		}
+		start, first := strconv.ParseUint(parts[1], 10, 64)
+		size, second := strconv.ParseUint(parts[2], 10, 64)
+		if first == nil && second == nil && start > 0 && size >= 65536 {
+			return Check{Name: "image-" + filepath.Base(path), OK: true, Detail: path}
+		}
+	}
+	return Check{Name: "image-" + filepath.Base(path), Detail: "arkd needs a contiguous range of at least 65536"}
+}
 func command(p Probe, name string) Check {
 	_, err := p.LookPath(name)
 	return result(name, err, "command available")

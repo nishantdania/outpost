@@ -37,6 +37,13 @@ func (s *fakeServer) Shutdown(context.Context) error {
 	return s.shutdownErr
 }
 
+func TestBoundedError(t *testing.T) {
+	value := boundedError(errors.New(string(make([]byte, 300)) + "final useful error"))
+	if len(value) != 256 || value[len(value)-18:] != "final useful error" {
+		t.Fatalf("diagnostic = %q", value)
+	}
+}
+
 func TestRunRejectsEmptyTokenBeforeOpeningDatabase(t *testing.T) {
 	err := run(context.Background(), Config{DatabasePath: "/path/that-must-not-be-opened/ark.db"})
 	if !errors.Is(err, ErrTokenRequired) {

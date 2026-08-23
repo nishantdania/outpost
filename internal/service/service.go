@@ -4,20 +4,61 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/nishantdania/ark/internal/ark"
+	"github.com/nishantdania/ark/internal/image"
 	"github.com/nishantdania/ark/internal/vmapi"
 )
 
 var ErrInvalidState = errors.New("ark is not in a state that allows this operation")
+var ErrImagesUnavailable = errors.New("image operations are unavailable")
 
 type Service struct {
 	store   *ark.Store
 	manager vmapi.Manager
+	images  *image.Store
 }
 
 func New(store *ark.Store, manager vmapi.Manager) *Service {
 	return &Service{store: store, manager: manager}
+}
+func (s *Service) WithImages(images *image.Store) *Service { s.images = images; return s }
+func (s *Service) Images(ctx context.Context) ([]ark.Image, error) {
+	if s.images == nil {
+		return nil, ErrImagesUnavailable
+	}
+	return s.store.ListImages(ctx)
+}
+func (s *Service) Image(ctx context.Context, ref string) (ark.Image, error) {
+	if s.images == nil {
+		return ark.Image{}, ErrImagesUnavailable
+	}
+	return s.store.GetImage(ctx, ref)
+}
+func (s *Service) BuildImage(ctx context.Context, input io.Reader, tag string) (ark.Image, error) {
+	if s.images == nil {
+		return ark.Image{}, ErrImagesUnavailable
+	}
+	return s.images.Build(ctx, input, tag)
+}
+func (s *Service) ImportImage(ctx context.Context, input io.Reader, tag string) (ark.Image, error) {
+	if s.images == nil {
+		return ark.Image{}, ErrImagesUnavailable
+	}
+	return s.images.Import(ctx, input, tag)
+}
+func (s *Service) RemoveImage(ctx context.Context, ref string) error {
+	if s.images == nil {
+		return ErrImagesUnavailable
+	}
+	return s.images.Remove(ctx, ref)
+}
+func (s *Service) GCImages(ctx context.Context) ([]string, error) {
+	if s.images == nil {
+		return nil, ErrImagesUnavailable
+	}
+	return s.images.GC(ctx)
 }
 func (s *Service) List(ctx context.Context) ([]ark.Ark, error) { return s.store.List(ctx) }
 func (s *Service) Get(ctx context.Context, name string) (ark.Ark, error) {
@@ -25,6 +66,10 @@ func (s *Service) Get(ctx context.Context, name string) (ark.Ark, error) {
 }
 
 func (s *Service) Create(ctx context.Context, input ark.CreateInput) (a ark.Ark, err error) {
+	input.ImageID, err = s.store.ResolveImage(ctx, input.ImageID)
+	if err != nil {
+		return a, err
+	}
 	a, err = s.store.CreateWith(ctx, input)
 	if err != nil {
 		return a, err

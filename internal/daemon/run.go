@@ -3,14 +3,17 @@ package daemon
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/nishantdania/ark/internal/ark"
 	"github.com/nishantdania/ark/internal/httpapi"
+	"github.com/nishantdania/ark/internal/image"
 	"github.com/nishantdania/ark/internal/launcherclient"
 	"github.com/nishantdania/ark/internal/service"
 )
@@ -38,8 +41,29 @@ func run(ctx context.Context, config Config) error {
 	defer store.Close()
 	manager := launcherclient.New(config.LauncherSocket)
 	defer manager.Close()
-
-	return runServer(ctx, httpapi.NewServer(config.ListenAddr, service.New(store, manager), config.Token))
+	service := service.New(store, manager)
+	if _, lookupErr := exec.LookPath("podman"); lookupErr == nil {
+		images, imageErr := image.New(config.ImageStore, store, nil)
+		if imageErr != nil {
+			return imageErr
+		}
+		available := true
+		if config.DefaultOCI != "" {
+			if _, statErr := os.Stat(config.DefaultOCI); statErr == nil {
+				if importErr := images.ImportDefault(ctx, config.DefaultOCI); importErr != nil {
+					available = false
+					log.Printf("arkd image capability disabled: %s", boundedError(importErr))
+				}
+			} else {
+				available = false
+				log.Printf("arkd image capability disabled: default OCI archive unavailable")
+			}
+		}
+		if available {
+			service.WithImages(images)
+		}
+	}
+	return runServer(ctx, httpapi.NewServer(config.ListenAddr, service, config.Token))
 }
 
 type server interface {
@@ -70,6 +94,14 @@ func shutdown(server server) error {
 	defer cancel()
 
 	return server.Shutdown(ctx)
+}
+
+func boundedError(err error) string {
+	value := err.Error()
+	if len(value) > 256 {
+		return value[len(value)-256:]
+	}
+	return value
 }
 
 func serveError(err error) error {

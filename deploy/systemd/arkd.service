@@ -10,6 +10,7 @@ User=arkd
 Group=arkd
 EnvironmentFile=@CONFIG@/arkd.env
 UMask=0077
+Delegate=yes
 ExecStart=@PREFIX@/lib/ark/arkd --listen=@LISTEN@ --database=@STATE@/ark.db
 Restart=on-failure
 RestartSec=5s
@@ -17,7 +18,7 @@ TimeoutStopSec=30s
 SupplementaryGroups=arkd
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
+ProtectHome=tmpfs
 ProtectSystem=strict
 ReadWritePaths=@STATE@ @RUNTIME@
 

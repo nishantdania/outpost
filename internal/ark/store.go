@@ -61,9 +61,14 @@ func (s *Store) CreateWith(ctx context.Context, input CreateInput) (Ark, error) 
 	if err := ValidateSSHPublicKey(input.SSHPublicKey); err != nil {
 		return Ark{}, err
 	}
-	if input.ImageID != DefaultImageID || input.VCPUs < MinVCPUs || input.VCPUs > MaxVCPUs || input.MemoryMiB < MinMemoryMiB || input.MemoryMiB > MaxMemoryMiB || input.DiskGiB < MinDiskGiB || input.DiskGiB > MaxDiskGiB {
+	if input.VCPUs < MinVCPUs || input.VCPUs > MaxVCPUs || input.MemoryMiB < MinMemoryMiB || input.MemoryMiB > MaxMemoryMiB || input.DiskGiB < MinDiskGiB || input.DiskGiB > MaxDiskGiB {
 		return Ark{}, ErrInvalidResources
 	}
+	resolved, err := s.ResolveImage(ctx, input.ImageID)
+	if err != nil {
+		return Ark{}, err
+	}
+	input.ImageID = resolved
 	now := time.Now().UTC()
 	a := Ark{ID: uuid.NewString(), Name: input.Name, ImageID: input.ImageID, VCPUs: input.VCPUs, MemoryMiB: input.MemoryMiB, DiskGiB: input.DiskGiB, SSHPublicKey: input.SSHPublicKey, DesiredState: DesiredRunning, Status: StatusProvisioning, CreatedAt: now, UpdatedAt: now}
 	result, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO arks (id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, ssh_public_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.ID, a.Name, a.ImageID, a.VCPUs, a.MemoryMiB, a.DiskGiB, a.DesiredState, a.Status, a.GuestIP, a.Failure, a.SSHPublicKey, timestamp(a.CreatedAt), timestamp(a.UpdatedAt))

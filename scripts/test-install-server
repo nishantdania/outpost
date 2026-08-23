@@ -49,7 +49,12 @@ grep -Fqx "$root/srv/ark/state/.ark-hardlink-probe $root/srv/ark/jailer/.ark-har
 grep -Fqx "$root_uid:$install_gid $root/usr/local/lib/ark" "$work/chown"
 grep -q "^$root_uid:$install_gid $root/usr/local/lib/ark/.arkd.new" "$work/chown"
 grep -q "^$install_uid:$install_gid $root/var/lib/arkd/images/default/.rootfs.ext4.new" "$work/chown"
+grep -q "^$install_uid:$install_gid .* $root/var/lib/arkd/images" "$work/chown"
 grep -Fqx "$root_uid:$root_gid $root/etc/arkd/launcher.env" "$work/chown"
+[ "$(stat -c %a:%U:%G "$root/var/lib/arkd/images")" = "750:$(id -un):$(id -gn)" ]
+probe=$root/var/lib/arkd/images/.arkd-write-probe
+: > "$probe"
+rm "$probe"
 [ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark")" = "750:$(id -un):$(id -gn)" ]
 [ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark/arkd")" = "750:$(id -un):$(id -gn)" ]
 [ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark/default.oci.tar")" = "640:$(id -un):$(id -gn)" ]
@@ -57,7 +62,13 @@ grep -Fqx "$root_uid:$root_gid $root/etc/arkd/launcher.env" "$work/chown"
 [ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark/launcher/ark-vm-launcher")" = "750:$(id -un):$(id -gn)" ]
 [ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark/launcher/vmlinux")" = "640:$(id -un):$(id -gn)" ]
 [ "$(stat -c %a:%U:%G "$root/etc/arkd/launcher.env")" = "600:$(id -un):$(id -gn)" ]
+[ "$(stat -c %a:%U:%G "$root/etc/arkd/containers.conf")" = "640:$(id -un):$(id -gn)" ]
+grep -Fqx 'CONTAINERS_CONF=/etc/arkd/containers.conf' "$root/etc/arkd/arkd.env"
+grep -Fqx 'cgroup_manager = "cgroupfs"' "$root/etc/arkd/containers.conf"
+grep -Fqx 'events_logger = "file"' "$root/etc/arkd/containers.conf"
 test -x "$root/usr/local/lib/ark/arkd"
+grep -Fqx 'User=arkd' "$root/etc/systemd/system/arkd.service"
+grep -Fqx 'Delegate=yes' "$root/etc/systemd/system/arkd.service"
 grep -q '^ExecStart=/usr/local/lib/ark/arkd ' "$root/etc/systemd/system/arkd.service"
 grep -q '^ExecStart=/usr/local/lib/ark/launcher/ark-vm-launcher ' "$root/etc/systemd/system/ark-vm-launcher.service"
 grep -q -- '--state-dir=/srv/ark/state' "$root/etc/systemd/system/ark-vm-launcher.service"

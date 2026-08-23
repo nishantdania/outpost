@@ -18,7 +18,7 @@ import (
 
 func main() {
 	config := launcher.DefaultConfig()
-	assets := launcher.FirecrackerConfig{StateDir: config.StateDir, RuntimeDir: config.RuntimeDir, JailerBase: "/srv/ark/jailer", Firecracker: "/usr/local/lib/ark/launcher/firecracker", Jailer: "/usr/local/lib/ark/launcher/jailer", Kernel: "/usr/local/lib/ark/launcher/vmlinux", DefaultRootFS: "/var/lib/arkd/images/default/rootfs.ext4", Uplink: "eth0", DNS: "1.1.1.1"}
+	assets := launcher.FirecrackerConfig{StateDir: config.StateDir, RuntimeDir: config.RuntimeDir, JailerBase: "/srv/ark/jailer", Firecracker: "/usr/local/lib/ark/launcher/firecracker", Jailer: "/usr/local/lib/ark/launcher/jailer", Kernel: "/usr/local/lib/ark/launcher/vmlinux", DefaultRootFS: "/var/lib/arkd/images/default/rootfs.ext4", ImageStore: "/var/lib/arkd/images", Uplink: "eth0", DNS: "1.1.1.1"}
 	flag.StringVar(&config.SocketPath, "socket", config.SocketPath, "launcher Unix socket")
 	flag.StringVar(&config.StateDir, "state-dir", config.StateDir, "launcher state directory")
 	flag.StringVar(&config.RuntimeDir, "runtime-dir", config.RuntimeDir, "launcher runtime directory")
@@ -28,6 +28,7 @@ func main() {
 	flag.StringVar(&assets.Jailer, "jailer", assets.Jailer, "trusted jailer executable")
 	flag.StringVar(&assets.Kernel, "kernel", assets.Kernel, "trusted kernel")
 	flag.StringVar(&assets.DefaultRootFS, "default-rootfs", assets.DefaultRootFS, "trusted default rootfs")
+	flag.StringVar(&assets.ImageStore, "image-store", assets.ImageStore, "trusted custom image store")
 	flag.StringVar(&assets.Uplink, "uplink", assets.Uplink, "host uplink interface")
 	flag.StringVar(&assets.DNS, "dns", assets.DNS, "guest DNS server")
 	doctorMode := flag.Bool("doctor", false, "check server requirements")
@@ -90,6 +91,22 @@ func main() {
 		log.Fatal(err)
 	}
 	assets.ArkVMGID, err = strconv.Atoi(group.Gid)
+	if err != nil {
+		log.Fatal(err)
+	}
+	arkdAccount, err := user.Lookup("arkd")
+	if err != nil {
+		log.Fatal(err)
+	}
+	assets.ArkdUID, err = strconv.Atoi(arkdAccount.Uid)
+	if err != nil {
+		log.Fatal(err)
+	}
+	arkdGroup, err := user.LookupGroup("arkd")
+	if err != nil {
+		log.Fatal(err)
+	}
+	assets.ArkdGID, err = strconv.Atoi(arkdGroup.Gid)
 	if err != nil {
 		log.Fatal(err)
 	}

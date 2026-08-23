@@ -100,6 +100,33 @@ paths:
         "404": {$ref: "#/components/responses/NotFound"}
         "409": {$ref: "#/components/responses/Conflict"}
         "500": {$ref: "#/components/responses/ServerError"}
+  /v1/images:
+    get:
+      operationId: listImages
+      responses: {"200": {description: Images, content: {application/json: {schema: {type: array, items: {$ref: "#/components/schemas/Image"}}}}}, "401": {$ref: "#/components/responses/Unauthorized"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+    post:
+      operationId: importImage
+      parameters: [{name: tag, in: query, required: true, schema: {type: string}}]
+      requestBody: {required: true, content: {application/octet-stream: {schema: {type: string, format: binary}}}}
+      responses: {"201": {description: Image, content: {application/json: {schema: {$ref: "#/components/schemas/Image"}}}}, "400": {$ref: "#/components/responses/InvalidRequest"}, "401": {$ref: "#/components/responses/Unauthorized"}, "413": {$ref: "#/components/responses/TooLarge"}, "415": {$ref: "#/components/responses/UnsupportedMediaType"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+  /v1/images/build:
+    post:
+      operationId: buildImage
+      parameters: [{name: tag, in: query, required: true, schema: {type: string}}]
+      requestBody: {required: true, content: {application/x-tar: {schema: {type: string, format: binary}}}}
+      responses: {"201": {description: Image, content: {application/json: {schema: {$ref: "#/components/schemas/Image"}}}}, "400": {$ref: "#/components/responses/InvalidRequest"}, "401": {$ref: "#/components/responses/Unauthorized"}, "413": {$ref: "#/components/responses/TooLarge"}, "415": {$ref: "#/components/responses/UnsupportedMediaType"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+  /v1/images/{reference}:
+    parameters: [{name: reference, in: path, required: true, schema: {type: string}}]
+    get:
+      operationId: getImage
+      responses: {"200": {description: Image, content: {application/json: {schema: {$ref: "#/components/schemas/Image"}}}}, "400": {$ref: "#/components/responses/InvalidRequest"}, "401": {$ref: "#/components/responses/Unauthorized"}, "404": {$ref: "#/components/responses/NotFound"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+    delete:
+      operationId: deleteImage
+      responses: {"204": {description: Deleted}, "400": {$ref: "#/components/responses/InvalidRequest"}, "401": {$ref: "#/components/responses/Unauthorized"}, "404": {$ref: "#/components/responses/NotFound"}, "409": {$ref: "#/components/responses/Conflict"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
+  /v1/images/gc:
+    post:
+      operationId: gcImages
+      responses: {"200": {description: Removed digests, content: {application/json: {schema: {type: array, items: {type: string}}}}}, "401": {$ref: "#/components/responses/Unauthorized"}, "500": {$ref: "#/components/responses/ServerError"}, "503": {$ref: "#/components/responses/Unavailable"}}
 components:
   securitySchemes:
     bearerAuth:
@@ -123,6 +150,15 @@ components:
       content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
     NotFound:
       description: Ark was not found.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    TooLarge:
+      description: Request body is too large.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    UnsupportedMediaType:
+      description: Request content type is unsupported.
+      content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
+    Unavailable:
+      description: Image operations are unavailable.
       content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
     ServerError:
       description: Server failed to process the request.
@@ -154,6 +190,14 @@ components:
         memory_mib: {type: integer, minimum: 128, maximum: 131072, example: 4096}
         disk_gib: {type: integer, minimum: 1, maximum: 1024, example: 8}
         ssh_public_key: {type: string, minLength: 1}
+    Image:
+      type: object
+      required: [digest, size_bytes, tags, created_at]
+      properties:
+        digest: {type: string}
+        size_bytes: {type: integer}
+        tags: {type: array, items: {type: string}}
+        created_at: {type: string, format: date-time}
     Error:
       type: object
       required: [error]
