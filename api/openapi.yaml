@@ -56,6 +56,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /v1/arks/{name}:
+    delete:
+      operationId: deleteArk
+      summary: Delete an Ark
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ark was deleted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ark"
+        "404":
+          description: Ark was not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Server failed to delete an Ark.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     Ark:

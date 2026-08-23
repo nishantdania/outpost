@@ -16,6 +16,7 @@ import (
 var (
 	ErrNameRequired = errors.New("ark name is required")
 	ErrNameTaken    = errors.New("ark name is already in use")
+	ErrNotFound     = errors.New("ark not found")
 )
 
 type Store struct {
@@ -67,6 +68,23 @@ func (s *Store) Create(ctx context.Context, name string) (Ark, error) {
 	}
 	if inserted == 0 {
 		return Ark{}, ErrNameTaken
+	}
+
+	return ark, nil
+}
+
+func (s *Store) Delete(ctx context.Context, name string) (Ark, error) {
+	var ark Ark
+	err := s.db.QueryRowContext(ctx, `
+		DELETE FROM arks
+		WHERE name = ? COLLATE NOCASE
+		RETURNING id, name
+	`, name).Scan(&ark.ID, &ark.Name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Ark{}, ErrNotFound
+	}
+	if err != nil {
+		return Ark{}, fmt.Errorf("delete ark: %w", err)
 	}
 
 	return ark, nil

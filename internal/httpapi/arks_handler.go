@@ -51,6 +51,20 @@ func (h handler) CreateArk(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, apiArk(created))
 }
 
+func (h handler) DeleteArk(w http.ResponseWriter, r *http.Request, name string) {
+	deleted, err := h.store.Delete(r.Context(), name)
+	if errors.Is(err, ark.ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, api.Error{Error: err.Error()})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "failed to delete ark"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, apiArk(deleted))
+}
+
 func apiArks(arks []ark.Ark) []api.Ark {
 	response := make([]api.Ark, 0, len(arks))
 	for _, ark := range arks {

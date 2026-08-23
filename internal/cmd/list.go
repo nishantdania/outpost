@@ -26,11 +26,7 @@ func newListCmd(options *rootOptions) *cobra.Command {
 				return err
 			}
 
-			writer, err := output.New(output.Options{
-				Format:  options.output,
-				Out:     cmd.OutOrStdout(),
-				NoColor: options.noColor,
-			})
+			writer, err := newOutputWriter(options, cmd.OutOrStdout())
 			if err != nil {
 				return err
 			}

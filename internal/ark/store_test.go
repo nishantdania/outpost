@@ -48,6 +48,32 @@ func TestStoreCreatesAndListsArks(t *testing.T) {
 	}
 }
 
+func TestStoreDeletesArkByName(t *testing.T) {
+	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	created, err := store.Create(context.Background(), "demo")
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+
+	deleted, err := store.Delete(context.Background(), "Demo")
+	if err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if deleted != created {
+		t.Fatalf("Delete() = %v, want %v", deleted, created)
+	}
+
+	_, err = store.Delete(context.Background(), "demo")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second Delete() error = %v, want %v", err, ErrNotFound)
+	}
+}
+
 func TestStoreRejectsDuplicateName(t *testing.T) {
 	store, err := Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
 	if err != nil {

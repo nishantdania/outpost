@@ -1,6 +1,12 @@
 package cmd
 
-import "github.com/spf13/cobra"
+import (
+	"io"
+
+	"github.com/spf13/cobra"
+
+	"github.com/nishantdania/ark/internal/output"
+)
 
 type rootOptions struct {
 	serverURL string
@@ -25,7 +31,16 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().StringVarP(&options.output, "output", "o", "table", "Output format: table or json")
 	root.PersistentFlags().BoolVar(&options.noColor, "no-color", false, "Disable color output")
 	root.AddCommand(newCreateCmd(options))
+	root.AddCommand(newDeleteCmd(options))
 	root.AddCommand(newListCmd(options))
 
 	return root
+}
+
+func newOutputWriter(options *rootOptions, out io.Writer) (*output.Writer, error) {
+	return output.New(output.Options{
+		Format:  options.output,
+		Out:     out,
+		NoColor: options.noColor,
+	})
 }

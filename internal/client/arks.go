@@ -31,6 +31,26 @@ func (c *Client) CreateArk(ctx context.Context, name string) (api.Ark, error) {
 	return *response.JSON201, nil
 }
 
+func (c *Client) DeleteArk(ctx context.Context, name string) (api.Ark, error) {
+	response, err := c.api.DeleteArkWithResponse(ctx, name)
+	if err != nil {
+		return api.Ark{}, fmt.Errorf("delete ark: %w", err)
+	}
+
+	if response.StatusCode() != http.StatusOK {
+		if response.JSON404 != nil {
+			return api.Ark{}, fmt.Errorf("delete ark: %s", response.JSON404.Error)
+		}
+		return api.Ark{}, fmt.Errorf("delete ark: unexpected response status: %s", response.Status())
+	}
+
+	if response.JSON200 == nil {
+		return api.Ark{}, fmt.Errorf("delete ark: response did not contain JSON")
+	}
+
+	return *response.JSON200, nil
+}
+
 func (c *Client) ListArks(ctx context.Context) ([]api.Ark, error) {
 	response, err := c.api.ListArksWithResponse(ctx)
 	if err != nil {

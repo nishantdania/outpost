@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/oapi-codegen/runtime"
 )
 
 // Ark defines model for Ark.
@@ -131,6 +133,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
 	CreateArk(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteArk Delete an Ark
+	//
+	// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
+	DeleteArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListArks List Arks
@@ -172,6 +179,21 @@ func (c *Client) CreateArkWithBody(ctx context.Context, contentType string, body
 // Corresponds with POST /v1/arks (the `CreateArk` operationId).
 func (c *Client) CreateArk(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateArkRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteArk Delete an Ark
+//
+// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
+func (c *Client) DeleteArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteArkRequest(c.Server, name)
 	if err != nil {
 		return nil, err
 	}
@@ -249,6 +271,40 @@ func NewCreateArkRequestWithBody(server string, contentType string, body io.Read
 	return req, nil
 }
 
+// NewDeleteArkRequest constructs an http.Request for the DeleteArk method
+func NewDeleteArkRequest(server string, name string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/arks/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -313,6 +369,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
 	CreateArkWithResponse(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateArkResponse, error)
+
+	// DeleteArkWithResponse Delete an Ark
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
+	DeleteArkWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*DeleteArkResponse, error)
 }
 
 type ListArksResponse struct {
@@ -425,6 +488,61 @@ func (r CreateArkResponse) ContentType() string {
 	return ""
 }
 
+type DeleteArkResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Ark
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteArkResponse) GetJSON200() *Ark {
+	return r.JSON200
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteArkResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r DeleteArkResponse) GetJSON500() *Error {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteArkResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteArkResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteArkResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteArkResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListArksWithResponse List Arks
 //
 // Returns a wrapper object for the known response body format(s).
@@ -462,6 +580,19 @@ func (c *ClientWithResponses) CreateArkWithResponse(ctx context.Context, body Cr
 		return nil, err
 	}
 	return ParseCreateArkResponse(rsp)
+}
+
+// DeleteArkWithResponse Delete an Ark
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
+func (c *ClientWithResponses) DeleteArkWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*DeleteArkResponse, error) {
+	rsp, err := c.DeleteArk(ctx, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteArkResponse(rsp)
 }
 
 // ParseListArksResponse parses an HTTP response from a ListArksWithResponse call
@@ -544,6 +675,46 @@ func ParseCreateArkResponse(rsp *http.Response) (*CreateArkResponse, error) {
 	return response, nil
 }
 
+// ParseDeleteArkResponse parses an HTTP response from a DeleteArkWithResponse call
+func ParseDeleteArkResponse(rsp *http.Response) (*DeleteArkResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteArkResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Ark
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// ListArks List Arks
@@ -552,6 +723,9 @@ type ServerInterface interface {
 	// CreateArk Create an Ark
 	// (POST /v1/arks)
 	CreateArk(w http.ResponseWriter, r *http.Request)
+	// DeleteArk Delete an Ark
+	// (DELETE /v1/arks/{name})
+	DeleteArk(w http.ResponseWriter, r *http.Request, name string)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -582,6 +756,32 @@ func (siw *ServerInterfaceWrapper) CreateArk(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateArk(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteArk operation middleware
+func (siw *ServerInterfaceWrapper) DeleteArk(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteArk(w, r, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -713,6 +913,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/arks", wrapper.ListArks)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/arks", wrapper.CreateArk)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/arks/{name}", wrapper.DeleteArk)
 
 	return m
 }
