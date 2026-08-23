@@ -4,3 +4,6 @@
 
 # Local daemon database
 /ark.db*
+
+# Host-specific manual Firecracker spike configuration
+/scripts/ark-spike.env
