@@ -4,7 +4,6 @@ root=${ARK_INSTALL_ROOT:-}
 test_mode=${ARK_INSTALL_TEST:-0}
 log_event() { [ -z "${ARK_INSTALL_TEST_LOG:-}" ] || printf '%s\n' "$1" >> "$ARK_INSTALL_TEST_LOG"; }
 [ "$test_mode" != 1 ] || [ -n "$root" ] || { echo 'ARK_INSTALL_ROOT is required' >&2; exit 1; }
-script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 version=${ARK_VERSION:?ARK_VERSION is required}
 prefix=${ARK_PREFIX:-/usr/local}
 state=${ARK_STATE_DIR:-/var/lib/arkd}
@@ -84,7 +83,7 @@ def pairs(v):
   if k in d: raise ValueError('duplicate key')
   d[k]=x
  return d
-m=json.load(open(sys.argv[1]),object_pairs_hook=pairs); required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
+m=json.load(open(sys.argv[1]),object_pairs_hook=pairs); required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','arkd.service':'arkd.service','ark-vm-launcher.service':'ark-vm-launcher.service'}
 if set(m)!= {'version','architecture','assets'} or m['version']!=sys.argv[2] or m['architecture']!='amd64' or len(m['assets'])!=len(required): raise SystemExit('invalid remote manifest')
 seen=set()
 for a in m['assets']:
@@ -99,7 +98,7 @@ fi
 python3 - "$source" "$version" "$stage/verified" <<'PY'
 import hashlib,json,os,re,stat,sys,urllib.parse
 source,version,out=sys.argv[1:]
-required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
+required={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','arkd.service':'arkd.service','ark-vm-launcher.service':'ark-vm-launcher.service'}
 try:
  if stat.S_ISLNK(os.lstat(source+'/assets.json').st_mode): raise ValueError('symlink manifest')
  fd=os.open(source+'/assets.json',os.O_RDONLY|os.O_NOFOLLOW)
@@ -270,8 +269,8 @@ ARK_UPLINK=$uplink
 ARK_DNS=$dns
 EOF
 chmod 0600 "$root$config/launcher.env"; chown "$owner_root" "$root$config/launcher.env"
-sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" -e "s|@LISTEN@|$listen|g" "$script_dir/deploy/systemd/arkd.service" > "$root/etc/systemd/system/arkd.service"
-sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@LAUNCHER_STATE@|$launcher_state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" "$script_dir/deploy/systemd/ark-vm-launcher.service" > "$root/etc/systemd/system/ark-vm-launcher.service"
+sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" -e "s|@LISTEN@|$listen|g" "$stage/verified/arkd.service" > "$root/etc/systemd/system/arkd.service"
+sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@LAUNCHER_STATE@|$launcher_state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" "$stage/verified/ark-vm-launcher.service" > "$root/etc/systemd/system/ark-vm-launcher.service"
 chmod 0644 "$root/etc/systemd/system/arkd.service" "$root/etc/systemd/system/ark-vm-launcher.service"
 install -d -m 0700 "$root$(dirname "$handoff")"
 chown "$handoff_uid:$handoff_gid" "$root$(dirname "$handoff")"

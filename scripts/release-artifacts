@@ -11,6 +11,10 @@ copy() { cp "$1" "$release/$2"; }
 copy "$out/ark" ark
 copy "$out/arkd" arkd
 copy "$out/ark-vm-launcher" ark-vm-launcher
+copy deploy/systemd/arkd.service arkd.service
+copy deploy/systemd/ark-vm-launcher.service ark-vm-launcher.service
+copy scripts/install-server install-server
+chmod 0755 "$release/install-server"
 copy "${ARK_FIRECRACKER:?ARK_FIRECRACKER is required}" firecracker
 copy "${ARK_JAILER:?ARK_JAILER is required}" jailer
 copy "${ARK_KERNEL:?ARK_KERNEL is required}" vmlinux
@@ -21,7 +25,7 @@ zstd -q --no-progress -19 -c "$out/ark-default-$version-$arch.oci.tar" > "$relea
 python3 - "$release" "$version" "$arch" <<'PY'
 import hashlib,json,os,sys
 root,version,arch=sys.argv[1:]
-files={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst'}
+files={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','arkd.service':'arkd.service','ark-vm-launcher.service':'ark-vm-launcher.service'}
 assets=[]
 for name,file in files.items():
  published=file
@@ -31,4 +35,4 @@ for name,file in files.items():
  assets.append({'name':name,'file':file,'sha256':h.hexdigest(),'url':'https://github.com/nishantdania/ark/releases/download/v'+version+'/'+published})
 with open(os.path.join(root,'assets.json'),'w') as f: json.dump({'version':version,'architecture':arch,'assets':assets},f,sort_keys=True,separators=(',',':'))
 PY
-( cd "$release" && sha256sum ark arkd ark-vm-launcher firecracker jailer vmlinux rootfs.ext4.zst default.oci.tar.zst assets.json > checksums.txt )
+( cd "$release" && sha256sum ark arkd ark-vm-launcher firecracker jailer vmlinux rootfs.ext4.zst default.oci.tar.zst arkd.service ark-vm-launcher.service install-server assets.json > checksums.txt )
