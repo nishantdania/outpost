@@ -11,8 +11,8 @@ import (
 
 	"github.com/nishantdania/ark/internal/ark"
 	"github.com/nishantdania/ark/internal/httpapi"
+	"github.com/nishantdania/ark/internal/launcherclient"
 	"github.com/nishantdania/ark/internal/service"
-	"github.com/nishantdania/ark/internal/vmapi"
 )
 
 var ErrTokenRequired = errors.New("arkd bearer token is required")
@@ -36,8 +36,10 @@ func run(ctx context.Context, config Config) error {
 		return err
 	}
 	defer store.Close()
+	manager := launcherclient.New(config.LauncherSocket)
+	defer manager.Close()
 
-	return runServer(ctx, httpapi.NewServer(config.ListenAddr, service.New(store, vmapi.UnavailableManager{}), config.Token))
+	return runServer(ctx, httpapi.NewServer(config.ListenAddr, service.New(store, manager), config.Token))
 }
 
 type server interface {

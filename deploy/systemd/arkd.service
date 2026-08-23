@@ -1,7 +1,8 @@
 [Unit]
 Description=arkd API daemon
 Wants=network-online.target
-After=network-online.target
+Requires=ark-vm-launcher.service
+After=network-online.target ark-vm-launcher.service
 
 [Service]
 Type=exec
@@ -15,6 +16,7 @@ RestartSec=5s
 TimeoutStopSec=15s
 StateDirectory=arkd
 RuntimeDirectory=arkd
+SupplementaryGroups=arkd
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true

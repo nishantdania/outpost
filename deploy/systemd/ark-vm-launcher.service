@@ -1,0 +1,25 @@
+[Unit]
+Description=Ark privileged VM launcher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=root
+Group=arkd
+ExecStart=/usr/local/bin/ark-vm-launcher
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+StateDirectory=ark-vm-launcher
+RuntimeDirectory=ark
+RuntimeDirectoryMode=0750
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/ark/jailer
+
+[Install]
+WantedBy=multi-user.target

@@ -18,6 +18,7 @@ func parseConfig(args []string) (Config, error) {
 	flags.StringVar(&config.ListenAddr, "listen", "127.0.0.1:17890", "HTTP listen address")
 	flags.StringVar(&config.DatabasePath, "database", "./ark.db", "SQLite database path")
 	flags.StringVar(&config.Token, "token", os.Getenv("ARKD_TOKEN"), "bearer token (or ARKD_TOKEN)")
+	flags.StringVar(&config.LauncherSocket, "launcher-socket", "/run/ark/vm-launcher.sock", "VM launcher Unix socket")
 	if err := flags.Parse(args); err != nil {
 		return Config{}, err
 	}
