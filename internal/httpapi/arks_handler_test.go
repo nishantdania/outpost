@@ -11,11 +11,13 @@ import (
 
 	"github.com/nishantdania/ark/internal/api"
 	"github.com/nishantdania/ark/internal/ark"
+	"github.com/nishantdania/ark/internal/service"
+	"github.com/nishantdania/ark/internal/vmapi"
 )
 
 func TestCreateArkAndListArks(t *testing.T) {
 	store := newTestStore(t)
-	handler := handler{store: store}
+	handler := testHandler(t, store)
 
 	createRec := createArk(t, handler, "demo")
 	if createRec.Code != http.StatusCreated {
@@ -26,8 +28,8 @@ func TestCreateArkAndListArks(t *testing.T) {
 	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode create response: %v", err)
 	}
-	if created.Id == "" || created.Name != "demo" {
-		t.Fatalf("created Ark = %v, want generated ID and demo name", created)
+	if created.Id == "" || created.Name != "demo" || created.ImageId != "default" || created.Vcpus != ark.DefaultVCPUs || created.MemoryMib != ark.DefaultMemoryMiB || created.DiskGib != ark.DefaultDiskGiB || created.DesiredState != api.ArkDesiredState(ark.DesiredRunning) || created.Status != api.ArkStatus(ark.StatusRunning) || created.GuestIp != "172.30.0.2" || created.CreatedAt.IsZero() || created.UpdatedAt.IsZero() {
+		t.Fatalf("created Ark = %v, want running Ark with resources and timestamps", created)
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/v1/arks", nil)
@@ -48,7 +50,7 @@ func TestCreateArkAndListArks(t *testing.T) {
 }
 
 func TestCreateArkRejectsDuplicateName(t *testing.T) {
-	handler := handler{store: newTestStore(t)}
+	handler := testHandler(t, newTestStore(t))
 
 	if rec := createArk(t, handler, "demo"); rec.Code != http.StatusCreated {
 		t.Fatalf("first create status = %d, want %d", rec.Code, http.StatusCreated)
@@ -68,14 +70,29 @@ func TestCreateArkRejectsDuplicateName(t *testing.T) {
 	}
 }
 
+func TestCreateArkRejectsOutOfBoundsResources(t *testing.T) {
+	handler := testHandler(t, newTestStore(t))
+	req := httptest.NewRequest(http.MethodPost, "/v1/arks", strings.NewReader(`{"name":"demo","image_id":"default","vcpus":33,"memory_mib":4096,"disk_gib":8}`))
+	rec := httptest.NewRecorder()
+	handler.CreateArk(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
 func createArk(t *testing.T, handler handler, name string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/arks", strings.NewReader(`{"name":"`+name+`"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/arks", strings.NewReader(`{"name":"`+name+`","image_id":"default","vcpus":2,"memory_mib":4096,"disk_gib":8}`))
 	rec := httptest.NewRecorder()
 	handler.CreateArk(rec, req)
 
 	return rec
+}
+
+func testHandler(t *testing.T, store *ark.Store) handler {
+	t.Helper()
+	return handler{service: service.New(store, &vmapi.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "172.30.0.2", nil }})}
 }
 
 func newTestStore(t *testing.T) *ark.Store {

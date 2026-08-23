@@ -15,6 +15,9 @@ func TestCreateArk(t *testing.T) {
 		if r.URL.Path != "/v1/arks" {
 			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/arks")
 		}
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Errorf("Authorization = %q, want bearer token", r.Header.Get("Authorization"))
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -22,7 +25,7 @@ func TestCreateArk(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(server.URL)
+	client, err := New(server.URL, "test-token")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

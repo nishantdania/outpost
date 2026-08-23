@@ -11,7 +11,11 @@ import (
 
 	"github.com/nishantdania/ark/internal/ark"
 	"github.com/nishantdania/ark/internal/httpapi"
+	"github.com/nishantdania/ark/internal/service"
+	"github.com/nishantdania/ark/internal/vmapi"
 )
+
+var ErrTokenRequired = errors.New("arkd bearer token is required")
 
 const shutdownTimeout = 10 * time.Second
 
@@ -23,13 +27,17 @@ func Run(config Config) error {
 }
 
 func run(ctx context.Context, config Config) error {
+	if config.Token == "" {
+		return ErrTokenRequired
+	}
+
 	store, err := ark.Open(ctx, config.DatabasePath)
 	if err != nil {
 		return err
 	}
 	defer store.Close()
 
-	return runServer(ctx, httpapi.NewServer(config.ListenAddr, store))
+	return runServer(ctx, httpapi.NewServer(config.ListenAddr, service.New(store, vmapi.UnavailableManager{}), config.Token))
 }
 
 type server interface {

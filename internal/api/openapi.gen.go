@@ -14,29 +14,136 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ArkDesiredState.
+const (
+	ArkDesiredStateDeleted ArkDesiredState = "deleted"
+	ArkDesiredStateRunning ArkDesiredState = "running"
+	ArkDesiredStateStopped ArkDesiredState = "stopped"
+)
+
+// Valid indicates whether the value is a known member of the ArkDesiredState enum.
+func (e ArkDesiredState) Valid() bool {
+	switch e {
+	case ArkDesiredStateDeleted:
+		return true
+	case ArkDesiredStateRunning:
+		return true
+	case ArkDesiredStateStopped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArkStatus.
+const (
+	ArkStatusDeleting     ArkStatus = "deleting"
+	ArkStatusFailed       ArkStatus = "failed"
+	ArkStatusProvisioning ArkStatus = "provisioning"
+	ArkStatusRunning      ArkStatus = "running"
+	ArkStatusStopped      ArkStatus = "stopped"
+	ArkStatusStopping     ArkStatus = "stopping"
+)
+
+// Valid indicates whether the value is a known member of the ArkStatus enum.
+func (e ArkStatus) Valid() bool {
+	switch e {
+	case ArkStatusDeleting:
+		return true
+	case ArkStatusFailed:
+		return true
+	case ArkStatusProvisioning:
+		return true
+	case ArkStatusRunning:
+		return true
+	case ArkStatusStopped:
+		return true
+	case ArkStatusStopping:
+		return true
+	default:
+		return false
+	}
+}
+
 // Ark defines model for Ark.
 type Ark struct {
+	CreatedAt    time.Time       `json:"created_at"`
+	DesiredState ArkDesiredState `json:"desired_state"`
+
+	// DiskGib Example: 8
+	DiskGib int    `json:"disk_gib"`
+	Failure string `json:"failure"`
+	GuestIp string `json:"guest_ip"`
+
 	// Id Example: 550e8400-e29b-41d4-a716-446655440000
 	Id string `json:"id"`
 
+	// ImageId Example: default
+	ImageId string `json:"image_id"`
+
+	// MemoryMib Example: 4096
+	MemoryMib int `json:"memory_mib"`
+
 	// Name Example: investigate-deploy
-	Name string `json:"name"`
+	Name      string    `json:"name"`
+	Status    ArkStatus `json:"status"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// Vcpus Example: 2
+	Vcpus int `json:"vcpus"`
 }
+
+// ArkDesiredState defines model for Ark.DesiredState.
+type ArkDesiredState string
+
+// ArkStatus defines model for Ark.Status.
+type ArkStatus string
 
 // CreateArkRequest defines model for CreateArkRequest.
 type CreateArkRequest struct {
+	// DiskGib Example: 8
+	DiskGib int `json:"disk_gib"`
+
+	// ImageId Example: default
+	ImageId string `json:"image_id"`
+
+	// MemoryMib Example: 4096
+	MemoryMib int `json:"memory_mib"`
+
 	// Name Example: investigate-deploy
 	Name string `json:"name"`
+
+	// Vcpus Example: 2
+	Vcpus int `json:"vcpus"`
 }
 
 // Error defines model for Error.
 type Error struct {
 	Error string `json:"error"`
 }
+
+// ArkName defines model for ArkName.
+type ArkName = string
+
+// Conflict defines model for Conflict.
+type Conflict = Error
+
+// InvalidRequest defines model for InvalidRequest.
+type InvalidRequest = Error
+
+// NotFound defines model for NotFound.
+type NotFound = Error
+
+// ServerError defines model for ServerError.
+type ServerError = Error
+
+// Unauthorized defines model for Unauthorized.
+type Unauthorized = Error
 
 // CreateArkJSONRequestBody defines body for CreateArk for application/json ContentType.
 type CreateArkJSONRequestBody = CreateArkRequest
@@ -138,6 +245,21 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
 	DeleteArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetArk Get an Ark
+	//
+	// Corresponds with GET /v1/arks/{name} (the `GetArk` operationId).
+	GetArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartArk Start an Ark
+	//
+	// Corresponds with POST /v1/arks/{name}/start (the `StartArk` operationId).
+	StartArk(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StopArk Stop an Ark
+	//
+	// Corresponds with POST /v1/arks/{name}/stop (the `StopArk` operationId).
+	StopArk(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListArks List Arks
@@ -194,6 +316,51 @@ func (c *Client) CreateArk(ctx context.Context, body CreateArkJSONRequestBody, r
 // Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
 func (c *Client) DeleteArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteArkRequest(c.Server, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetArk Get an Ark
+//
+// Corresponds with GET /v1/arks/{name} (the `GetArk` operationId).
+func (c *Client) GetArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetArkRequest(c.Server, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StartArk Start an Ark
+//
+// Corresponds with POST /v1/arks/{name}/start (the `StartArk` operationId).
+func (c *Client) StartArk(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartArkRequest(c.Server, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StopArk Stop an Ark
+//
+// Corresponds with POST /v1/arks/{name}/stop (the `StopArk` operationId).
+func (c *Client) StopArk(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStopArkRequest(c.Server, name)
 	if err != nil {
 		return nil, err
 	}
@@ -305,6 +472,108 @@ func NewDeleteArkRequest(server string, name string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewGetArkRequest constructs an http.Request for the GetArk method
+func NewGetArkRequest(server string, name string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/arks/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartArkRequest constructs an http.Request for the StartArk method
+func NewStartArkRequest(server string, name ArkName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/arks/%s/start", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStopArkRequest constructs an http.Request for the StopArk method
+func NewStopArkRequest(server string, name ArkName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/arks/%s/stop", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -376,6 +645,27 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
 	DeleteArkWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*DeleteArkResponse, error)
+
+	// GetArkWithResponse Get an Ark
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/arks/{name} (the `GetArk` operationId).
+	GetArkWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetArkResponse, error)
+
+	// StartArkWithResponse Start an Ark
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/arks/{name}/start (the `StartArk` operationId).
+	StartArkWithResponse(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*StartArkResponse, error)
+
+	// StopArkWithResponse Stop an Ark
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/arks/{name}/stop (the `StopArk` operationId).
+	StopArkWithResponse(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*StopArkResponse, error)
 }
 
 type ListArksResponse struct {
@@ -383,8 +673,10 @@ type ListArksResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *[]Ark
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
 	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *Error
+	JSON500 *ServerError
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -392,8 +684,13 @@ func (r ListArksResponse) GetJSON200() *[]Ark {
 	return r.JSON200
 }
 
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListArksResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r ListArksResponse) GetJSON500() *Error {
+func (r ListArksResponse) GetJSON500() *ServerError {
 	return r.JSON500
 }
 
@@ -432,11 +729,13 @@ type CreateArkResponse struct {
 	// JSON201 the response for an HTTP 201 `application/json` response
 	JSON201 *Ark
 	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *Error
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
 	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Error
+	JSON409 *Conflict
 	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *Error
+	JSON500 *ServerError
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -445,17 +744,22 @@ func (r CreateArkResponse) GetJSON201() *Ark {
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r CreateArkResponse) GetJSON400() *Error {
+func (r CreateArkResponse) GetJSON400() *InvalidRequest {
 	return r.JSON400
 }
 
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateArkResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r CreateArkResponse) GetJSON409() *Error {
+func (r CreateArkResponse) GetJSON409() *Conflict {
 	return r.JSON409
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r CreateArkResponse) GetJSON500() *Error {
+func (r CreateArkResponse) GetJSON500() *ServerError {
 	return r.JSON500
 }
 
@@ -493,10 +797,14 @@ type DeleteArkResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *Ark
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
 	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *Error
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
 	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *Error
+	JSON500 *ServerError
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -504,13 +812,23 @@ func (r DeleteArkResponse) GetJSON200() *Ark {
 	return r.JSON200
 }
 
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteArkResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r DeleteArkResponse) GetJSON404() *Error {
+func (r DeleteArkResponse) GetJSON404() *NotFound {
 	return r.JSON404
 }
 
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r DeleteArkResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r DeleteArkResponse) GetJSON500() *Error {
+func (r DeleteArkResponse) GetJSON500() *ServerError {
 	return r.JSON500
 }
 
@@ -537,6 +855,206 @@ func (r DeleteArkResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DeleteArkResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetArkResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Ark
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetArkResponse) GetJSON200() *Ark {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetArkResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetArkResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetArkResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetArkResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetArkResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetArkResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetArkResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StartArkResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Ark
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r StartArkResponse) GetJSON200() *Ark {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r StartArkResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r StartArkResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r StartArkResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r StartArkResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r StartArkResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StartArkResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartArkResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StartArkResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StopArkResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Ark
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r StopArkResponse) GetJSON200() *Ark {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r StopArkResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r StopArkResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r StopArkResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r StopArkResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r StopArkResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StopArkResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StopArkResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StopArkResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -595,6 +1113,45 @@ func (c *ClientWithResponses) DeleteArkWithResponse(ctx context.Context, name st
 	return ParseDeleteArkResponse(rsp)
 }
 
+// GetArkWithResponse Get an Ark
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/arks/{name} (the `GetArk` operationId).
+func (c *ClientWithResponses) GetArkWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetArkResponse, error) {
+	rsp, err := c.GetArk(ctx, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetArkResponse(rsp)
+}
+
+// StartArkWithResponse Start an Ark
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/arks/{name}/start (the `StartArk` operationId).
+func (c *ClientWithResponses) StartArkWithResponse(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*StartArkResponse, error) {
+	rsp, err := c.StartArk(ctx, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartArkResponse(rsp)
+}
+
+// StopArkWithResponse Stop an Ark
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/arks/{name}/stop (the `StopArk` operationId).
+func (c *ClientWithResponses) StopArkWithResponse(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*StopArkResponse, error) {
+	rsp, err := c.StopArk(ctx, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStopArkResponse(rsp)
+}
+
 // ParseListArksResponse parses an HTTP response from a ListArksWithResponse call
 func ParseListArksResponse(rsp *http.Response) (*ListArksResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -616,8 +1173,15 @@ func ParseListArksResponse(rsp *http.Response) (*ListArksResponse, error) {
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Error
+		var dest ServerError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -650,21 +1214,28 @@ func ParseCreateArkResponse(rsp *http.Response) (*CreateArkResponse, error) {
 		response.JSON201 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
+		var dest InvalidRequest
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Error
+		var dest Conflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Error
+		var dest ServerError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -696,15 +1267,184 @@ func ParseDeleteArkResponse(rsp *http.Response) (*DeleteArkResponse, error) {
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetArkResponse parses an HTTP response from a GetArkWithResponse call
+func ParseGetArkResponse(rsp *http.Response) (*GetArkResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetArkResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Ark
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Error
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStartArkResponse parses an HTTP response from a StartArkWithResponse call
+func ParseStartArkResponse(rsp *http.Response) (*StartArkResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartArkResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Ark
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStopArkResponse parses an HTTP response from a StopArkWithResponse call
+func ParseStopArkResponse(rsp *http.Response) (*StopArkResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StopArkResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Ark
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -726,6 +1466,15 @@ type ServerInterface interface {
 	// DeleteArk Delete an Ark
 	// (DELETE /v1/arks/{name})
 	DeleteArk(w http.ResponseWriter, r *http.Request, name string)
+	// GetArk Get an Ark
+	// (GET /v1/arks/{name})
+	GetArk(w http.ResponseWriter, r *http.Request, name string)
+	// StartArk Start an Ark
+	// (POST /v1/arks/{name}/start)
+	StartArk(w http.ResponseWriter, r *http.Request, name ArkName)
+	// StopArk Stop an Ark
+	// (POST /v1/arks/{name}/stop)
+	StopArk(w http.ResponseWriter, r *http.Request, name ArkName)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -782,6 +1531,84 @@ func (siw *ServerInterfaceWrapper) DeleteArk(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteArk(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArk operation middleware
+func (siw *ServerInterfaceWrapper) GetArk(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArk(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartArk operation middleware
+func (siw *ServerInterfaceWrapper) StartArk(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name ArkName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartArk(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopArk operation middleware
+func (siw *ServerInterfaceWrapper) StopArk(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name ArkName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopArk(w, r, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -914,6 +1741,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/arks", wrapper.ListArks)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/arks", wrapper.CreateArk)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/arks/{name}", wrapper.DeleteArk)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/arks/{name}", wrapper.GetArk)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/arks/{name}/start", wrapper.StartArk)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/arks/{name}/stop", wrapper.StopArk)
 
 	return m
 }

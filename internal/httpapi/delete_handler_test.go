@@ -19,7 +19,7 @@ func TestDeleteArk(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodDelete, "/v1/arks/demo", nil)
 	rec := httptest.NewRecorder()
-	handler{store: store}.DeleteArk(rec, req, "demo")
+	testHandler(t, store).DeleteArk(rec, req, "demo")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -37,7 +37,7 @@ func TestDeleteArk(t *testing.T) {
 func TestDeleteArkReturnsNotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/v1/arks/missing", nil)
 	rec := httptest.NewRecorder()
-	handler{store: newTestStore(t)}.DeleteArk(rec, req, "missing")
+	testHandler(t, newTestStore(t)).DeleteArk(rec, req, "missing")
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)

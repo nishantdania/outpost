@@ -12,7 +12,7 @@ func TestParseConfig(t *testing.T) {
 	}{
 		{
 			name:     "default configuration",
-			wantAddr: ":17890",
+			wantAddr: "127.0.0.1:17890",
 			wantDB:   "./ark.db",
 		},
 		{

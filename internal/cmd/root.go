@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -10,6 +11,7 @@ import (
 
 type rootOptions struct {
 	serverURL string
+	token     string
 	output    string
 	noColor   bool
 }
@@ -28,10 +30,14 @@ func newRootCmd() *cobra.Command {
 	}
 
 	root.PersistentFlags().StringVar(&options.serverURL, "server", "http://127.0.0.1:17890", "arkd server URL")
+	root.PersistentFlags().StringVar(&options.token, "token", os.Getenv("ARK_TOKEN"), "arkd bearer token")
 	root.PersistentFlags().StringVarP(&options.output, "output", "o", "table", "Output format: table or json")
 	root.PersistentFlags().BoolVar(&options.noColor, "no-color", false, "Disable color output")
 	root.AddCommand(newCreateCmd(options))
 	root.AddCommand(newDeleteCmd(options))
+	root.AddCommand(newStartCmd(options))
+	root.AddCommand(newStopCmd(options))
+	root.AddCommand(newInspectCmd(options))
 	root.AddCommand(newListCmd(options))
 
 	return root

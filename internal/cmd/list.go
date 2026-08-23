@@ -16,7 +16,7 @@ func newListCmd(options *rootOptions) *cobra.Command {
 		Short: "List Arks",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			arkdClient, err := client.New(options.serverURL)
+			arkdClient, err := client.New(options.serverURL, options.token)
 			if err != nil {
 				return fmt.Errorf("create arkd client: %w", err)
 			}
@@ -38,12 +38,12 @@ func newListCmd(options *rootOptions) *cobra.Command {
 
 func arkTable(arks []api.Ark) output.Table {
 	table := output.Table{
-		Headers: []string{"NAME"},
+		Headers: []string{"NAME", "STATUS", "IMAGE", "CPUS", "MEMORY", "DISK", "IP"},
 		Rows:    make([][]string, 0, len(arks)),
 	}
 
 	for _, ark := range arks {
-		table.Rows = append(table.Rows, []string{ark.Name})
+		table.Rows = append(table.Rows, []string{ark.Name, string(ark.Status), ark.ImageId, fmt.Sprint(ark.Vcpus), fmt.Sprint(ark.MemoryMib), fmt.Sprint(ark.DiskGib), ark.GuestIp})
 	}
 
 	return table

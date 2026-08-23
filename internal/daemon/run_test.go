@@ -37,6 +37,13 @@ func (s *fakeServer) Shutdown(context.Context) error {
 	return s.shutdownErr
 }
 
+func TestRunRejectsEmptyTokenBeforeOpeningDatabase(t *testing.T) {
+	err := run(context.Background(), Config{DatabasePath: "/path/that-must-not-be-opened/ark.db"})
+	if !errors.Is(err, ErrTokenRequired) {
+		t.Fatalf("run() error = %v, want %v", err, ErrTokenRequired)
+	}
+}
+
 func TestRunServerReturnsServerError(t *testing.T) {
 	want := errors.New("listen failed")
 	server := newFakeServer(want, nil)

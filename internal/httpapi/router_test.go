@@ -7,7 +7,7 @@ import (
 )
 
 func TestRouter(t *testing.T) {
-	router := newRouter(newTestStore(t))
+	router := newRouter(testHandler(t, newTestStore(t)).service, "test-token")
 
 	tests := []struct {
 		name   string
@@ -38,6 +38,7 @@ func TestRouter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Header.Set("Authorization", "Bearer test-token")
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)

@@ -11,12 +11,16 @@ import (
 )
 
 func TestCreateCommand(t *testing.T) {
+	t.Setenv("ARK_TOKEN", "test-token")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodPost)
 		}
 		if r.URL.Path != "/v1/arks" {
 			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/arks")
+		}
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Errorf("Authorization = %q, want bearer token", r.Header.Get("Authorization"))
 		}
 
 		var request api.CreateArkRequest
@@ -26,6 +30,9 @@ func TestCreateCommand(t *testing.T) {
 		if request.Name != "demo" {
 			t.Errorf("name = %q, want %q", request.Name, "demo")
 		}
+		if request.Vcpus != 2 || request.MemoryMib != 4096 || request.DiskGib != 8 {
+			t.Errorf("resources = %#v, want 2 CPU, 4096 MiB, 8 GiB", request)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -34,7 +41,7 @@ func TestCreateCommand(t *testing.T) {
 	defer server.Close()
 
 	root := newRootCmd()
-	root.SetArgs([]string{"--server", server.URL, "--output", "json", "create", "demo"})
+	root.SetArgs([]string{"--server", server.URL, "--output", "json", "create", "--memory", "4G", "--disk", "8G", "demo"})
 
 	var output bytes.Buffer
 	root.SetOut(&output)

@@ -18,7 +18,7 @@ func newArkNameCmd(options *rootOptions, use, short string, action arkNameAction
 		Short: short,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			arkdClient, err := client.New(options.serverURL)
+			arkdClient, err := client.New(options.serverURL, options.token)
 			if err != nil {
 				return fmt.Errorf("create arkd client: %w", err)
 			}
