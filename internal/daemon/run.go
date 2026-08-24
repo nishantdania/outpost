@@ -11,14 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nishantdania/ark/internal/ark"
-	"github.com/nishantdania/ark/internal/httpapi"
-	"github.com/nishantdania/ark/internal/image"
-	"github.com/nishantdania/ark/internal/launcherclient"
-	"github.com/nishantdania/ark/internal/service"
+	"github.com/nishantdania/outpost/internal/httpapi"
+	"github.com/nishantdania/outpost/internal/image"
+	"github.com/nishantdania/outpost/internal/launcherclient"
+	"github.com/nishantdania/outpost/internal/outpost"
+	"github.com/nishantdania/outpost/internal/service"
 )
 
-var ErrTokenRequired = errors.New("arkd bearer token is required")
+var ErrTokenRequired = errors.New("outpostd bearer token is required")
 
 const shutdownTimeout = 10 * time.Second
 
@@ -34,7 +34,7 @@ func run(ctx context.Context, config Config) error {
 		return ErrTokenRequired
 	}
 
-	store, err := ark.Open(ctx, config.DatabasePath)
+	store, err := outpost.Open(ctx, config.DatabasePath)
 	if err != nil {
 		return err
 	}
@@ -52,11 +52,11 @@ func run(ctx context.Context, config Config) error {
 			if _, statErr := os.Stat(config.DefaultOCI); statErr == nil {
 				if importErr := images.ImportDefault(ctx, config.DefaultOCI); importErr != nil {
 					available = false
-					log.Printf("arkd image capability disabled: %s", boundedError(importErr))
+					log.Printf("outpostd image capability disabled: %s", boundedError(importErr))
 				}
 			} else {
 				available = false
-				log.Printf("arkd image capability disabled: default OCI archive unavailable")
+				log.Printf("outpostd image capability disabled: default OCI archive unavailable")
 			}
 		}
 		if available {

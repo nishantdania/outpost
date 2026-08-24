@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/nishantdania/ark/internal/ark"
+	"github.com/nishantdania/outpost/internal/outpost"
 )
 
 var (
@@ -15,7 +15,7 @@ var (
 )
 
 type Manager interface {
-	Create(context.Context, ark.Ark) error
+	Create(context.Context, outpost.Outpost) error
 	Start(context.Context, string) (string, error)
 	Stop(context.Context, string) error
 	Delete(context.Context, string) error
@@ -23,20 +23,20 @@ type Manager interface {
 
 type UnavailableManager struct{}
 
-func (UnavailableManager) Create(context.Context, ark.Ark) error         { return ErrUnavailable }
+func (UnavailableManager) Create(context.Context, outpost.Outpost) error { return ErrUnavailable }
 func (UnavailableManager) Start(context.Context, string) (string, error) { return "", ErrUnavailable }
 func (UnavailableManager) Stop(context.Context, string) error            { return ErrUnavailable }
 func (UnavailableManager) Delete(context.Context, string) error          { return ErrUnavailable }
 
 type FakeManager struct {
-	CreateFunc func(context.Context, ark.Ark) error
+	CreateFunc func(context.Context, outpost.Outpost) error
 	StartFunc  func(context.Context, string) (string, error)
 	StopFunc   func(context.Context, string) error
 	DeleteFunc func(context.Context, string) error
 	Calls      []string
 }
 
-func (m *FakeManager) Create(ctx context.Context, a ark.Ark) error {
+func (m *FakeManager) Create(ctx context.Context, a outpost.Outpost) error {
 	m.Calls = append(m.Calls, "create:"+a.ID)
 	if m.CreateFunc != nil {
 		return m.CreateFunc(ctx, a)

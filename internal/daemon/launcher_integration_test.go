@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nishantdania/ark/internal/ark"
-	"github.com/nishantdania/ark/internal/httpapi"
-	"github.com/nishantdania/ark/internal/launcher"
-	"github.com/nishantdania/ark/internal/launcherclient"
-	"github.com/nishantdania/ark/internal/service"
+	"github.com/nishantdania/outpost/internal/httpapi"
+	"github.com/nishantdania/outpost/internal/launcher"
+	"github.com/nishantdania/outpost/internal/launcherclient"
+	"github.com/nishantdania/outpost/internal/outpost"
+	"github.com/nishantdania/outpost/internal/service"
 )
 
-func TestArkdLifecycleCrossesLauncherUnixSocket(t *testing.T) {
+func TestOutpostdLifecycleCrossesLauncherUnixSocket(t *testing.T) {
 	directory := t.TempDir()
 	socket := filepath.Join(directory, "launcher.sock")
 	launcherServer, err := launcher.NewServer(launcher.Config{SocketPath: socket, RuntimeDir: directory, StateDir: filepath.Join(directory, "state"), SocketGID: -1, Authorize: func(int) bool { return true }}, launcher.NewMemoryRuntime())
@@ -34,7 +34,7 @@ func TestArkdLifecycleCrossesLauncherUnixSocket(t *testing.T) {
 		}
 	}()
 
-	store, err := ark.Open(context.Background(), filepath.Join(directory, "ark.db"))
+	store, err := outpost.Open(context.Background(), filepath.Join(directory, "outpost.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,10 +45,10 @@ func TestArkdLifecycleCrossesLauncherUnixSocket(t *testing.T) {
 	defer api.Close()
 	client := api.Client()
 	for _, request := range []struct{ method, path, body string }{
-		{"POST", "/v1/arks", `{"name":"demo","image_id":"default","vcpus":2,"memory_mib":1024,"disk_gib":8}`},
-		{"POST", "/v1/arks/demo/stop", ""},
-		{"POST", "/v1/arks/demo/start", ""},
-		{"DELETE", "/v1/arks/demo", ""},
+		{"POST", "/v1/outposts", `{"name":"demo","image_id":"default","vcpus":2,"memory_mib":1024,"disk_gib":8}`},
+		{"POST", "/v1/outposts/demo/stop", ""},
+		{"POST", "/v1/outposts/demo/start", ""},
+		{"DELETE", "/v1/outposts/demo", ""},
 	} {
 		doAuthorized(t, client, api.URL+request.path, request.method, request.body)
 	}

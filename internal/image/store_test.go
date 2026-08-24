@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nishantdania/ark/internal/ark"
+	"github.com/nishantdania/outpost/internal/outpost"
 )
 
 type localRunner struct{}
@@ -66,7 +66,7 @@ func rootfsTar(t *testing.T) *bytes.Reader {
 }
 
 func TestConvertCreatesJournaledBootableRootFS(t *testing.T) {
-	db, err := ark.Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	db, err := outpost.Open(context.Background(), filepath.Join(t.TempDir(), "outpost.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestConvertCreatesJournaledBootableRootFS(t *testing.T) {
 }
 
 func TestConvertIsDeterministic(t *testing.T) {
-	db, err := ark.Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	db, err := outpost.Open(context.Background(), filepath.Join(t.TempDir(), "outpost.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestConvertIsDeterministic(t *testing.T) {
 }
 
 func TestNewReconcilesOnlyKnownTemporaryPrefixes(t *testing.T) {
-	db, err := ark.Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	db, err := outpost.Open(context.Background(), filepath.Join(t.TempDir(), "outpost.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestNewReconcilesOnlyKnownTemporaryPrefixes(t *testing.T) {
 }
 
 func TestNewReconcilesOrphanArtifact(t *testing.T) {
-	db, err := ark.Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	db, err := outpost.Open(context.Background(), filepath.Join(t.TempDir(), "outpost.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestNewReconcilesOrphanArtifact(t *testing.T) {
 }
 
 func TestPublishDeduplicatesConcurrentWrites(t *testing.T) {
-	db, err := ark.Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	db, err := outpost.Open(context.Background(), filepath.Join(t.TempDir(), "outpost.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,14 +292,14 @@ type defaultRunner struct {
 func (r *defaultRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, append([]string{name}, args...))
 	joined := strings.Join(args, " ")
-	if strings.Contains(joined, "image exists ark/default:1") && r.canonical {
+	if strings.Contains(joined, "image exists outpost/default:1") && r.canonical {
 		return nil, nil
 	}
 	if strings.Contains(joined, "image exists") {
 		return nil, errors.New("missing")
 	}
 	if strings.Contains(joined, "load") {
-		return []byte("Loaded image: localhost/ark/default:0.1.0-amd64\n"), nil
+		return []byte("Loaded image: localhost/outpost/default:0.1.0-amd64\n"), nil
 	}
 	if strings.Contains(joined, "inspect") {
 		return []byte("sha256:immutable\n"), nil
@@ -320,7 +320,7 @@ func TestImportDefaultTagsCanonicalReference(t *testing.T) {
 		}
 		return out
 	}(), "\n")
-	if !strings.Contains(calls, "inspect --format {{.Id}} localhost/ark/default:0.1.0-amd64") || !strings.Contains(calls, "tag sha256:immutable ark/default:1") || !strings.Contains(calls, "inspect --format {{.Id}} ark/default:1") {
+	if !strings.Contains(calls, "inspect --format {{.Id}} localhost/outpost/default:0.1.0-amd64") || !strings.Contains(calls, "tag sha256:immutable outpost/default:1") || !strings.Contains(calls, "inspect --format {{.Id}} outpost/default:1") {
 		t.Fatalf("canonical tag was not verified: %s", calls)
 	}
 	r.canonical = true
@@ -365,7 +365,7 @@ func TestArchiveAllowsGuestLinksAndRejectsEscapes(t *testing.T) {
 }
 
 func TestContextRejectsUnsafeArchive(t *testing.T) {
-	db, err := ark.Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	db, err := outpost.Open(context.Background(), filepath.Join(t.TempDir(), "outpost.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

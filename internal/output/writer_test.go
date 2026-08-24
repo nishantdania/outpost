@@ -14,7 +14,7 @@ func TestWriterWritesJSON(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	value := []string{"ark_123"}
+	value := []string{"outpost_123"}
 	if err := writer.Write(value, Table{}); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
@@ -24,7 +24,7 @@ func TestWriterWritesJSON(t *testing.T) {
 		t.Fatalf("decode JSON output: %v", err)
 	}
 
-	if len(got) != 1 || got[0] != "ark_123" {
+	if len(got) != 1 || got[0] != "outpost_123" {
 		t.Fatalf("JSON output = %v, want %v", got, value)
 	}
 }
@@ -38,13 +38,13 @@ func TestWriterWritesTable(t *testing.T) {
 
 	table := Table{
 		Headers: []string{"ID", "NAME"},
-		Rows:    [][]string{{"ark_123", "investigate-deploy"}},
+		Rows:    [][]string{{"outpost_123", "investigate-deploy"}},
 	}
 	if err := writer.Write(nil, table); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
 
-	for _, value := range []string{"ID", "NAME", "ark_123", "investigate-deploy"} {
+	for _, value := range []string{"ID", "NAME", "outpost_123", "investigate-deploy"} {
 		if !strings.Contains(out.String(), value) {
 			t.Fatalf("table output = %q, want %q", out.String(), value)
 		}

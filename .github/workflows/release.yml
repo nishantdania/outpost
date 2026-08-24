@@ -27,7 +27,7 @@ jobs:
       - run: shellcheck install.sh scripts/install-server scripts/uninstall-server scripts/release-artifacts scripts/test-install scripts/test-install-server scripts/verify-toolchain images/default/build.sh images/default/test-reproducible
       - run: scripts/test-install
       - run: scripts/test-install-server
-      - run: ARK_VERSION=0.1.0 ARK_ROOTFS_SIZE=1G SOURCE_DATE_EPOCH=1700000000 images/default/test-reproducible
+      - run: OUTPOST_VERSION=0.2.0 OUTPOST_ROOTFS_SIZE=1G SOURCE_DATE_EPOCH=1700000000 images/default/test-reproducible
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: test
@@ -41,14 +41,15 @@ jobs:
         with:
           go-version: '1.27.0'
       - run: sudo apt-get update && sudo apt-get install -y zstd
+      - run: '[[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
       - run: mkdir -p dist/input dist
       - run: scripts/verify-toolchain
       - run: python3 -c 'import json; x=json.load(open("deploy/toolchain.json")); print("FC_URL="+x["firecracker"]["url"]); print("FC_SHA="+x["firecracker"]["sha256"]); print("KERNEL_URL="+x["kernel"]["url"]); print("KERNEL_SHA="+x["kernel"]["sha256"])' >> "$GITHUB_ENV"
       - run: curl --fail --location --proto '=https' --tlsv1.2 -o dist/input/firecracker.tgz "$FC_URL" && echo "$FC_SHA  dist/input/firecracker.tgz" | sha256sum -c - && tar -C dist/input -xzf dist/input/firecracker.tgz
       - run: curl --fail --location --proto '=https' --tlsv1.2 -o dist/input/vmlinux "$KERNEL_URL" && echo "$KERNEL_SHA  dist/input/vmlinux" | sha256sum -c -
-      - run: go build -trimpath -ldflags='-buildid=' -o dist/ark ./cmd/ark && go build -trimpath -ldflags='-buildid=' -o dist/arkd ./cmd/arkd && go build -trimpath -ldflags='-buildid=' -o dist/ark-vm-launcher ./cmd/ark-vm-launcher
-      - run: ARK_VERSION=${GITHUB_REF_NAME#v} ARK_OUTPUT_DIR=dist ARK_ROOTFS_SIZE=1G SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) images/default/build.sh
-      - run: ARK_VERSION=${GITHUB_REF_NAME#v} ARK_OUTPUT_DIR=dist ARK_FIRECRACKER=dist/input/release-v1.16.1-x86_64/firecracker-v1.16.1-x86_64 ARK_JAILER=dist/input/release-v1.16.1-x86_64/jailer-v1.16.1-x86_64 ARK_KERNEL=dist/input/vmlinux scripts/release-artifacts
+      - run: go build -trimpath -ldflags='-buildid=' -o dist/outpost ./cmd/outpost && go build -trimpath -ldflags='-buildid=' -o dist/outpostd ./cmd/outpostd && go build -trimpath -ldflags='-buildid=' -o dist/outpost-vm-launcher ./cmd/outpost-vm-launcher
+      - run: OUTPOST_VERSION=${GITHUB_REF_NAME#v} OUTPOST_OUTPUT_DIR=dist OUTPOST_ROOTFS_SIZE=1G SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) images/default/build.sh
+      - run: OUTPOST_VERSION=${GITHUB_REF_NAME#v} OUTPOST_OUTPUT_DIR=dist OUTPOST_FIRECRACKER=dist/input/release-v1.16.1-x86_64/firecracker-v1.16.1-x86_64 OUTPOST_JAILER=dist/input/release-v1.16.1-x86_64/jailer-v1.16.1-x86_64 OUTPOST_KERNEL=dist/input/vmlinux scripts/release-artifacts
       - run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}

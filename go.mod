@@ -1,4 +1,4 @@
-module github.com/nishantdania/ark
+module github.com/nishantdania/outpost
 
 go 1.27.0
 

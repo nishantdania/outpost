@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/nishantdania/ark/internal/ark"
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/outpost"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 func TestManagerFailuresAreRetained(t *testing.T) {
@@ -17,22 +17,22 @@ func TestManagerFailuresAreRetained(t *testing.T) {
 		action  func(*Service) error
 		desired string
 	}{
-		{"create", &vmapi.FakeManager{CreateFunc: func(context.Context, ark.Ark) error { return failure }}, func(s *Service) error { _, err := s.Create(context.Background(), input("demo")); return err }, ark.DesiredRunning},
-		{"start", &vmapi.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "", failure }}, func(s *Service) error { _, err := s.Create(context.Background(), input("demo")); return err }, ark.DesiredRunning},
+		{"create", &vmapi.FakeManager{CreateFunc: func(context.Context, outpost.Outpost) error { return failure }}, func(s *Service) error { _, err := s.Create(context.Background(), input("demo")); return err }, outpost.DesiredRunning},
+		{"start", &vmapi.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "", failure }}, func(s *Service) error { _, err := s.Create(context.Background(), input("demo")); return err }, outpost.DesiredRunning},
 		{"stop", &vmapi.FakeManager{StopFunc: func(context.Context, string) error { return failure }}, func(s *Service) error {
 			if _, err := s.Create(context.Background(), input("demo")); err != nil {
 				return err
 			}
 			_, err := s.Stop(context.Background(), "demo")
 			return err
-		}, ark.DesiredStopped},
+		}, outpost.DesiredStopped},
 		{"delete", &vmapi.FakeManager{DeleteFunc: func(context.Context, string) error { return failure }}, func(s *Service) error {
 			if _, err := s.Create(context.Background(), input("demo")); err != nil {
 				return err
 			}
 			_, err := s.Delete(context.Background(), "demo")
 			return err
-		}, ark.DesiredDeleted},
+		}, outpost.DesiredDeleted},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := testStore(t)
@@ -44,8 +44,8 @@ func TestManagerFailuresAreRetained(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if a.Status != ark.StatusFailed || a.DesiredState != test.desired || a.Failure != failure.Error() {
-				t.Fatalf("failed Ark = %#v", a)
+			if a.Status != outpost.StatusFailed || a.DesiredState != test.desired || a.Failure != failure.Error() {
+				t.Fatalf("failed Outpost = %#v", a)
 			}
 		})
 	}

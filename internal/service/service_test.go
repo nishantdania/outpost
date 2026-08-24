@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/nishantdania/ark/internal/ark"
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/outpost"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 func TestLifecycleTransitions(t *testing.T) {
@@ -19,22 +19,22 @@ func TestLifecycleTransitions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	if created.Status != ark.StatusRunning || created.DesiredState != ark.DesiredRunning || created.GuestIP != "172.30.0.2" {
-		t.Fatalf("Create() = %#v, want running Ark", created)
+	if created.Status != outpost.StatusRunning || created.DesiredState != outpost.DesiredRunning || created.GuestIP != "172.30.0.2" {
+		t.Fatalf("Create() = %#v, want running Outpost", created)
 	}
 	stopped, err := application.Stop(context.Background(), "demo")
 	if err != nil {
 		t.Fatalf("Stop() error = %v", err)
 	}
-	if stopped.Status != ark.StatusStopped || stopped.DesiredState != ark.DesiredStopped || stopped.GuestIP != "172.30.0.2" {
-		t.Fatalf("Stop() = %#v, want stopped Ark retaining guest IP", stopped)
+	if stopped.Status != outpost.StatusStopped || stopped.DesiredState != outpost.DesiredStopped || stopped.GuestIP != "172.30.0.2" {
+		t.Fatalf("Stop() = %#v, want stopped Outpost retaining guest IP", stopped)
 	}
 	started, err := application.Start(context.Background(), "demo")
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	if started.Status != ark.StatusRunning || started.Failure != "" {
-		t.Fatalf("Start() = %#v, want running Ark without failure", started)
+	if started.Status != outpost.StatusRunning || started.Failure != "" {
+		t.Fatalf("Start() = %#v, want running Outpost without failure", started)
 	}
 	deleted, err := application.Delete(context.Background(), "demo")
 	if err != nil {
@@ -43,8 +43,8 @@ func TestLifecycleTransitions(t *testing.T) {
 	if deleted.ID != created.ID {
 		t.Fatalf("Delete() = %#v, want %#v", deleted, created)
 	}
-	if _, err := application.Get(context.Background(), "demo"); !errors.Is(err, ark.ErrNotFound) {
-		t.Fatalf("Get() error = %v, want %v", err, ark.ErrNotFound)
+	if _, err := application.Get(context.Background(), "demo"); !errors.Is(err, outpost.ErrNotFound) {
+		t.Fatalf("Get() error = %v, want %v", err, outpost.ErrNotFound)
 	}
 	wantCalls := []string{"create:" + created.ID, "start:" + created.ID, "stop:" + created.ID, "start:" + created.ID, "delete:" + created.ID}
 	if !reflect.DeepEqual(manager.Calls, wantCalls) {
@@ -63,8 +63,8 @@ func TestFailureIsRetainedAndInvalidTransitionDoesNotCallManager(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
-	if failed.Status != ark.StatusFailed || failed.DesiredState != ark.DesiredRunning || failed.Failure != "boot failed" {
-		t.Fatalf("failed Ark = %#v", failed)
+	if failed.Status != outpost.StatusFailed || failed.DesiredState != outpost.DesiredRunning || failed.Failure != "boot failed" {
+		t.Fatalf("failed Outpost = %#v", failed)
 	}
 	if _, err := application.Stop(context.Background(), "demo"); !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("Stop() error = %v, want %v", err, ErrInvalidState)
@@ -80,21 +80,21 @@ func TestStaleTransitionIsRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Transition(context.Background(), created.ID, ark.StatusStopped, ark.DesiredRunning, ark.StatusProvisioning, "", ""); err != nil {
+	if _, err := store.Transition(context.Background(), created.ID, outpost.StatusStopped, outpost.DesiredRunning, outpost.StatusProvisioning, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	application := New(store, &vmapi.FakeManager{})
-	if _, err := application.transition(context.Background(), created.ID, ark.StatusStopped, ark.DesiredRunning, ark.StatusProvisioning, "", ""); !errors.Is(err, ErrInvalidState) {
+	if _, err := application.transition(context.Background(), created.ID, outpost.StatusStopped, outpost.DesiredRunning, outpost.StatusProvisioning, "", ""); !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("transition error = %v, want %v", err, ErrInvalidState)
 	}
 }
 
-func input(name string) ark.CreateInput {
-	return ark.CreateInput{Name: name, ImageID: "default", VCPUs: 2, MemoryMiB: 2048, DiskGiB: 20}
+func input(name string) outpost.CreateInput {
+	return outpost.CreateInput{Name: name, ImageID: "default", VCPUs: 2, MemoryMiB: 2048, DiskGiB: 20}
 }
-func testStore(t *testing.T) *ark.Store {
+func testStore(t *testing.T) *outpost.Store {
 	t.Helper()
-	store, err := ark.Open(context.Background(), filepath.Join(t.TempDir(), "ark.db"))
+	store, err := outpost.Open(context.Background(), filepath.Join(t.TempDir(), "outpost.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

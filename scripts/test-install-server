@@ -9,15 +9,15 @@ mkdir -p "$root" "$artifacts" "$work/bin" "$work/standalone"
 cp "$repo/scripts/install-server" "$work/standalone/install-server"
 chmod 755 "$work/standalone/install-server"
 installer=$work/standalone/install-server
-for name in ark arkd ark-vm-launcher firecracker jailer vmlinux rootfs.ext4 default.oci.tar; do printf 'tiny %s\n' "$name" > "$artifacts/$name"; done
-cp "$repo/deploy/systemd/arkd.service" "$artifacts/arkd.service"
-cp "$repo/deploy/systemd/ark-vm-launcher.service" "$artifacts/ark-vm-launcher.service"
+for name in outpost outpostd outpost-vm-launcher firecracker jailer vmlinux rootfs.ext4 default.oci.tar; do printf 'tiny %s\n' "$name" > "$artifacts/$name"; done
+cp "$repo/deploy/systemd/outpostd.service" "$artifacts/outpostd.service"
+cp "$repo/deploy/systemd/outpost-vm-launcher.service" "$artifacts/outpost-vm-launcher.service"
 zstd -q --no-progress -19 -f "$artifacts/rootfs.ext4" -o "$artifacts/rootfs.ext4.zst"
 zstd -q --no-progress -19 -f "$artifacts/default.oci.tar" -o "$artifacts/default.oci.tar.zst"
 rm "$artifacts/rootfs.ext4" "$artifacts/default.oci.tar"
 python3 - "$artifacts" <<'PY'
 import hashlib,json,os,sys
-p=sys.argv[1]; names={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','arkd.service':'arkd.service','ark-vm-launcher.service':'ark-vm-launcher.service'}
+p=sys.argv[1]; names={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service'}
 a=[]
 for n,f in names.items():
  b=open(os.path.join(p,f),'rb').read(); a.append({'name':n,'file':f,'sha256':hashlib.sha256(b).hexdigest(),'url':'https://example.test/'+f})
@@ -25,152 +25,152 @@ open(os.path.join(p,'assets.json'),'w').write(json.dumps({'version':'0.1.0','arc
 PY
 cat > "$work/bin/systemctl" <<'EOF'
 #!/bin/sh
-echo "$*" >> "$ARK_FAKE_LOG"
-[ "${ARK_SYSTEMCTL_FAIL:-0}" = 1 ] && exit 23
+echo "$*" >> "$OUTPOST_FAKE_LOG"
+[ "${OUTPOST_SYSTEMCTL_FAIL:-0}" = 1 ] && exit 23
 EOF
 chmod 755 "$work/bin/systemctl"
 real_chown=$(command -v chown)
 real_ln=$(command -v ln)
 cat > "$work/bin/chown" <<'EOF'
 #!/bin/sh
-printf '%s\n' "$*" >> "$ARK_FAKE_CHOWN_LOG"
+printf '%s\n' "$*" >> "$OUTPOST_FAKE_CHOWN_LOG"
 owner=$1
 shift
-case "$owner" in "$ARK_INSTALL_ROOT_UID":*) owner=$ARK_INSTALL_UID:$ARK_INSTALL_GID;; esac
-exec "$ARK_REAL_CHOWN" "$owner" "$@"
+case "$owner" in "$OUTPOST_INSTALL_ROOT_UID":*) owner=$OUTPOST_INSTALL_UID:$OUTPOST_INSTALL_GID;; esac
+exec "$OUTPOST_REAL_CHOWN" "$owner" "$@"
 EOF
 chmod 755 "$work/bin/chown"
 cat > "$work/bin/ln" <<'EOF'
 #!/bin/sh
-printf '%s\n' "$*" >> "$ARK_FAKE_LN_LOG"
-exec "$ARK_REAL_LN" "$@"
+printf '%s\n' "$*" >> "$OUTPOST_FAKE_LN_LOG"
+exec "$OUTPOST_REAL_LN" "$@"
 EOF
 chmod 755 "$work/bin/ln"
 install_uid=$(id -u)
 install_gid=$(id -g)
 root_uid=4242
 root_gid=4243
-run() { timeout "${ARK_INSTALL_TIMEOUT:-30}" env PATH="$work/bin:$PATH" ARK_REAL_CHOWN="$real_chown" ARK_FAKE_CHOWN_LOG="$work/chown" ARK_REAL_LN="$real_ln" ARK_FAKE_LN_LOG="$work/ln" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$install_uid" ARK_INSTALL_GID="$install_gid" ARK_INSTALL_ROOT_UID="$root_uid" ARK_INSTALL_ROOT_GID="$root_gid" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$install_uid" ARK_INSTALL_HANDOFF_GID="$install_gid" SUDO_UID="$install_uid" SUDO_GID="$install_gid" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$artifacts" ARK_FAKE_LOG="$work/log" ARK_INSTALL_TEST_SYSTEMCTL="${ARK_INSTALL_TEST_SYSTEMCTL:-0}" ARK_SYSTEMCTL_FAIL="${ARK_SYSTEMCTL_FAIL:-0}" ARK_INSTALL_TEST_FAIL_HARDLINK="${ARK_INSTALL_TEST_FAIL_HARDLINK:-0}" ARK_INSTALL_TEST_LOG="$work/order" "$installer"; }
+run() { timeout "${OUTPOST_INSTALL_TIMEOUT:-30}" env PATH="$work/bin:$PATH" OUTPOST_REAL_CHOWN="$real_chown" OUTPOST_FAKE_CHOWN_LOG="$work/chown" OUTPOST_REAL_LN="$real_ln" OUTPOST_FAKE_LN_LOG="$work/ln" OUTPOST_INSTALL_ROOT="$root" OUTPOST_INSTALL_TEST=1 OUTPOST_INSTALL_UID="$install_uid" OUTPOST_INSTALL_GID="$install_gid" OUTPOST_INSTALL_ROOT_UID="$root_uid" OUTPOST_INSTALL_ROOT_GID="$root_gid" OUTPOST_INSTALL_HANDOFF_HOME=/client OUTPOST_INSTALL_HANDOFF_UID="$install_uid" OUTPOST_INSTALL_HANDOFF_GID="$install_gid" SUDO_UID="$install_uid" SUDO_GID="$install_gid" OUTPOST_VERSION=0.1.0 OUTPOST_UPLINK=eth0 OUTPOST_ARTIFACT_DIR="$artifacts" OUTPOST_FAKE_LOG="$work/log" OUTPOST_INSTALL_TEST_SYSTEMCTL="${OUTPOST_INSTALL_TEST_SYSTEMCTL:-0}" OUTPOST_SYSTEMCTL_FAIL="${OUTPOST_SYSTEMCTL_FAIL:-0}" OUTPOST_INSTALL_TEST_FAIL_HARDLINK="${OUTPOST_INSTALL_TEST_FAIL_HARDLINK:-0}" OUTPOST_INSTALL_TEST_LOG="$work/order" "$installer"; }
 run
-python3 - "$root/usr/local/lib/ark/assets.json" "$root" <<'PY'
+python3 - "$root/usr/local/lib/outpost/assets.json" "$root" <<'PY'
 import hashlib,json,os,sys
 manifest,root=sys.argv[1:]
 m=json.load(open(manifest))
-want={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4','default':'default.oci.tar'}
+want={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4','default':'default.oci.tar'}
 if set(m)!= {'version','architecture','assets'} or m['version']!='0.1.0' or m['architecture']!='amd64' or len(m['assets'])!=8: raise SystemExit('invalid installed runtime manifest')
 actual={a['name']:a for a in m['assets']}
 if set(actual)!=set(want) or any(set(a)!={'name','file','sha256','url'} or a['file']!=want[n] for n,a in actual.items()): raise SystemExit('runtime manifest has wrong assets')
-paths={'ark':'/usr/local/bin/ark','arkd':'/usr/local/lib/ark/arkd','ark-vm-launcher':'/usr/local/lib/ark/launcher/ark-vm-launcher','firecracker':'/usr/local/lib/ark/launcher/firecracker','jailer':'/usr/local/lib/ark/launcher/jailer','vmlinux':'/usr/local/lib/ark/launcher/vmlinux','rootfs.ext4':'/var/lib/arkd/images/default/rootfs.ext4','default':'/usr/local/lib/ark/default.oci.tar'}
+paths={'outpost':'/usr/local/bin/outpost','outpostd':'/usr/local/lib/outpost/outpostd','outpost-vm-launcher':'/usr/local/lib/outpost/launcher/outpost-vm-launcher','firecracker':'/usr/local/lib/outpost/launcher/firecracker','jailer':'/usr/local/lib/outpost/launcher/jailer','vmlinux':'/usr/local/lib/outpost/launcher/vmlinux','rootfs.ext4':'/var/lib/outpostd/images/default/rootfs.ext4','default':'/usr/local/lib/outpost/default.oci.tar'}
 urls=dict(want); urls['rootfs.ext4']='rootfs.ext4.zst'; urls['default']='default.oci.tar.zst'
 for name,path in paths.items():
  if actual[name]['url']!='https://example.test/'+urls[name]: raise SystemExit('runtime URL was not derived from bootstrap '+name)
 
  with open(root+path,'rb') as f: got=hashlib.sha256(f.read()).hexdigest()
  if actual[name]['sha256']!=got: raise SystemExit('runtime digest does not match installed '+name)
-if {'arkd.service','ark-vm-launcher.service'} & set(actual): raise SystemExit('bootstrap-only assets installed in runtime manifest')
+if {'outpostd.service','outpost-vm-launcher.service'} & set(actual): raise SystemExit('bootstrap-only assets installed in runtime manifest')
 PY
-[ "$(stat -c %a "$root/usr/local/lib/ark/assets.json")" = 640 ]
+[ "$(stat -c %a "$root/usr/local/lib/outpost/assets.json")" = 640 ]
 [ "$(head -n 2 "$work/order" | tr '\n' ' ')" = 'hardlink identities ' ]
-grep -Fqx "$root/srv/ark/state/.ark-hardlink-probe $root/srv/ark/jailer/.ark-hardlink-probe" "$work/ln"
-grep -Fqx "$root_uid:$install_gid $root/usr/local/lib/ark" "$work/chown"
-grep -q "^$root_uid:$install_gid $root/usr/local/lib/ark/.arkd.new" "$work/chown"
-grep -q "^$install_uid:$install_gid $root/var/lib/arkd/images/default/.rootfs.ext4.new" "$work/chown"
-grep -q "^$install_uid:$install_gid .* $root/var/lib/arkd/images" "$work/chown"
-grep -Fqx "$root_uid:$root_gid $root/etc/arkd/launcher.env" "$work/chown"
-[ "$(stat -c %a:%U:%G "$root/var/lib/arkd/images")" = "750:$(id -un):$(id -gn)" ]
-probe=$root/var/lib/arkd/images/.arkd-write-probe
+grep -Fqx "$root/srv/outpost/state/.outpost-hardlink-probe $root/srv/outpost/jailer/.outpost-hardlink-probe" "$work/ln"
+grep -Fqx "$root_uid:$install_gid $root/usr/local/lib/outpost" "$work/chown"
+grep -q "^$root_uid:$install_gid $root/usr/local/lib/outpost/.outpostd.new" "$work/chown"
+grep -q "^$install_uid:$install_gid $root/var/lib/outpostd/images/default/.rootfs.ext4.new" "$work/chown"
+grep -q "^$install_uid:$install_gid .* $root/var/lib/outpostd/images" "$work/chown"
+grep -Fqx "$root_uid:$root_gid $root/etc/outpostd/launcher.env" "$work/chown"
+[ "$(stat -c %a:%U:%G "$root/var/lib/outpostd/images")" = "750:$(id -un):$(id -gn)" ]
+probe=$root/var/lib/outpostd/images/.outpostd-write-probe
 : > "$probe"
 rm "$probe"
-[ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark")" = "750:$(id -un):$(id -gn)" ]
-[ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark/arkd")" = "750:$(id -un):$(id -gn)" ]
-[ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark/default.oci.tar")" = "640:$(id -un):$(id -gn)" ]
-[ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark/launcher")" = "750:$(id -un):$(id -gn)" ]
-[ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark/launcher/ark-vm-launcher")" = "750:$(id -un):$(id -gn)" ]
-[ "$(stat -c %a:%U:%G "$root/usr/local/lib/ark/launcher/vmlinux")" = "640:$(id -un):$(id -gn)" ]
-[ "$(stat -c %a:%U:%G "$root/etc/arkd/launcher.env")" = "600:$(id -un):$(id -gn)" ]
-[ "$(stat -c %a:%U:%G "$root/etc/arkd/containers.conf")" = "640:$(id -un):$(id -gn)" ]
-grep -Fqx 'CONTAINERS_CONF=/etc/arkd/containers.conf' "$root/etc/arkd/arkd.env"
-grep -Fqx 'cgroup_manager = "cgroupfs"' "$root/etc/arkd/containers.conf"
-grep -Fqx 'events_logger = "file"' "$root/etc/arkd/containers.conf"
-test -x "$root/usr/local/lib/ark/arkd"
-grep -Fqx 'User=arkd' "$root/etc/systemd/system/arkd.service"
-grep -Fqx 'Delegate=yes' "$root/etc/systemd/system/arkd.service"
-grep -Fqx 'NoNewPrivileges=false' "$root/etc/systemd/system/arkd.service"
-grep -Fqx 'NoNewPrivileges=true' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -q '^ExecStart=/usr/local/lib/ark/arkd ' "$root/etc/systemd/system/arkd.service"
-grep -q '^ExecStart=/usr/local/lib/ark/launcher/ark-vm-launcher ' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -q -- '--state-dir=/srv/ark/state' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -Fqx 'RequiresMountsFor=/var/lib/arkd /srv/ark' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -Fqx 'ReadWritePaths=/srv/ark /run/ark /sys/fs/cgroup' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -Fqx 'ReadOnlyPaths=/usr/local/lib/ark/launcher /var/lib/arkd/images/default' "$root/etc/systemd/system/ark-vm-launcher.service"
-if grep -Fq 'ReadWritePaths=/srv/ark/' "$root/etc/systemd/system/ark-vm-launcher.service"; then exit 1; fi
-grep -Fqx 'PrivateDevices=false' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -Fqx 'DeviceAllow=/dev/kvm rwm' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -Fqx 'DeviceAllow=/dev/net/tun rwm' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -Fqx 'DeviceAllow=/dev/userfaultfd rwm' "$root/etc/systemd/system/ark-vm-launcher.service"
-[ "$(grep -c '^DeviceAllow=' "$root/etc/systemd/system/ark-vm-launcher.service")" = 3 ]
-grep -q '^CapabilityBoundingSet=.*CAP_FOWNER' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -q '^AmbientCapabilities=.*CAP_FOWNER' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -Fqx 'CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_MKNOD CAP_KILL CAP_SYS_RESOURCE CAP_SETUID CAP_SETGID CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SYS_PTRACE' "$root/etc/systemd/system/ark-vm-launcher.service"
-grep -Fqx 'AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_MKNOD CAP_KILL CAP_SYS_RESOURCE CAP_SETUID CAP_SETGID CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SYS_PTRACE' "$root/etc/systemd/system/ark-vm-launcher.service"
-if grep -q 'SupplementaryGroups=arkvm' "$root/etc/systemd/system/arkd.service"; then exit 1; fi
-if grep -q -- '--firecracker=/usr/local/lib/ark/firecracker' "$root/etc/systemd/system/ark-vm-launcher.service"; then exit 1; fi
+[ "$(stat -c %a:%U:%G "$root/usr/local/lib/outpost")" = "750:$(id -un):$(id -gn)" ]
+[ "$(stat -c %a:%U:%G "$root/usr/local/lib/outpost/outpostd")" = "750:$(id -un):$(id -gn)" ]
+[ "$(stat -c %a:%U:%G "$root/usr/local/lib/outpost/default.oci.tar")" = "640:$(id -un):$(id -gn)" ]
+[ "$(stat -c %a:%U:%G "$root/usr/local/lib/outpost/launcher")" = "750:$(id -un):$(id -gn)" ]
+[ "$(stat -c %a:%U:%G "$root/usr/local/lib/outpost/launcher/outpost-vm-launcher")" = "750:$(id -un):$(id -gn)" ]
+[ "$(stat -c %a:%U:%G "$root/usr/local/lib/outpost/launcher/vmlinux")" = "640:$(id -un):$(id -gn)" ]
+[ "$(stat -c %a:%U:%G "$root/etc/outpostd/launcher.env")" = "600:$(id -un):$(id -gn)" ]
+[ "$(stat -c %a:%U:%G "$root/etc/outpostd/containers.conf")" = "640:$(id -un):$(id -gn)" ]
+grep -Fqx 'CONTAINERS_CONF=/etc/outpostd/containers.conf' "$root/etc/outpostd/outpostd.env"
+grep -Fqx 'cgroup_manager = "cgroupfs"' "$root/etc/outpostd/containers.conf"
+grep -Fqx 'events_logger = "file"' "$root/etc/outpostd/containers.conf"
+test -x "$root/usr/local/lib/outpost/outpostd"
+grep -Fqx 'User=outpostd' "$root/etc/systemd/system/outpostd.service"
+grep -Fqx 'Delegate=yes' "$root/etc/systemd/system/outpostd.service"
+grep -Fqx 'NoNewPrivileges=false' "$root/etc/systemd/system/outpostd.service"
+grep -Fqx 'NoNewPrivileges=true' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -q '^ExecStart=/usr/local/lib/outpost/outpostd ' "$root/etc/systemd/system/outpostd.service"
+grep -q '^ExecStart=/usr/local/lib/outpost/launcher/outpost-vm-launcher ' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -q -- '--state-dir=/srv/outpost/state' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'RequiresMountsFor=/var/lib/outpostd /srv/outpost' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'ReadWritePaths=/srv/outpost /run/outpost /sys/fs/cgroup' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'ReadOnlyPaths=/usr/local/lib/outpost/launcher /var/lib/outpostd/images/default' "$root/etc/systemd/system/outpost-vm-launcher.service"
+if grep -Fq 'ReadWritePaths=/srv/outpost/' "$root/etc/systemd/system/outpost-vm-launcher.service"; then exit 1; fi
+grep -Fqx 'PrivateDevices=false' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'DeviceAllow=/dev/kvm rwm' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'DeviceAllow=/dev/net/tun rwm' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'DeviceAllow=/dev/userfaultfd rwm' "$root/etc/systemd/system/outpost-vm-launcher.service"
+[ "$(grep -c '^DeviceAllow=' "$root/etc/systemd/system/outpost-vm-launcher.service")" = 3 ]
+grep -q '^CapabilityBoundingSet=.*CAP_FOWNER' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -q '^AmbientCapabilities=.*CAP_FOWNER' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_MKNOD CAP_KILL CAP_SYS_RESOURCE CAP_SETUID CAP_SETGID CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SYS_PTRACE' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'AmbientCapabilities=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_MKNOD CAP_KILL CAP_SYS_RESOURCE CAP_SETUID CAP_SETGID CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SYS_PTRACE' "$root/etc/systemd/system/outpost-vm-launcher.service"
+if grep -q 'SupplementaryGroups=outpostvm' "$root/etc/systemd/system/outpostd.service"; then exit 1; fi
+if grep -q -- '--firecracker=/usr/local/lib/outpost/firecracker' "$root/etc/systemd/system/outpost-vm-launcher.service"; then exit 1; fi
 mkdir -p "$work/output"
-for name in ark arkd ark-vm-launcher; do cp "$artifacts/$name" "$work/output/$name"; done
-printf 'tiny rootfs.ext4\n' > "$work/output/ark-default-0.1.0-amd64.ext4"
-printf 'tiny default.oci.tar\n' > "$work/output/ark-default-0.1.0-amd64.oci.tar"
-ARK_VERSION=0.1.0 ARK_OUTPUT_DIR="$work/output" ARK_FIRECRACKER="$artifacts/firecracker" ARK_JAILER="$artifacts/jailer" ARK_KERNEL="$artifacts/vmlinux" "$repo/scripts/release-artifacts"
+for name in outpost outpostd outpost-vm-launcher; do cp "$artifacts/$name" "$work/output/$name"; done
+printf 'tiny rootfs.ext4\n' > "$work/output/outpost-default-0.1.0-amd64.ext4"
+printf 'tiny default.oci.tar\n' > "$work/output/outpost-default-0.1.0-amd64.oci.tar"
+OUTPOST_VERSION=0.1.0 OUTPOST_OUTPUT_DIR="$work/output" OUTPOST_FIRECRACKER="$artifacts/firecracker" OUTPOST_JAILER="$artifacts/jailer" OUTPOST_KERNEL="$artifacts/vmlinux" "$repo/scripts/release-artifacts"
 first=$(sha256sum "$work/output/release/assets.json" "$work/output/release/checksums.txt")
 printf stale > "$work/output/release/stale"
-ARK_VERSION=0.1.0 ARK_OUTPUT_DIR="$work/output" ARK_FIRECRACKER="$artifacts/firecracker" ARK_JAILER="$artifacts/jailer" ARK_KERNEL="$artifacts/vmlinux" "$repo/scripts/release-artifacts"
+OUTPOST_VERSION=0.1.0 OUTPOST_OUTPUT_DIR="$work/output" OUTPOST_FIRECRACKER="$artifacts/firecracker" OUTPOST_JAILER="$artifacts/jailer" OUTPOST_KERNEL="$artifacts/vmlinux" "$repo/scripts/release-artifacts"
 [ "$first" = "$(sha256sum "$work/output/release/assets.json" "$work/output/release/checksums.txt")" ]
 [ ! -e "$work/output/release/stale" ]
 [ -f "$work/output/release/rootfs.ext4.zst" ]
 [ -f "$work/output/release/default.oci.tar.zst" ]
-[ -f "$work/output/release/arkd.service" ]
-[ -f "$work/output/release/ark-vm-launcher.service" ]
+[ -f "$work/output/release/outpostd.service" ]
+[ -f "$work/output/release/outpost-vm-launcher.service" ]
 python3 - "$work/output/release/assets.json" <<'PY'
 import hashlib,json,os,sys
 p=sys.argv[1]; m=json.load(open(p))
-want={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','arkd.service':'arkd.service','ark-vm-launcher.service':'ark-vm-launcher.service'}
+want={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service'}
 actual={a['name']:a for a in m['assets']}
 if len(m['assets'])!=10 or set(actual)!=set(want) or any(a['file']!=want[n] for n,a in actual.items()): raise SystemExit('invalid bootstrap manifest')
 for name,a in actual.items():
  with open(os.path.join(os.path.dirname(p),a['file']),'rb') as f: got=hashlib.sha256(f.read()).hexdigest()
  if a['sha256']!=got: raise SystemExit('bootstrap digest mismatch: '+name)
 PY
-grep -Fqx 'NoNewPrivileges=false' "$work/output/release/arkd.service"
-grep -Fqx 'NoNewPrivileges=true' "$work/output/release/ark-vm-launcher.service"
+grep -Fqx 'NoNewPrivileges=false' "$work/output/release/outpostd.service"
+grep -Fqx 'NoNewPrivileges=true' "$work/output/release/outpost-vm-launcher.service"
 [ -x "$work/output/release/install-server" ]
 ( cd "$work/output/release" && sha256sum -c checksums.txt )
 [ ! -e "$work/output/release/rootfs.ext4" ]
 [ ! -e "$work/output/release/default.oci.tar" ]
 artifacts=$work/output/release
 run
-token=$(cat "$root/etc/arkd/token")
-printf legacy > "$root/usr/local/lib/ark/firecracker"
+token=$(cat "$root/etc/outpostd/token")
+printf legacy > "$root/usr/local/lib/outpost/firecracker"
 : > "$work/chown"
 run
-grep -Fqx "$root_uid:$install_gid $root/usr/local/lib/ark" "$work/chown"
-grep -q "^$root_uid:$install_gid $root/usr/local/lib/ark/.arkd.new" "$work/chown"
-[ ! -e "$root/usr/local/lib/ark/firecracker" ]
-[ "$token" = "$(cat "$root/etc/arkd/token")" ]
-[ "$(stat -c %a "$root/etc/arkd/token")" = 600 ]
-handoff=/client/.config/ark/server.env
+grep -Fqx "$root_uid:$install_gid $root/usr/local/lib/outpost" "$work/chown"
+grep -q "^$root_uid:$install_gid $root/usr/local/lib/outpost/.outpostd.new" "$work/chown"
+[ ! -e "$root/usr/local/lib/outpost/firecracker" ]
+[ "$token" = "$(cat "$root/etc/outpostd/token")" ]
+[ "$(stat -c %a "$root/etc/outpostd/token")" = 600 ]
+handoff=/client/.config/outpost/server.env
 [ "$(stat -c %a "$root$handoff")" = 600 ]
-grep -qx "ARK_TOKEN=$token" "$root$handoff"
-grep -qx 'ARK_SERVER=http://127.0.0.1:17890' "$root$handoff"
-[ "$(stat -c %a "$root/etc/systemd/system/arkd.service")" = 644 ]
-[ "$(stat -c %a "$root/etc/systemd/system/ark-vm-launcher.service")" = 644 ]
-grep -q -- '--listen=127.0.0.1:17890' "$root/etc/systemd/system/arkd.service"
-grep -q 'EnvironmentFile=/etc/arkd/launcher.env' "$root/etc/systemd/system/ark-vm-launcher.service"
-[ -x "$root/usr/local/bin/ark" ]
-[ -d "$root/srv/ark/state" ]
-[ ! -e "$root/var/lib/ark-vm-launcher" ]
-[ -f "$root/usr/local/lib/ark/default.oci.tar" ]
-grep -Fqx 'tiny default.oci.tar' "$root/usr/local/lib/ark/default.oci.tar"
-grep -Fqx 'tiny rootfs.ext4' "$root/var/lib/arkd/images/default/rootfs.ext4"
-[ ! -e /usr/local/lib/ark/default.oci.tar ]
+grep -qx "OUTPOST_TOKEN=$token" "$root$handoff"
+grep -qx 'OUTPOST_SERVER=http://127.0.0.1:17890' "$root$handoff"
+[ "$(stat -c %a "$root/etc/systemd/system/outpostd.service")" = 644 ]
+[ "$(stat -c %a "$root/etc/systemd/system/outpost-vm-launcher.service")" = 644 ]
+grep -q -- '--listen=127.0.0.1:17890' "$root/etc/systemd/system/outpostd.service"
+grep -q 'EnvironmentFile=/etc/outpostd/launcher.env' "$root/etc/systemd/system/outpost-vm-launcher.service"
+[ -x "$root/usr/local/bin/outpost" ]
+[ -d "$root/srv/outpost/state" ]
+[ ! -e "$root/var/lib/outpost-vm-launcher" ]
+[ -f "$root/usr/local/lib/outpost/default.oci.tar" ]
+grep -Fqx 'tiny default.oci.tar' "$root/usr/local/lib/outpost/default.oci.tar"
+grep -Fqx 'tiny rootfs.ext4' "$root/var/lib/outpostd/images/default/rootfs.ext4"
+[ ! -e /usr/local/lib/outpost/default.oci.tar ]
 cp -a "$artifacts" "$work/sparse"; artifacts=$work/sparse
 artifacts=$artifacts python3 - <<'PY'
 import hashlib,json,os,subprocess
@@ -184,10 +184,10 @@ for a in m['assets']:
  if a['file']=='rootfs.ext4.zst': a['sha256']=hashlib.sha256(open(p+'/'+a['file'],'rb').read()).hexdigest()
 open(p+'/assets.json','w').write(json.dumps(m,separators=(',',':')))
 PY
-rm -rf "$root"; mkdir "$root"; ARK_INSTALL_TIMEOUT=10 run
-[ "$(stat -c %s "$root/var/lib/arkd/images/default/rootfs.ext4")" = 67108864 ]
-[ "$(stat -c %b "$root/var/lib/arkd/images/default/rootfs.ext4")" -lt 8192 ]
-python3 - "$root/var/lib/arkd/images/default/rootfs.ext4" <<'PY'
+rm -rf "$root"; mkdir "$root"; OUTPOST_INSTALL_TIMEOUT=10 run
+[ "$(stat -c %s "$root/var/lib/outpostd/images/default/rootfs.ext4")" = 67108864 ]
+[ "$(stat -c %b "$root/var/lib/outpostd/images/default/rootfs.ext4")" -lt 8192 ]
+python3 - "$root/var/lib/outpostd/images/default/rootfs.ext4" <<'PY'
 import sys
 with open(sys.argv[1],'rb') as f:
  if f.read(4)!=b'head': raise SystemExit('bad sparse rootfs head')
@@ -195,22 +195,22 @@ with open(sys.argv[1],'rb') as f:
  if f.read()!=b'tail': raise SystemExit('bad sparse rootfs tail')
 PY
 artifacts=$work/output/release
-[ ! -e /usr/local/lib/ark/default.oci.tar ]
-[ ! -e /usr/local/bin/ark ]
+[ ! -e /usr/local/lib/outpost/default.oci.tar ]
+[ ! -e /usr/local/bin/outpost ]
 fail_preapply() {
  rm -rf "$root"; mkdir "$root"
  if run >/dev/null 2>&1; then echo "accepted invalid manifest" >&2; exit 1; fi
  [ ! -e "$root/usr" ] || { echo "applied before preflight" >&2; exit 1; }
- if find "$root" -maxdepth 1 -name '.ark-install-stage.*' -print -quit | grep -q .; then echo "staged files not cleaned" >&2; exit 1; fi
+ if find "$root" -maxdepth 1 -name '.outpost-install-stage.*' -print -quit | grep -q .; then echo "staged files not cleaned" >&2; exit 1; fi
 }
 good=$artifacts
-cp -a "$good" "$work/bad"; printf x >> "$work/bad/ark"; artifacts=$work/bad; fail_preapply
+cp -a "$good" "$work/bad"; printf x >> "$work/bad/outpost"; artifacts=$work/bad; fail_preapply
 cp -a "$good" "$work/missing"; rm "$work/missing/jailer"; artifacts=$work/missing; fail_preapply
-for name in arkd.service ark-vm-launcher.service; do
+for name in outpostd.service outpost-vm-launcher.service; do
  cp -a "$good" "$work/missing-$name"; rm "$work/missing-$name/$name"; artifacts=$work/missing-$name; fail_preapply
  cp -a "$good" "$work/corrupt-$name"; printf x >> "$work/corrupt-$name/$name"; artifacts=$work/corrupt-$name; fail_preapply
 done
-cp -a "$good" "$work/swapped-services"; mv "$work/swapped-services/arkd.service" "$work/swapped-services/service.tmp"; mv "$work/swapped-services/ark-vm-launcher.service" "$work/swapped-services/arkd.service"; mv "$work/swapped-services/service.tmp" "$work/swapped-services/ark-vm-launcher.service"; artifacts=$work/swapped-services; fail_preapply
+cp -a "$good" "$work/swapped-services"; mv "$work/swapped-services/outpostd.service" "$work/swapped-services/service.tmp"; mv "$work/swapped-services/outpost-vm-launcher.service" "$work/swapped-services/outpostd.service"; mv "$work/swapped-services/service.tmp" "$work/swapped-services/outpost-vm-launcher.service"; artifacts=$work/swapped-services; fail_preapply
 cp -a "$good" "$work/corrupt-compression"; printf x >> "$work/corrupt-compression/rootfs.ext4.zst"; artifacts=$work/corrupt-compression; fail_preapply
 cp -a "$good" "$work/invalid-compression"; printf x > "$work/invalid-compression/rootfs.ext4.zst"; artifacts=$work/invalid-compression python3 - <<'PY'
 import hashlib,json,os
@@ -220,7 +220,7 @@ for a in m['assets']:
 open(p+'/assets.json','w').write(json.dumps(m,separators=(',',':')))
 PY
 artifacts=$work/invalid-compression; fail_preapply
-artifacts=$good; ARK_ROOTFS_MAX_BYTES=1 fail_preapply
+artifacts=$good; OUTPOST_ROOTFS_MAX_BYTES=1 fail_preapply
 cp -a "$good" "$work/duplicate"; artifacts=$work/duplicate python3 - <<'PY'
 import json,os
 p=os.environ['artifacts']+'/assets.json'; x=json.load(open(p)); x['assets'].append(x['assets'][0]); open(p,'w').write(json.dumps(x))
@@ -228,7 +228,7 @@ PY
 artifacts=$work/duplicate; fail_preapply
 cp -a "$good" "$work/traversal"; artifacts=$work/traversal python3 - <<'PY'
 import json,os
-p=os.environ['artifacts']+'/assets.json'; x=json.load(open(p)); x['assets'][0]['file']='../ark'; open(p,'w').write(json.dumps(x))
+p=os.environ['artifacts']+'/assets.json'; x=json.load(open(p)); x['assets'][0]['file']='../outpost'; open(p,'w').write(json.dumps(x))
 PY
 artifacts=$work/traversal; fail_preapply
 cp -a "$good" "$work/arch"; artifacts=$work/arch python3 - <<'PY'
@@ -238,9 +238,9 @@ PY
 artifacts=$work/arch; fail_preapply
 for kind in version extra duplicate-file malformed-digest; do
  artifacts=$work/$kind; cp -a "$good" "$artifacts"
- ARK_KIND=$kind ARK_DIR=$artifacts python3 - <<'PY'
+ OUTPOST_KIND=$kind OUTPOST_DIR=$artifacts python3 - <<'PY'
 import json,os
-p=os.environ['ARK_DIR']+'/assets.json'; x=json.load(open(p)); k=os.environ['ARK_KIND']
+p=os.environ['OUTPOST_DIR']+'/assets.json'; x=json.load(open(p)); k=os.environ['OUTPOST_KIND']
 if k=='version': x['version']='9.9.9'
 elif k=='extra': x['assets'].append({'name':'extra','file':'extra','sha256':'a'*64,'url':'https://example.test/extra'})
 elif k=='duplicate-file': x['assets'][1]['file']=x['assets'][0]['file']
@@ -250,38 +250,38 @@ PY
  fail_preapply
 done
 artifacts=$work/symlink-manifest; cp -a "$good" "$artifacts"; mv "$artifacts/assets.json" "$artifacts/real.json"; ln -s real.json "$artifacts/assets.json"; fail_preapply
-rm -rf "$root"; mkdir "$root"; artifacts=$work/symlink; cp -a "$good" "$artifacts"; rm "$artifacts/jailer"; ln -s ark "$artifacts/jailer"; fail_preapply
-for name in arkd.service ark-vm-launcher.service; do
- artifacts=$work/symlink-$name; cp -a "$good" "$artifacts"; rm "$artifacts/$name"; ln -s ark "$artifacts/$name"; fail_preapply
+rm -rf "$root"; mkdir "$root"; artifacts=$work/symlink; cp -a "$good" "$artifacts"; rm "$artifacts/jailer"; ln -s outpost "$artifacts/jailer"; fail_preapply
+for name in outpostd.service outpost-vm-launcher.service; do
+ artifacts=$work/symlink-$name; cp -a "$good" "$artifacts"; rm "$artifacts/$name"; ln -s outpost "$artifacts/$name"; fail_preapply
 done
-artifacts=$good; rm -rf "$root"; mkdir "$root"; ARK_INSTALL_TEST_FAIL_HARDLINK=1 run >/dev/null 2>&1 && { echo 'hardlink failure accepted' >&2; exit 1; }
-artifacts=$good; ARK_INSTALL_TEST_SYSTEMCTL=1 ARK_SYSTEMCTL_FAIL=1 run >/dev/null 2>&1 && { echo 'systemctl failure accepted' >&2; exit 1; }
+artifacts=$good; rm -rf "$root"; mkdir "$root"; OUTPOST_INSTALL_TEST_FAIL_HARDLINK=1 run >/dev/null 2>&1 && { echo 'hardlink failure accepted' >&2; exit 1; }
+artifacts=$good; OUTPOST_INSTALL_TEST_SYSTEMCTL=1 OUTPOST_SYSTEMCTL_FAIL=1 run >/dev/null 2>&1 && { echo 'systemctl failure accepted' >&2; exit 1; }
 artifacts=$good; run
-grep -Fqx 'User=arkd' "$root/etc/systemd/system/arkd.service"
+grep -Fqx 'User=outpostd' "$root/etc/systemd/system/outpostd.service"
 grep -q 'daemon-reload' "$work/log"
 cat > "$work/bin/systemctl" <<'EOF'
 #!/bin/sh
-printf '%s\n' "$*" >> "$ARK_UNINSTALL_SYSTEMCTL_LOG"
-[ "${ARK_UNINSTALL_FAIL:-}" != "$1" ] || exit 23
+printf '%s\n' "$*" >> "$OUTPOST_UNINSTALL_SYSTEMCTL_LOG"
+[ "${OUTPOST_UNINSTALL_FAIL:-}" != "$1" ] || exit 23
 case "$1" in show) printf '%s\n' inactive;; is-active) :;; esac
 EOF
 chmod 755 "$work/bin/systemctl"
 mkdir -p "$root/unrelated"; printf keep > "$root/unrelated/file"
-if PATH="$work/bin:$PATH" ARK_UNINSTALL_ROOT="$root" ARK_UNINSTALL_TEST=1 ARK_UNINSTALL_TEST_READY=1 ARK_UNINSTALL_FAIL=start ARK_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server" >/dev/null 2>&1; then exit 1; fi
-[ -e "$root/usr/local/lib/ark" ]
-PATH="$work/bin:$PATH" ARK_UNINSTALL_ROOT="$root" ARK_UNINSTALL_TEST=1 ARK_UNINSTALL_TEST_READY=1 ARK_UNINSTALL_TEST_LOG="$work/uninstall-order" ARK_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server"
-[ "$(head -n 4 "$work/uninstall-order" | tr '\n' ' ')" = 'stop-arkd stop-launcher reconcile-launcher stop-reconciled-launcher ' ]
-grep -Fqx 'stop arkd.service' "$work/uninstall-systemctl"
-grep -Fqx 'start ark-vm-launcher.service' "$work/uninstall-systemctl"
-[ ! -e "$root/usr/local/lib/ark" ]
+if PATH="$work/bin:$PATH" OUTPOST_UNINSTALL_ROOT="$root" OUTPOST_UNINSTALL_TEST=1 OUTPOST_UNINSTALL_TEST_READY=1 OUTPOST_UNINSTALL_FAIL=start OUTPOST_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server" >/dev/null 2>&1; then exit 1; fi
+[ -e "$root/usr/local/lib/outpost" ]
+PATH="$work/bin:$PATH" OUTPOST_UNINSTALL_ROOT="$root" OUTPOST_UNINSTALL_TEST=1 OUTPOST_UNINSTALL_TEST_READY=1 OUTPOST_UNINSTALL_TEST_LOG="$work/uninstall-order" OUTPOST_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server"
+[ "$(head -n 4 "$work/uninstall-order" | tr '\n' ' ')" = 'stop-outpostd stop-launcher reconcile-launcher stop-reconciled-launcher ' ]
+grep -Fqx 'stop outpostd.service' "$work/uninstall-systemctl"
+grep -Fqx 'start outpost-vm-launcher.service' "$work/uninstall-systemctl"
+[ ! -e "$root/usr/local/lib/outpost" ]
 [ "$(cat "$root/unrelated/file")" = keep ]
-PATH="$work/bin:$PATH" ARK_UNINSTALL_ROOT="$root" ARK_UNINSTALL_TEST=1 ARK_UNINSTALL_TEST_READY=1 ARK_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server"
-invalid_input() { rm -rf "$root"; mkdir "$root"; if env PATH="$work/bin:$PATH" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$(id -u)" ARK_INSTALL_GID="$(id -g)" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$(id -u)" ARK_INSTALL_HANDOFF_GID="$(id -g)" SUDO_UID="$(id -u)" SUDO_GID="$(id -g)" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$good" "$@" "$installer" >/dev/null 2>&1; then echo 'invalid input accepted' >&2; exit 1; fi; [ ! -e "$root/usr" ]; }
-invalid_input 'ARK_UPLINK=eth0|bad'
-invalid_input ARK_DNS=not-an-ip
-invalid_input 'ARK_LISTEN=0.0.0.0:17890'
-invalid_input 'ARK_CLIENT_HANDOFF=/etc/../outside'
+PATH="$work/bin:$PATH" OUTPOST_UNINSTALL_ROOT="$root" OUTPOST_UNINSTALL_TEST=1 OUTPOST_UNINSTALL_TEST_READY=1 OUTPOST_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server"
+invalid_input() { rm -rf "$root"; mkdir "$root"; if env PATH="$work/bin:$PATH" OUTPOST_INSTALL_ROOT="$root" OUTPOST_INSTALL_TEST=1 OUTPOST_INSTALL_UID="$(id -u)" OUTPOST_INSTALL_GID="$(id -g)" OUTPOST_INSTALL_HANDOFF_HOME=/client OUTPOST_INSTALL_HANDOFF_UID="$(id -u)" OUTPOST_INSTALL_HANDOFF_GID="$(id -g)" SUDO_UID="$(id -u)" SUDO_GID="$(id -g)" OUTPOST_VERSION=0.1.0 OUTPOST_UPLINK=eth0 OUTPOST_ARTIFACT_DIR="$good" "$@" "$installer" >/dev/null 2>&1; then echo 'invalid input accepted' >&2; exit 1; fi; [ ! -e "$root/usr" ]; }
+invalid_input 'OUTPOST_UPLINK=eth0|bad'
+invalid_input OUTPOST_DNS=not-an-ip
+invalid_input 'OUTPOST_LISTEN=0.0.0.0:17890'
+invalid_input 'OUTPOST_CLIENT_HANDOFF=/etc/../outside'
 rm -rf "$root"; mkdir "$root"
-if PATH="$work/bin:$PATH" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$(id -u)" ARK_INSTALL_GID="$(id -g)" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_RELEASE_URL=https://example.test ARK_ASSETS_MANIFEST_SHA256=xyz "$installer" >/dev/null 2>&1; then echo 'malformed remote checksum accepted' >&2; exit 1; fi
+if PATH="$work/bin:$PATH" OUTPOST_INSTALL_ROOT="$root" OUTPOST_INSTALL_TEST=1 OUTPOST_INSTALL_UID="$(id -u)" OUTPOST_INSTALL_GID="$(id -g)" OUTPOST_VERSION=0.1.0 OUTPOST_UPLINK=eth0 OUTPOST_RELEASE_URL=https://example.test OUTPOST_ASSETS_MANIFEST_SHA256=xyz "$installer" >/dev/null 2>&1; then echo 'malformed remote checksum accepted' >&2; exit 1; fi
 [ ! -e "$root/usr" ]
 printf '%s\n' 'TestInstallServerIntegration'

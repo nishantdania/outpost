@@ -1,1 +1,0 @@
-ALTER TABLE arks ADD COLUMN ssh_public_key TEXT NOT NULL DEFAULT '';

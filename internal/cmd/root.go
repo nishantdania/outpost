@@ -7,11 +7,11 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/nishantdania/ark/internal/remote"
+	"github.com/nishantdania/outpost/internal/remote"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nishantdania/ark/internal/output"
+	"github.com/nishantdania/outpost/internal/output"
 )
 
 type rootOptions struct {
@@ -31,29 +31,29 @@ func Execute() error {
 func newRootCmd() *cobra.Command {
 	home, homeErr := os.UserHomeDir()
 	ssh := remote.DefaultConfig(home)
-	ssh.User = envString("ARK_SSH_USER", ssh.User)
-	ssh.ProxyJump = os.Getenv("ARK_SSH_PROXY_JUMP")
-	ssh.IdentityFile = envString("ARK_SSH_IDENTITY", ssh.IdentityFile)
-	ssh.KnownHostsFile = envString("ARK_SSH_KNOWN_HOSTS", ssh.KnownHostsFile)
-	agentValue := os.Getenv("ARK_SSH_AGENT_FORWARDING")
+	ssh.User = envString("OUTPOST_SSH_USER", ssh.User)
+	ssh.ProxyJump = os.Getenv("OUTPOST_SSH_PROXY_JUMP")
+	ssh.IdentityFile = envString("OUTPOST_SSH_IDENTITY", ssh.IdentityFile)
+	ssh.KnownHostsFile = envString("OUTPOST_SSH_KNOWN_HOSTS", ssh.KnownHostsFile)
+	agentValue := os.Getenv("OUTPOST_SSH_AGENT_FORWARDING")
 	var agentErr error
 	if agentValue != "" {
 		ssh.AgentForwarding, agentErr = strconv.ParseBool(agentValue)
 		if agentErr != nil {
-			agentErr = fmt.Errorf("parse ARK_SSH_AGENT_FORWARDING: %w", agentErr)
+			agentErr = fmt.Errorf("parse OUTPOST_SSH_AGENT_FORWARDING: %w", agentErr)
 		}
 	}
 	options := &rootOptions{ssh: ssh, runner: remote.SystemRunner(), initErr: errors.Join(homeErr, agentErr)}
 	root := &cobra.Command{
-		Use:               "ark",
-		Short:             "Create and manage Arks",
+		Use:               "outpost",
+		Short:             "Create and manage Outposts",
 		SilenceErrors:     true,
 		SilenceUsage:      true,
 		PersistentPreRunE: func(*cobra.Command, []string) error { return options.initErr },
 	}
 
-	root.PersistentFlags().StringVar(&options.serverURL, "server", envString("ARK_SERVER", "http://127.0.0.1:17890"), "arkd server URL")
-	root.PersistentFlags().StringVar(&options.token, "token", os.Getenv("ARK_TOKEN"), "arkd bearer token")
+	root.PersistentFlags().StringVar(&options.serverURL, "server", envString("OUTPOST_SERVER", "http://127.0.0.1:17890"), "outpostd server URL")
+	root.PersistentFlags().StringVar(&options.token, "token", os.Getenv("OUTPOST_TOKEN"), "outpostd bearer token")
 	root.PersistentFlags().StringVarP(&options.output, "output", "o", "table", "Output format: table or json")
 	root.PersistentFlags().BoolVar(&options.noColor, "no-color", false, "Disable color output")
 	root.PersistentFlags().StringVar(&options.ssh.User, "ssh-user", options.ssh.User, "guest SSH user")

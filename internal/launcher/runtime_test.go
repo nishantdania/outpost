@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 func TestMemoryRuntimeCreateCancellationAndConflict(t *testing.T) {

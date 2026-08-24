@@ -19,24 +19,24 @@ func TestAuthenticatedLifecycleRoutes(t *testing.T) {
 		router.ServeHTTP(rec, req)
 		return rec.Code
 	}
-	if got := request(http.MethodGet, "/v1/arks/demo"); got != http.StatusOK {
+	if got := request(http.MethodGet, "/v1/outposts/demo"); got != http.StatusOK {
 		t.Fatalf("get status = %d", got)
 	}
-	if got := request(http.MethodPost, "/v1/arks/demo/start"); got != http.StatusOK {
+	if got := request(http.MethodPost, "/v1/outposts/demo/start"); got != http.StatusOK {
 		t.Fatalf("start status = %d", got)
 	}
-	if got := request(http.MethodPost, "/v1/arks/demo/start"); got != http.StatusConflict {
+	if got := request(http.MethodPost, "/v1/outposts/demo/start"); got != http.StatusConflict {
 		t.Fatalf("duplicate start status = %d", got)
 	}
-	if got := request(http.MethodPost, "/v1/arks/demo/stop"); got != http.StatusOK {
+	if got := request(http.MethodPost, "/v1/outposts/demo/stop"); got != http.StatusOK {
 		t.Fatalf("stop status = %d", got)
 	}
-	if got := request(http.MethodPost, "/v1/arks/demo/stop"); got != http.StatusConflict {
+	if got := request(http.MethodPost, "/v1/outposts/demo/stop"); got != http.StatusConflict {
 		t.Fatalf("duplicate stop status = %d", got)
 	}
-	for _, path := range []string{"/v1/arks/missing", "/v1/arks/missing/start", "/v1/arks/missing/stop"} {
+	for _, path := range []string{"/v1/outposts/missing", "/v1/outposts/missing/start", "/v1/outposts/missing/stop"} {
 		method := http.MethodGet
-		if path != "/v1/arks/missing" {
+		if path != "/v1/outposts/missing" {
 			method = http.MethodPost
 		}
 		if got := request(method, path); got != http.StatusNotFound {

@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 type CommandRunner interface {
@@ -156,10 +156,10 @@ type FirecrackerConfig struct {
 	ImageStore    string
 	Uplink        string
 	DNS           string
-	ArkVMUID      int
-	ArkVMGID      int
-	ArkdUID       int
-	ArkdGID       int
+	OutpostVMUID  int
+	OutpostVMGID  int
+	OutpostdUID   int
+	OutpostdGID   int
 	MaxImageBytes int64
 	Runner        CommandRunner
 	Launcher      ProcessLauncher
@@ -261,8 +261,8 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 	if config.MaxImageBytes == 0 {
 		config.MaxImageBytes = 8 << 30
 	}
-	if config.ArkdUID == 0 && config.ArkdGID == 0 {
-		config.ArkdUID, config.ArkdGID = -1, -1
+	if config.OutpostdUID == 0 && config.OutpostdGID == 0 {
+		config.OutpostdUID, config.OutpostdGID = -1, -1
 	}
 	if config.PIDTimeout == 0 {
 		config.PIDTimeout = 10 * time.Second
@@ -284,7 +284,7 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 			return nil, fmt.Errorf("trusted asset %q: %w", path, vmapi.ErrInvalid)
 		}
 	}
-	if !interfaceName.MatchString(config.Uplink) || net.ParseIP(config.DNS) == nil || net.ParseIP(config.DNS).To4() == nil || config.ArkVMUID < 0 || config.ArkVMGID < 0 || config.ArkdUID < -1 || config.ArkdGID < -1 || config.MaxImageBytes <= 0 || config.SSHTimeout <= 0 || config.PIDTimeout <= 0 || config.StopTimeout <= 0 || config.PollInterval <= 0 {
+	if !interfaceName.MatchString(config.Uplink) || net.ParseIP(config.DNS) == nil || net.ParseIP(config.DNS).To4() == nil || config.OutpostVMUID < 0 || config.OutpostVMGID < 0 || config.OutpostdUID < -1 || config.OutpostdGID < -1 || config.MaxImageBytes <= 0 || config.SSHTimeout <= 0 || config.PIDTimeout <= 0 || config.StopTimeout <= 0 || config.PollInterval <= 0 {
 		return nil, fmt.Errorf("firecracker configuration: %w", vmapi.ErrInvalid)
 	}
 	executable := filepath.Base(config.Firecracker)
@@ -313,7 +313,7 @@ func (r *FirecrackerRuntime) rootfs(id string) (*os.File, error) {
 		return nil, vmapi.ErrInvalid
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || stat.Nlink != 1 || (r.config.ArkdUID >= 0 && int(stat.Uid) != r.config.ArkdUID) || (r.config.ArkdGID >= 0 && int(stat.Gid) != r.config.ArkdGID) {
+	if !ok || stat.Nlink != 1 || (r.config.OutpostdUID >= 0 && int(stat.Uid) != r.config.OutpostdUID) || (r.config.OutpostdGID >= 0 && int(stat.Gid) != r.config.OutpostdGID) {
 		file.Close()
 		return nil, vmapi.ErrInvalid
 	}
@@ -383,7 +383,7 @@ func (r *FirecrackerRuntime) Create(ctx context.Context, spec vmapi.VMSpec) erro
 	if err := r.installGuestFiles(ctx, paths, spec); err != nil {
 		return r.failCreate(paths, err)
 	}
-	if err := os.Chown(paths.stateDisk, r.config.ArkVMUID, r.config.ArkVMGID); err != nil {
+	if err := os.Chown(paths.stateDisk, r.config.OutpostVMUID, r.config.OutpostVMGID); err != nil {
 		return r.failCreate(paths, err)
 	}
 	if err := os.Chmod(paths.stateDisk, 0600); err != nil {
@@ -566,7 +566,7 @@ func (r *FirecrackerRuntime) prepareJail(paths vmPaths, m manifest) error {
 	if err := os.Chmod(paths.jailRoot, 0700); err != nil {
 		return err
 	}
-	if err := copyFile(r.config.Kernel, paths.jailKernel, r.config.ArkVMUID, r.config.ArkVMGID, 0400); err != nil {
+	if err := copyFile(r.config.Kernel, paths.jailKernel, r.config.OutpostVMUID, r.config.OutpostVMGID, 0400); err != nil {
 		return err
 	}
 	if err := os.Link(paths.stateDisk, paths.jailDisk); err != nil {
@@ -590,11 +590,11 @@ func (r *FirecrackerRuntime) prepareJail(paths vmPaths, m manifest) error {
 	if err := os.Chmod(paths.jailConfig, 0400); err != nil {
 		return err
 	}
-	return os.Chown(paths.jailConfig, r.config.ArkVMUID, r.config.ArkVMGID)
+	return os.Chown(paths.jailConfig, r.config.OutpostVMUID, r.config.OutpostVMGID)
 }
 
 func (r *FirecrackerRuntime) jailerArgs(id string) []string {
-	return []string{"--id", id, "--exec-file", r.config.Firecracker, "--uid", strconv.Itoa(r.config.ArkVMUID), "--gid", strconv.Itoa(r.config.ArkVMGID), "--chroot-base-dir", r.config.JailerBase, "--cgroup-version", "2", "--resource-limit", "no-file=1024", "--", "--api-sock", "/firecracker.sock", "--config-file", "/config.json"}
+	return []string{"--id", id, "--exec-file", r.config.Firecracker, "--uid", strconv.Itoa(r.config.OutpostVMUID), "--gid", strconv.Itoa(r.config.OutpostVMGID), "--chroot-base-dir", r.config.JailerBase, "--cgroup-version", "2", "--resource-limit", "no-file=1024", "--", "--api-sock", "/firecracker.sock", "--config-file", "/config.json"}
 }
 
 func (r *FirecrackerRuntime) cleanupBeforeLaunch(id string, m manifest, cause error) (string, error) {
@@ -992,10 +992,10 @@ func (r *FirecrackerRuntime) allocate(id string) (string, string, string, error)
 		value := n * 4
 		guest := fmt.Sprintf("172.30.%d.%d", value/256, value%256+2)
 		if !used[guest] {
-			return fmt.Sprintf("ark%04x", n), fmt.Sprintf("172.30.%d.%d", value/256, value%256+1), guest, nil
+			return fmt.Sprintf("outpost%04x", n), fmt.Sprintf("172.30.%d.%d", value/256, value%256+1), guest, nil
 		}
 	}
-	return "", "", "", errors.New("Ark /30 address space is exhausted")
+	return "", "", "", errors.New("Outpost /30 address space is exhausted")
 }
 
 func (r *FirecrackerRuntime) ensureAllocationUnique(id string, allocation manifest) error {
@@ -1035,7 +1035,7 @@ func (r *FirecrackerRuntime) networkUp(ctx context.Context, m manifest) error {
 		name string
 		args []string
 	}{
-		{name: "ip", args: []string{"tuntap", "add", "dev", m.Tap, "mode", "tap", "user", strconv.Itoa(r.config.ArkVMUID)}},
+		{name: "ip", args: []string{"tuntap", "add", "dev", m.Tap, "mode", "tap", "user", strconv.Itoa(r.config.OutpostVMUID)}},
 		{name: "ip", args: []string{"addr", "add", m.Gateway + "/30", "dev", m.Tap}},
 		{name: "ip", args: []string{"link", "set", "dev", m.Tap, "up"}},
 		{name: "nft", args: []string{"add", "table", "inet", networkTable(m)}},
@@ -1092,7 +1092,7 @@ func resourceAbsent(err error) bool {
 }
 
 func allocationValid(m manifest) bool {
-	if len(m.Tap) != 7 || !strings.HasPrefix(m.Tap, "ark") {
+	if len(m.Tap) != 11 || !strings.HasPrefix(m.Tap, "outpost") {
 		return false
 	}
 	guest := net.ParseIP(m.GuestIP)
@@ -1113,7 +1113,7 @@ func allocationValid(m manifest) bool {
 		return false
 	}
 	n := (third*256 + fourth - 2) / 4
-	return m.Tap == fmt.Sprintf("ark%04x", n) && m.Gateway == fmt.Sprintf("172.30.%d.%d", third, fourth-1)
+	return m.Tap == fmt.Sprintf("outpost%04x", n) && m.Gateway == fmt.Sprintf("172.30.%d.%d", third, fourth-1)
 }
 
 func manifestValid(m manifest) bool {

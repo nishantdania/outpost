@@ -83,7 +83,7 @@ func (h httpFake) Do(*http.Request) (*http.Response, error) {
 }
 
 func TestAPIRequiresExactOK(t *testing.T) {
-	r, _ := http.NewRequest(http.MethodGet, "http://example.test/v1/arks", nil)
+	r, _ := http.NewRequest(http.MethodGet, "http://example.test/v1/outposts", nil)
 	for _, status := range []int{http.StatusOK, http.StatusUnauthorized, http.StatusNotFound, http.StatusInternalServerError} {
 		got := API(httpFake{status}, r)
 		if got.OK != (status == http.StatusOK) {
@@ -103,19 +103,19 @@ func (f fullFake) LookupUser(name string) (*user.User, error) {
 	if name == "root" {
 		return &user.User{Uid: "0"}, nil
 	}
-	if name == "arkd" {
+	if name == "outpostd" {
 		return &user.User{Uid: "10"}, nil
 	}
-	if name == "arkvm" {
+	if name == "outpostvm" {
 		return &user.User{Uid: "11"}, nil
 	}
 	return nil, errors.New("missing")
 }
 func (f fullFake) LookupGroup(name string) (*user.Group, error) {
-	if name == "arkd" {
+	if name == "outpostd" {
 		return &user.Group{Gid: "10"}, nil
 	}
-	if name == "arkvm" {
+	if name == "outpostvm" {
 		return &user.Group{Gid: "11"}, nil
 	}
 	return nil, errors.New("missing")
@@ -131,7 +131,7 @@ func passingServer() (fullFake, ServerConfig) {
 	files := map[string]fs.FileInfo{"/dev/kvm": info{mode: fs.ModeCharDevice}, "/dev/net/tun": info{mode: fs.ModeCharDevice}, "/dev/userfaultfd": info{mode: fs.ModeCharDevice}, "/sys/fs/cgroup": info{mode: fs.ModeDir}, "/s": info{mode: fs.ModeDir | 0750, uid: 10, gid: 10}, "/j": info{mode: fs.ModeDir | 0750, gid: 11}, "/r": info{mode: fs.ModeDir | 0750, gid: 10}, "/sys/class/net/eth0": info{mode: fs.ModeDir}, "/unit": info{mode: 0644}, "/asset": info{mode: 0640}}
 	data := map[string][]byte{"/proc/sys/net/ipv4/ip_forward": []byte("1\n"), "/sys/fs/cgroup/cgroup.controllers": []byte("cpu"), "/asset": []byte("a")}
 	f := fullFake{fake: fake{files: files, data: data, commands: commands}}
-	c := ServerConfig{StateDir: "/s", JailerDir: "/j", RuntimeDir: "/r", Uplink: "eth0", Users: []string{"arkd", "arkvm"}, Groups: []string{"arkd", "arkvm"}, Directories: []Directory{{Path: "/s", Mode: 0750, User: "arkd", Group: "arkd"}, {Path: "/j", Mode: 0750, User: "root", Group: "arkvm"}, {Path: "/r", Mode: 0750, User: "root", Group: "arkd"}}, Units: []string{"/unit"}, Assets: map[string]string{"asset": "/asset"}, Manifest: map[string]string{"asset": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}}
+	c := ServerConfig{StateDir: "/s", JailerDir: "/j", RuntimeDir: "/r", Uplink: "eth0", Users: []string{"outpostd", "outpostvm"}, Groups: []string{"outpostd", "outpostvm"}, Directories: []Directory{{Path: "/s", Mode: 0750, User: "outpostd", Group: "outpostd"}, {Path: "/j", Mode: 0750, User: "root", Group: "outpostvm"}, {Path: "/r", Mode: 0750, User: "root", Group: "outpostd"}}, Units: []string{"/unit"}, Assets: map[string]string{"asset": "/asset"}, Manifest: map[string]string{"asset": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}}
 	return f, c
 }
 func TestServerCompleteOfflinePass(t *testing.T) {
@@ -181,7 +181,7 @@ func TestServerOnlineSocketOwnerAndSystemdFailures(t *testing.T) {
 	c.Online = true
 	c.Socket = "/socket"
 	c.SocketUser = "root"
-	c.SocketGroup = "arkd"
+	c.SocketGroup = "outpostd"
 	f.files["/socket"] = info{mode: fs.ModeSocket | 0660, gid: 10}
 	if Server(f, c).Failed() {
 		t.Fatal("passing online server failed")
@@ -236,15 +236,15 @@ func TestImageBuildChecksAbsentPartialAndValid(t *testing.T) {
 		t.Fatal("partial podman passed")
 	}
 	files := map[string]fs.FileInfo{}
-	for _, path := range []string{"/etc/arkd/storage.conf", "/etc/arkd/containers.conf"} {
+	for _, path := range []string{"/etc/outpostd/storage.conf", "/etc/outpostd/containers.conf"} {
 		files[path] = info{mode: 0640}
 	}
-	for _, path := range []string{"/var/lib/arkd/images", "/var/lib/arkd/podman/storage", "/run/ark/podman/storage"} {
+	for _, path := range []string{"/var/lib/outpostd/images", "/var/lib/outpostd/podman/storage", "/run/outpost/podman/storage"} {
 		files[path] = info{mode: fs.ModeDir | 0750}
 	}
-	valid := fullFake{fake: fake{files: files, data: map[string][]byte{"/etc/subuid": []byte("arkd:100000:65536\n"), "/etc/subgid": []byte("arkd:200000:65536\n"), "/etc/arkd/storage.conf": []byte("[storage]\n"), "/etc/arkd/containers.conf": []byte("cgroup_manager = \"cgroupfs\"\n")}, commands: map[string]bool{"podman": true, "newuidmap": true, "newgidmap": true, "fuse-overlayfs": true}}}
-	valid.files["/var/lib/arkd/podman/storage"] = info{mode: fs.ModeDir | 0700}
-	valid.files["/run/ark/podman/storage"] = info{mode: fs.ModeDir | 0700}
+	valid := fullFake{fake: fake{files: files, data: map[string][]byte{"/etc/subuid": []byte("outpostd:100000:65536\n"), "/etc/subgid": []byte("outpostd:200000:65536\n"), "/etc/outpostd/storage.conf": []byte("[storage]\n"), "/etc/outpostd/containers.conf": []byte("cgroup_manager = \"cgroupfs\"\n")}, commands: map[string]bool{"podman": true, "newuidmap": true, "newgidmap": true, "fuse-overlayfs": true}}}
+	valid.files["/var/lib/outpostd/podman/storage"] = info{mode: fs.ModeDir | 0700}
+	valid.files["/run/outpost/podman/storage"] = info{mode: fs.ModeDir | 0700}
 	checks := imageBuildChecks(valid)
 	if !checks[len(checks)-1].OK {
 		t.Fatalf("%+v", checks)
@@ -256,7 +256,7 @@ func TestImageBuildChecksAbsentPartialAndValid(t *testing.T) {
 	if !found["image-graphroot"] || !found["image-runroot"] {
 		t.Fatalf("%+v", checks)
 	}
-	for _, data := range [][]byte{[]byte("arkd:100000:65535\n"), []byte("arkd:nope:65536\n")} {
+	for _, data := range [][]byte{[]byte("outpostd:100000:65535\n"), []byte("outpostd:nope:65536\n")} {
 		valid.data["/etc/subuid"] = data
 		if imageBuildChecks(valid)[len(checks)-1].OK {
 			t.Fatalf("accepted %q", data)

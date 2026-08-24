@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nishantdania/ark/internal/service"
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/service"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 func TestImageRoutesRequireAuthAndAreUnavailableWithoutPodman(t *testing.T) {

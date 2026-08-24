@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nishantdania/ark/internal/ark"
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/outpost"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 const (
@@ -32,7 +32,7 @@ func New(socketPath string) *Client {
 }
 
 func (c *Client) Close() { c.http.CloseIdleConnections() }
-func (c *Client) Create(ctx context.Context, a ark.Ark) error {
+func (c *Client) Create(ctx context.Context, a outpost.Outpost) error {
 	return c.call(ctx, "/v1/create", vmapi.CreateRequest{Version: vmapi.Version, Spec: vmapi.VMSpec{ID: a.ID, ImageID: a.ImageID, VCPUs: a.VCPUs, MemoryMiB: a.MemoryMiB, DiskGiB: a.DiskGiB, SSHPublicKey: a.SSHPublicKey}}, nil)
 }
 func (c *Client) Start(ctx context.Context, id string) (string, error) {

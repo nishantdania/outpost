@@ -63,7 +63,7 @@ func (OSProbe) Access(path string) error {
 	if _, err := rand.Read(random[:]); err != nil {
 		return err
 	}
-	name := ".ark-doctor-" + hex.EncodeToString(random[:])
+	name := ".outpost-doctor-" + hex.EncodeToString(random[:])
 	file, err := unix.Openat(dir, name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
 	if err != nil {
 		return err
@@ -73,7 +73,7 @@ func (OSProbe) Access(path string) error {
 	return errors.Join(closeErr, removeErr)
 }
 func (OSProbe) Hardlink(state, jail string) error {
-	source, err := os.CreateTemp(state, ".ark-hardlink-")
+	source, err := os.CreateTemp(state, ".outpost-hardlink-")
 	if err != nil {
 		return err
 	}
@@ -211,7 +211,7 @@ func imageBuildChecks(p Probe) []Check {
 		check.Optional = true
 		checks = append(checks, check)
 	}
-	for _, path := range []string{"/etc/arkd/storage.conf", "/etc/arkd/containers.conf", "/var/lib/arkd/images", "/var/lib/arkd/podman/storage", "/run/ark/podman/storage"} {
+	for _, path := range []string{"/etc/outpostd/storage.conf", "/etc/outpostd/containers.conf", "/var/lib/outpostd/images", "/var/lib/outpostd/podman/storage", "/run/outpost/podman/storage"} {
 		check := regularOrDirectory(p, path)
 		check.Optional = true
 		checks = append(checks, check)
@@ -232,9 +232,9 @@ func imageBuildChecks(p Probe) []Check {
 }
 func imageCheckName(path string) string {
 	switch path {
-	case "/var/lib/arkd/podman/storage":
+	case "/var/lib/outpostd/podman/storage":
 		return "image-graphroot"
-	case "/run/ark/podman/storage":
+	case "/run/outpost/podman/storage":
 		return "image-runroot"
 	default:
 		return "image-" + filepath.Base(path)
@@ -246,22 +246,22 @@ func regularOrDirectory(p Probe, path string) Check {
 	if err != nil {
 		return Check{Name: name, Detail: err.Error()}
 	}
-	if path == "/etc/arkd/storage.conf" || path == "/etc/arkd/containers.conf" {
+	if path == "/etc/outpostd/storage.conf" || path == "/etc/outpostd/containers.conf" {
 		if !info.Mode().IsRegular() || info.Mode().Perm() > 0640 {
 			return Check{Name: name, Detail: "unsafe file"}
 		}
 		data, err := p.ReadFile(path)
 		want := "[storage]"
-		if path == "/etc/arkd/containers.conf" {
+		if path == "/etc/outpostd/containers.conf" {
 			want = `cgroup_manager = "cgroupfs"`
 		}
 		if err != nil || !strings.Contains(string(data), want) {
 			return Check{Name: name, Detail: "configuration is incomplete"}
 		}
-	} else if !info.IsDir() || (path == "/var/lib/arkd/images" && info.Mode().Perm() != 0750) || (path != "/var/lib/arkd/images" && info.Mode().Perm() != 0700 && info.Mode().Perm() != 0750) {
+	} else if !info.IsDir() || (path == "/var/lib/outpostd/images" && info.Mode().Perm() != 0750) || (path != "/var/lib/outpostd/images" && info.Mode().Perm() != 0700 && info.Mode().Perm() != 0750) {
 		return Check{Name: name, Detail: "wrong directory mode"}
 	}
-	if strings.HasPrefix(path, "/var/lib/arkd/") || strings.HasPrefix(path, "/run/ark/") {
+	if strings.HasPrefix(path, "/var/lib/outpostd/") || strings.HasPrefix(path, "/run/outpost/") {
 		if q, ok := p.(interface{ Access(string) error }); ok {
 			if err := q.Access(path); err != nil {
 				return Check{Name: name, Detail: err.Error()}
@@ -277,7 +277,7 @@ func subID(p Probe, path string) Check {
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		parts := strings.Split(line, ":")
-		if len(parts) != 3 || parts[0] != "arkd" {
+		if len(parts) != 3 || parts[0] != "outpostd" {
 			continue
 		}
 		start, first := strconv.ParseUint(parts[1], 10, 64)
@@ -286,7 +286,7 @@ func subID(p Probe, path string) Check {
 			return Check{Name: "image-" + filepath.Base(path), OK: true, Detail: path}
 		}
 	}
-	return Check{Name: "image-" + filepath.Base(path), Detail: "arkd needs a contiguous range of at least 65536"}
+	return Check{Name: "image-" + filepath.Base(path), Detail: "outpostd needs a contiguous range of at least 65536"}
 }
 func command(p Probe, name string) Check {
 	_, err := p.LookPath(name)

@@ -16,15 +16,15 @@ func TestRouter(t *testing.T) {
 		want   int
 	}{
 		{
-			name:   "list arks",
+			name:   "list outposts",
 			method: http.MethodGet,
-			path:   "/v1/arks",
+			path:   "/v1/outposts",
 			want:   http.StatusOK,
 		},
 		{
 			name:   "wrong method",
 			method: http.MethodPut,
-			path:   "/v1/arks",
+			path:   "/v1/outposts",
 			want:   http.StatusMethodNotAllowed,
 		},
 		{

@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nishantdania/ark/internal/remote"
+	"github.com/nishantdania/outpost/internal/remote"
 )
 
 type recordingRunner struct {

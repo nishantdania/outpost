@@ -1,4 +1,0 @@
-CREATE TABLE arks (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL
-);

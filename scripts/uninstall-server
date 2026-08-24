@@ -1,18 +1,18 @@
 #!/bin/sh
 set -eu
 [ "$#" -eq 0 ] || exit 1
-root=${ARK_UNINSTALL_ROOT:-}
-test_mode=${ARK_UNINSTALL_TEST:-0}
+root=${OUTPOST_UNINSTALL_ROOT:-}
+test_mode=${OUTPOST_UNINSTALL_TEST:-0}
 [ -z "$root" ] || [ "$test_mode" = 1 ] || exit 1
 case "$root" in ''|/*) :;; *) exit 1;; esac
 [ "$test_mode" = 1 ] || [ "$(id -u)" = 0 ] || exit 1
-log() { [ -z "${ARK_UNINSTALL_TEST_LOG:-}" ] || printf '%s\n' "$1" >> "$ARK_UNINSTALL_TEST_LOG"; }
+log() { [ -z "${OUTPOST_UNINSTALL_TEST_LOG:-}" ] || printf '%s\n' "$1" >> "$OUTPOST_UNINSTALL_TEST_LOG"; }
 remove() { if [ -e "$root$1" ] || [ -L "$root$1" ]; then rm -rf -- "$root$1"; fi; }
 inactive() { [ "$(systemctl show -p ActiveState --value "$1.service")" = inactive ]; }
 stop() { systemctl stop "$1.service" || [ "$(systemctl show -p LoadState --value "$1.service")" = not-found ]; inactive "$1"; }
 ready() {
- [ "$test_mode" = 1 ] && [ "${ARK_UNINSTALL_TEST_READY:-}" = 1 ] && return
- python3 - "$root/run/ark/vm-launcher.sock" "${ARK_UNINSTALL_READY_TIMEOUT:-30}" <<'PY'
+ [ "$test_mode" = 1 ] && [ "${OUTPOST_UNINSTALL_TEST_READY:-}" = 1 ] && return
+ python3 - "$root/run/outpost/vm-launcher.sock" "${OUTPOST_UNINSTALL_READY_TIMEOUT:-30}" <<'PY'
 import socket,sys,time
 path,timeout=sys.argv[1],int(sys.argv[2]); end=time.monotonic()+timeout
 while time.monotonic()<end:
@@ -22,60 +22,60 @@ while time.monotonic()<end:
 raise SystemExit(1)
 PY
 }
-handoff=''; created_arkd_user=''; created_arkvm_user=''; created_arkd_group=''; created_arkvm_group=''; created_subuid=''; created_subgid=''; ip_previous=''; changed_ip=''; created_sysctl=''
-file=$root/etc/arkd/uninstall.env
+handoff=''; created_outpostd_user=''; created_outpostvm_user=''; created_outpostd_group=''; created_outpostvm_group=''; created_subuid=''; created_subgid=''; ip_previous=''; changed_ip=''; created_sysctl=''
+file=$root/etc/outpostd/uninstall.env
 if [ -f "$file" ] && [ ! -L "$file" ]; then
  [ "$test_mode" = 1 ] || [ "$(stat -c %u:%a "$file")" = 0:600 ] || exit 1
  { IFS= read -r one; IFS= read -r two; IFS= read -r three; IFS= read -r four; IFS= read -r five; IFS= read -r six; IFS= read -r seven; IFS= read -r eight; IFS= read -r nine; IFS= read -r ten; IFS= read -r extra || :; } < "$file"
  [ -z "$extra" ] || exit 1
  set -- "$one" "$two" "$three" "$four" "$five" "$six" "$seven" "$eight" "$nine" "$ten"
  case "$1:$2:$3:$4:$5:$6:$7:$8:$9:${10}" in
-  ARK_HANDOFF=*:ARK_CREATED_ARKD_USER=[01]:ARK_CREATED_ARKVM_USER=[01]:ARK_CREATED_ARKD_GROUP=[01]:ARK_CREATED_ARKVM_GROUP=[01]:ARK_CREATED_ARKD_SUBUID=[01]:ARK_CREATED_ARKD_SUBGID=[01]:ARK_IP_FORWARD_PREVIOUS=[01]:ARK_CHANGED_IP_FORWARD=[01]:ARK_CREATED_SYSCTL=[01]) :;; *) exit 1;;
+  OUTPOST_HANDOFF=*:OUTPOST_CREATED_OUTPOSTD_USER=[01]:OUTPOST_CREATED_OUTPOSTVM_USER=[01]:OUTPOST_CREATED_OUTPOSTD_GROUP=[01]:OUTPOST_CREATED_OUTPOSTVM_GROUP=[01]:OUTPOST_CREATED_OUTPOSTD_SUBUID=[01]:OUTPOST_CREATED_OUTPOSTD_SUBGID=[01]:OUTPOST_IP_FORWARD_PREVIOUS=[01]:OUTPOST_CHANGED_IP_FORWARD=[01]:OUTPOST_CREATED_SYSCTL=[01]) :;; *) exit 1;;
  esac
- handoff=${1#ARK_HANDOFF=}
+ handoff=${1#OUTPOST_HANDOFF=}
  if [ "$test_mode" = 1 ]; then
-  case "$handoff" in /*/.config/ark/server.env) :;; *) exit 1;; esac
+  case "$handoff" in /*/.config/outpost/server.env) :;; *) exit 1;; esac
  else
   case "$handoff" in
-   /root/.config/ark/server.env) : ;;
-   /home/*/.config/ark/server.env)
+   /root/.config/outpost/server.env) : ;;
+   /home/*/.config/outpost/server.env)
     user=${handoff#/home/}; user=${user%%/*}
     case "$user" in ''|*[!A-Za-z0-9_.-]*) exit 1;; esac
-    [ "$handoff" = "/home/$user/.config/ark/server.env" ] || exit 1
+    [ "$handoff" = "/home/$user/.config/outpost/server.env" ] || exit 1
     ;;
    *) exit 1 ;;
   esac
  fi
- created_arkd_user=${2#*=}; created_arkvm_user=${3#*=}; created_arkd_group=${4#*=}; created_arkvm_group=${5#*=}; created_subuid=${6#*=}; created_subgid=${7#*=}; ip_previous=${8#*=}; changed_ip=${9#*=}; created_sysctl=${10#*=}
+ created_outpostd_user=${2#*=}; created_outpostvm_user=${3#*=}; created_outpostd_group=${4#*=}; created_outpostvm_group=${5#*=}; created_subuid=${6#*=}; created_subgid=${7#*=}; ip_previous=${8#*=}; changed_ip=${9#*=}; created_sysctl=${10#*=}
 fi
-launcher_load=$(systemctl show -p LoadState --value ark-vm-launcher.service)
-log stop-arkd; stop arkd || exit 1
-log stop-launcher; stop ark-vm-launcher || exit 1
+launcher_load=$(systemctl show -p LoadState --value outpost-vm-launcher.service)
+log stop-outpostd; stop outpostd || exit 1
+log stop-launcher; stop outpost-vm-launcher || exit 1
 if [ "$launcher_load" != not-found ]; then
- log reconcile-launcher; systemctl start ark-vm-launcher.service && systemctl is-active --quiet ark-vm-launcher.service && ready || exit 1
- log stop-reconciled-launcher; stop ark-vm-launcher || exit 1
+ log reconcile-launcher; systemctl start outpost-vm-launcher.service && systemctl is-active --quiet outpost-vm-launcher.service && ready || exit 1
+ log stop-reconciled-launcher; stop outpost-vm-launcher || exit 1
 fi
-systemctl disable arkd.service || [ "$(systemctl show -p LoadState --value arkd.service)" = not-found ] || exit 1
-systemctl disable ark-vm-launcher.service || [ "$launcher_load" = not-found ] || exit 1
+systemctl disable outpostd.service || [ "$(systemctl show -p LoadState --value outpostd.service)" = not-found ] || exit 1
+systemctl disable outpost-vm-launcher.service || [ "$launcher_load" = not-found ] || exit 1
 [ -z "$handoff" ] || remove "$handoff"
-[ "$created_sysctl" != 1 ] || remove /etc/sysctl.d/99-ark.conf
-remove /etc/systemd/system/arkd.service
-remove /etc/systemd/system/ark-vm-launcher.service
-remove /usr/local/bin/ark
-remove /usr/local/lib/ark
-remove /etc/arkd
-remove /var/lib/arkd
-remove /srv/ark/state
-remove /srv/ark/jailer
-rmdir -- "$root/srv/ark" 2>/dev/null || :
-remove /run/ark
+[ "$created_sysctl" != 1 ] || remove /etc/sysctl.d/99-outpost.conf
+remove /etc/systemd/system/outpostd.service
+remove /etc/systemd/system/outpost-vm-launcher.service
+remove /usr/local/bin/outpost
+remove /usr/local/lib/outpost
+remove /etc/outpostd
+remove /var/lib/outpostd
+remove /srv/outpost/state
+remove /srv/outpost/jailer
+rmdir -- "$root/srv/outpost" 2>/dev/null || :
+remove /run/outpost
 if [ "$test_mode" != 1 ]; then
- [ "$created_subuid" != 1 ] || sed -i '/^arkd:/d' /etc/subuid
- [ "$created_subgid" != 1 ] || sed -i '/^arkd:/d' /etc/subgid
- [ "$created_arkd_user" != 1 ] || userdel arkd
- [ "$created_arkvm_user" != 1 ] || userdel arkvm
- [ "$created_arkd_group" != 1 ] || groupdel arkd
- [ "$created_arkvm_group" != 1 ] || groupdel arkvm
+ [ "$created_subuid" != 1 ] || sed -i '/^outpostd:/d' /etc/subuid
+ [ "$created_subgid" != 1 ] || sed -i '/^outpostd:/d' /etc/subgid
+ [ "$created_outpostd_user" != 1 ] || userdel outpostd
+ [ "$created_outpostvm_user" != 1 ] || userdel outpostvm
+ [ "$created_outpostd_group" != 1 ] || groupdel outpostd
+ [ "$created_outpostvm_group" != 1 ] || groupdel outpostvm
  if [ "$changed_ip" = 1 ] && ! grep -Rqs '^[[:space:]]*net.ipv4.ip_forward[[:space:]]*=[[:space:]]*1[[:space:]]*$' /etc/sysctl.conf /etc/sysctl.d 2>/dev/null; then sysctl -w "net.ipv4.ip_forward=$ip_previous" >/dev/null; fi
 fi
 systemctl daemon-reload

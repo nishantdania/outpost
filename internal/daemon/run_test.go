@@ -45,7 +45,7 @@ func TestBoundedError(t *testing.T) {
 }
 
 func TestRunRejectsEmptyTokenBeforeOpeningDatabase(t *testing.T) {
-	err := run(context.Background(), Config{DatabasePath: "/path/that-must-not-be-opened/ark.db"})
+	err := run(context.Background(), Config{DatabasePath: "/path/that-must-not-be-opened/outpost.db"})
 	if !errors.Is(err, ErrTokenRequired) {
 		t.Fatalf("run() error = %v, want %v", err, ErrTokenRequired)
 	}

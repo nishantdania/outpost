@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/nishantdania/ark/internal/api"
-	"github.com/nishantdania/ark/internal/service"
+	"github.com/nishantdania/outpost/internal/api"
+	"github.com/nishantdania/outpost/internal/service"
 )
 
 func newRouter(application *service.Service, token string) http.Handler {

@@ -5,23 +5,23 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nishantdania/ark/internal/api"
-	"github.com/nishantdania/ark/internal/client"
-	"github.com/nishantdania/ark/internal/output"
+	"github.com/nishantdania/outpost/internal/api"
+	"github.com/nishantdania/outpost/internal/client"
+	"github.com/nishantdania/outpost/internal/output"
 )
 
 func newListCmd(options *rootOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List Arks",
+		Short: "List Outposts",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			arkdClient, err := client.New(options.serverURL, options.token)
+			outpostdClient, err := client.New(options.serverURL, options.token)
 			if err != nil {
-				return fmt.Errorf("create arkd client: %w", err)
+				return fmt.Errorf("create outpostd client: %w", err)
 			}
 
-			arks, err := arkdClient.ListArks(cmd.Context())
+			outposts, err := outpostdClient.ListOutposts(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -31,19 +31,19 @@ func newListCmd(options *rootOptions) *cobra.Command {
 				return err
 			}
 
-			return writer.Write(arks, arkTable(arks))
+			return writer.Write(outposts, outpostTable(outposts))
 		},
 	}
 }
 
-func arkTable(arks []api.Ark) output.Table {
+func outpostTable(outposts []api.Outpost) output.Table {
 	table := output.Table{
 		Headers: []string{"NAME", "STATUS", "IMAGE", "CPUS", "MEMORY", "DISK", "IP"},
-		Rows:    make([][]string, 0, len(arks)),
+		Rows:    make([][]string, 0, len(outposts)),
 	}
 
-	for _, ark := range arks {
-		table.Rows = append(table.Rows, []string{ark.Name, string(ark.Status), ark.ImageId, fmt.Sprint(ark.Vcpus), fmt.Sprint(ark.MemoryMib), fmt.Sprint(ark.DiskGib), ark.GuestIp})
+	for _, outpost := range outposts {
+		table.Rows = append(table.Rows, []string{outpost.Name, string(outpost.Status), outpost.ImageId, fmt.Sprint(outpost.Vcpus), fmt.Sprint(outpost.MemoryMib), fmt.Sprint(outpost.DiskGib), outpost.GuestIp})
 	}
 
 	return table
