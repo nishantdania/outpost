@@ -128,6 +128,22 @@ EOF
  install -m 0755 "$work/ark-wrapper" "$bin/ark"
  printf 'Installed Ark %s\n' "$version"
 )
+install_server_packages() {
+ local manager=${ARK_INSTALL_PACKAGE_MANAGER:-}
+ if [[ -z $manager ]]; then
+  if command -v apt-get >/dev/null 2>&1; then manager=apt; elif command -v pacman >/dev/null 2>&1; then manager=pacman; else fail 'apt-get or pacman is required'; fi
+ fi
+ case $manager in
+  apt)
+   sudo apt-get update
+   sudo apt-get install -y curl zstd iproute2 nftables e2fsprogs openssh-client rsync podman uidmap fuse-overlayfs python3
+   ;;
+  pacman)
+   sudo pacman -S --needed --noconfirm curl zstd iproute2 nftables e2fsprogs openssh rsync podman shadow fuse-overlayfs python
+   ;;
+  *) fail 'invalid package manager' ;;
+ esac
+}
 server_install() (
  local work ip uplink actual
  [[ $(uname -s) == Linux ]] || fail 'Linux is required'
@@ -137,8 +153,7 @@ server_install() (
  work=$(mktemp -d "${TMPDIR:-/tmp}/ark-server-install.XXXXXX")
  trap 'rm -rf "$work"' EXIT HUP INT TERM
  release_metadata "$work"
- sudo apt-get update
- sudo apt-get install -y curl zstd iproute2 nftables e2fsprogs openssh-client rsync podman uidmap fuse-overlayfs python3
+ install_server_packages
  ip=$(tailscale ip -4 | awk 'NR == 1 { print }')
  valid_ipv4 "$ip" || fail 'a Tailscale IPv4 address is required'
  uplink=$(ip route show default | awk 'NR == 1 { print $5 }')
