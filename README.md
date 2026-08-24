@@ -4,7 +4,7 @@ Ark runs persistent Firecracker VMs on a remote Linux server.
 
 ## Requirements
 
-- An x86-64 Ubuntu or Debian server with KVM, TUN/TAP, cgroup v2, and `/dev/userfaultfd`
+- An x86-64 Arch, Ubuntu, or Debian server with KVM, TUN/TAP, cgroup v2, and `/dev/userfaultfd`
 - Tailscale connectivity between your computer and server
 - SSH and interactive sudo access to the server
 

@@ -52,7 +52,11 @@ exec "$@"
 EOF
 cat > "$bin/apt-get" <<'EOF'
 #!/bin/sh
-printf '%s\n' "$*" >> "$ARK_TEST_LOG"
+printf 'apt-get %s\n' "$*" >> "$ARK_TEST_LOG"
+EOF
+cat > "$bin/pacman" <<'EOF'
+#!/bin/sh
+printf 'pacman %s\n' "$*" >> "$ARK_TEST_LOG"
 EOF
 cat > "$bin/tailscale" <<'EOF'
 #!/bin/sh
@@ -124,5 +128,7 @@ run ARK_INSTALL_TARGET=user@server
 rm -rf "$home/.config/ark"
 run ARK_INSTALL_MODE=server
 [ "$(stat -c %a "$home/.config/ark/server.env")" = 600 ]
-grep -q '^install -y ' "$work/log"
+grep -q '^apt-get install -y ' "$work/log"
+run ARK_INSTALL_MODE=server ARK_INSTALL_PACKAGE_MANAGER=pacman
+grep -q '^pacman -S --needed --noconfirm ' "$work/log"
 printf '%s\n' TestInstallIntegration
