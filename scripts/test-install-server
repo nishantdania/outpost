@@ -259,6 +259,23 @@ artifacts=$good; ARK_INSTALL_TEST_SYSTEMCTL=1 ARK_SYSTEMCTL_FAIL=1 run >/dev/nul
 artifacts=$good; run
 grep -Fqx 'User=arkd' "$root/etc/systemd/system/arkd.service"
 grep -q 'daemon-reload' "$work/log"
+cat > "$work/bin/systemctl" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$ARK_UNINSTALL_SYSTEMCTL_LOG"
+[ "${ARK_UNINSTALL_FAIL:-}" != "$1" ] || exit 23
+case "$1" in show) printf '%s\n' inactive;; is-active) :;; esac
+EOF
+chmod 755 "$work/bin/systemctl"
+mkdir -p "$root/unrelated"; printf keep > "$root/unrelated/file"
+if PATH="$work/bin:$PATH" ARK_UNINSTALL_ROOT="$root" ARK_UNINSTALL_TEST=1 ARK_UNINSTALL_TEST_READY=1 ARK_UNINSTALL_FAIL=start ARK_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server" >/dev/null 2>&1; then exit 1; fi
+[ -e "$root/usr/local/lib/ark" ]
+PATH="$work/bin:$PATH" ARK_UNINSTALL_ROOT="$root" ARK_UNINSTALL_TEST=1 ARK_UNINSTALL_TEST_READY=1 ARK_UNINSTALL_TEST_LOG="$work/uninstall-order" ARK_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server"
+[ "$(head -n 4 "$work/uninstall-order" | tr '\n' ' ')" = 'stop-arkd stop-launcher reconcile-launcher stop-reconciled-launcher ' ]
+grep -Fqx 'stop arkd.service' "$work/uninstall-systemctl"
+grep -Fqx 'start ark-vm-launcher.service' "$work/uninstall-systemctl"
+[ ! -e "$root/usr/local/lib/ark" ]
+[ "$(cat "$root/unrelated/file")" = keep ]
+PATH="$work/bin:$PATH" ARK_UNINSTALL_ROOT="$root" ARK_UNINSTALL_TEST=1 ARK_UNINSTALL_TEST_READY=1 ARK_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server"
 invalid_input() { rm -rf "$root"; mkdir "$root"; if env PATH="$work/bin:$PATH" ARK_INSTALL_ROOT="$root" ARK_INSTALL_TEST=1 ARK_INSTALL_UID="$(id -u)" ARK_INSTALL_GID="$(id -g)" ARK_INSTALL_HANDOFF_HOME=/client ARK_INSTALL_HANDOFF_UID="$(id -u)" ARK_INSTALL_HANDOFF_GID="$(id -g)" SUDO_UID="$(id -u)" SUDO_GID="$(id -g)" ARK_VERSION=0.1.0 ARK_UPLINK=eth0 ARK_ARTIFACT_DIR="$good" "$@" "$installer" >/dev/null 2>&1; then echo 'invalid input accepted' >&2; exit 1; fi; [ ! -e "$root/usr" ]; }
 invalid_input 'ARK_UPLINK=eth0|bad'
 invalid_input ARK_DNS=not-an-ip
