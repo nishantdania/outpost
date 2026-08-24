@@ -24,7 +24,8 @@ jobs:
       - run: go vet ./...
       - run: git diff --check
       - run: sudo apt-get update && sudo apt-get install -y shellcheck zstd
-      - run: shellcheck scripts/install-server scripts/release-artifacts scripts/test-install-server scripts/verify-toolchain images/default/build.sh images/default/test-reproducible
+      - run: shellcheck install.sh scripts/install-server scripts/release-artifacts scripts/test-install scripts/test-install-server scripts/verify-toolchain images/default/build.sh images/default/test-reproducible
+      - run: scripts/test-install
       - run: scripts/test-install-server
       - run: ARK_VERSION=0.1.0 ARK_ROOTFS_SIZE=1G SOURCE_DATE_EPOCH=1700000000 images/default/test-reproducible
   release:

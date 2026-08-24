@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT HUP INT TERM
+release=$work/release
+bin=$work/bin
+home=$work/home
+remote_home=$work/remote-home
+mkdir -p "$release" "$bin" "$home" "$remote_home"
+cat > "$release/ark" <<'EOF'
+#!/bin/sh
+printf '%s|%s|%s\n' "${ARK_SERVER:-}" "${ARK_TOKEN:-}" "${ARK_SSH_PROXY_JUMP:-}" >> "$ARK_CLIENT_LOG"
+EOF
+chmod 755 "$release/ark"
+cat > "$release/install-server" <<'EOF'
+#!/bin/sh
+mkdir -p "$HOME/.config/ark"
+if [ ! -f "$HOME/.config/ark/server.env" ]; then printf '%s\n' "ARK_SERVER=$ARK_SERVER" "ARK_TOKEN=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi=" > "$HOME/.config/ark/server.env"; fi
+chmod 600 "$HOME/.config/ark/server.env"
+EOF
+chmod 755 "$release/install-server"
+python3 - "$release" <<'PY'
+import hashlib,json,os,sys
+p=sys.argv[1]
+names=['ark','arkd','ark-vm-launcher','firecracker','jailer','vmlinux','rootfs.ext4','default','arkd.service','ark-vm-launcher.service']
+a=[]
+for n in names: a.append({'name':n,'file':n,'sha256':'0'*64,'url':'https://example.test/'+n})
+open(p+'/assets.json','w').write(json.dumps({'version':'1.2.3','architecture':'amd64','assets':a}))
+with open(p+'/checksums.txt','w') as f:
+ for n in ('ark','install-server','assets.json'):
+  h=hashlib.sha256(open(p+'/'+n,'rb').read()).hexdigest(); f.write(h+'  '+n+'\n')
+PY
+cat > "$bin/curl" <<'EOF'
+#!/bin/sh
+out=
+for arg do
+ [ "$previous" = -o ] && out=$arg
+ previous=$arg
+ url=$arg
+done
+case "$url" in
+ https://github.com/nishantdania/ark/releases/latest) printf '%s' https://github.com/nishantdania/ark/releases/tag/v1.2.3 ;;
+ https://github.com/nishantdania/ark/releases/download/v1.2.3/*) cp "$ARK_TEST_RELEASE/${url##*/}" "$out" ;;
+ https://raw.githubusercontent.com/nishantdania/ark/main/install.sh) printf '%s\n' "$url" >> "$ARK_TEST_CURL_LOG"; cat "$ARK_TEST_INSTALLER" ;;
+ *) exit 22 ;;
+esac
+EOF
+cat > "$bin/sudo" <<'EOF'
+#!/bin/sh
+exec "$@"
+EOF
+cat > "$bin/apt-get" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$ARK_TEST_LOG"
+EOF
+cat > "$bin/tailscale" <<'EOF'
+#!/bin/sh
+printf '%s\n' 100.64.0.2
+EOF
+cat > "$bin/ip" <<'EOF'
+#!/bin/sh
+printf '%s\n' 'default via 192.0.2.1 dev eth0'
+EOF
+cat > "$bin/tee" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+EOF
+cat > "$bin/sysctl" <<'EOF'
+#!/bin/sh
+:
+EOF
+cat > "$bin/ssh" <<'EOF'
+#!/bin/sh
+for arg do command=$arg; done
+IFS= read -r input
+[ "$input" = tty-input ]
+printf '%s\n' "$input" > "$ARK_TEST_SSH_STDIN_LOG"
+printf '%s\n' "$command" > "$ARK_TEST_SSH_COMMAND_LOG"
+HOME=$ARK_TEST_REMOTE_HOME ARK_INSTALL_TEST=1 ARK_TEST_RELEASE=$ARK_TEST_RELEASE ARK_TEST_INSTALLER=$ARK_TEST_INSTALLER ARK_TEST_CURL_LOG=$ARK_TEST_CURL_LOG PATH=$PATH /bin/bash -c "$command"
+EOF
+cat > "$bin/python3" <<'EOF'
+#!/bin/sh
+exit 127
+EOF
+cat > "$bin/scp" <<'EOF'
+#!/bin/sh
+cp "$ARK_TEST_REMOTE_HOME/.config/ark/server.env" "$2"
+EOF
+chmod 755 "$bin"/*
+printf '%s\n' tty-input > "$work/tty"
+run() { env HOME="$home" PATH="$bin:$PATH" ARK_INSTALL_TEST=1 ARK_INSTALL_SSH_STDIN="$work/tty" ARK_TEST_RELEASE="$release" ARK_TEST_INSTALLER="$repo/install.sh" ARK_TEST_REMOTE_HOME="$remote_home" ARK_TEST_LOG="$work/log" ARK_TEST_CURL_LOG="$work/curl.log" ARK_TEST_SSH_STDIN_LOG="$work/ssh-stdin.log" ARK_TEST_SSH_COMMAND_LOG="$work/ssh-command.log" ARK_CLIENT_LOG="$work/client.log" "$@" bash "$repo/install.sh"; }
+run ARK_INSTALL_MODE=client
+[ -x "$home/.local/bin/ark" ]
+[ -x "$home/.local/lib/ark/ark-1.2.3" ]
+[ ! -e "$home/.config/ark/server.env" ]
+cp "$release/ark" "$release/ark.good"
+printf x >> "$release/ark"
+if run ARK_INSTALL_MODE=client >/dev/null 2>&1; then exit 1; fi
+mv "$release/ark.good" "$release/ark"
+python3 - "$release" <<'PY'
+import hashlib,sys
+p=sys.argv[1]
+with open(p+'/checksums.txt','w') as f:
+ for n in ('ark','install-server','assets.json'):
+  f.write(hashlib.sha256(open(p+'/'+n,'rb').read()).hexdigest()+'  '+n+'\n')
+PY
+if run ARK_INSTALL_TARGET='bad;target' >/dev/null 2>&1; then exit 1; fi
+run ARK_INSTALL_TARGET=user@server
+[ "$(cat "$work/ssh-stdin.log")" = tty-input ]
+grep -Fqx 'https://raw.githubusercontent.com/nishantdania/ark/main/install.sh' "$work/curl.log"
+grep -Fq 'https://raw.githubusercontent.com/nishantdania/ark/main/install.sh' "$work/ssh-command.log"
+config=$home/.config/ark/server.env
+[ "$(stat -c %a "$config")" = 600 ]
+[ "$(stat -c %a "$home/.config/ark")" = 700 ]
+grep -qx 'ARK_SSH_PROXY_JUMP=user@server' "$config"
+HOME="$home" ARK_CLIENT_LOG="$work/client.log" "$home/.local/bin/ark" list
+expected='http://100.64.0.2:17890|ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi=|user@server'
+grep -qx "$expected" "$work/client.log"
+if grep -q 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi=' "$work/log"; then exit 1; fi
+before=$(sha256sum "$config")
+run ARK_INSTALL_TARGET=user@server
+[ "$before" = "$(sha256sum "$config")" ]
+rm -rf "$home/.config/ark"
+run ARK_INSTALL_MODE=server
+[ "$(stat -c %a "$home/.config/ark/server.env")" = 600 ]
+grep -q '^install -y ' "$work/log"
+printf '%s\n' TestInstallIntegration
