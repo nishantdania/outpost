@@ -2,6 +2,7 @@
 set -euo pipefail
 
 handoff_work=
+server_uninstaller_b64='IyEvYmluL3NoCnNldCAtZXUKWyAiJCMiIC1lcSAwIF0gfHwgZXhpdCAxCnJvb3Q9JHtBUktfVU5JTlNUQUxMX1JPT1Q6LX0KdGVzdF9tb2RlPSR7QVJLX1VOSU5TVEFMTF9URVNUOi0wfQpbIC16ICIkcm9vdCIgXSB8fCBbICIkdGVzdF9tb2RlIiA9IDEgXSB8fCBleGl0IDEKY2FzZSAiJHJvb3QiIGluICcnfC8qKSA6OzsgKikgZXhpdCAxOzsgZXNhYwpbICIkdGVzdF9tb2RlIiA9IDEgXSB8fCBbICIkKGlkIC11KSIgPSAwIF0gfHwgZXhpdCAxCmxvZygpIHsgWyAteiAiJHtBUktfVU5JTlNUQUxMX1RFU1RfTE9HOi19IiBdIHx8IHByaW50ZiAnJXNcbicgIiQxIiA+PiAiJEFSS19VTklOU1RBTExfVEVTVF9MT0ciOyB9CnJlbW92ZSgpIHsgaWYgWyAtZSAiJHJvb3QkMSIgXSB8fCBbIC1MICIkcm9vdCQxIiBdOyB0aGVuIHJtIC1yZiAtLSAiJHJvb3QkMSI7IGZpOyB9CmluYWN0aXZlKCkgeyBbICIkKHN5c3RlbWN0bCBzaG93IC1wIEFjdGl2ZVN0YXRlIC0tdmFsdWUgIiQxLnNlcnZpY2UiKSIgPSBpbmFjdGl2ZSBdOyB9CnN0b3AoKSB7IHN5c3RlbWN0bCBzdG9wICIkMS5zZXJ2aWNlIiB8fCBbICIkKHN5c3RlbWN0bCBzaG93IC1wIExvYWRTdGF0ZSAtLXZhbHVlICIkMS5zZXJ2aWNlIikiID0gbm90LWZvdW5kIF07IGluYWN0aXZlICIkMSI7IH0KcmVhZHkoKSB7CiBbICIkdGVzdF9tb2RlIiA9IDEgXSAmJiBbICIke0FSS19VTklOU1RBTExfVEVTVF9SRUFEWTotfSIgPSAxIF0gJiYgcmV0dXJuCiBweXRob24zIC0gIiRyb290L3J1bi9hcmsvdm0tbGF1bmNoZXIuc29jayIgIiR7QVJLX1VOSU5TVEFMTF9SRUFEWV9USU1FT1VUOi0zMH0iIDw8J1BZJwppbXBvcnQgc29ja2V0LHN5cyx0aW1lCnBhdGgsdGltZW91dD1zeXMuYXJndlsxXSxpbnQoc3lzLmFyZ3ZbMl0pOyBlbmQ9dGltZS5tb25vdG9uaWMoKSt0aW1lb3V0CndoaWxlIHRpbWUubW9ub3RvbmljKCk8ZW5kOgogdHJ5OgogIHM9c29ja2V0LnNvY2tldChzb2NrZXQuQUZfVU5JWCk7IHMuc2V0dGltZW91dCguMik7IHMuY29ubmVjdChwYXRoKTsgcy5jbG9zZSgpOyByYWlzZSBTeXN0ZW1FeGl0KDApCiBleGNlcHQgT1NFcnJvcjogdGltZS5zbGVlcCguMSkKcmFpc2UgU3lzdGVtRXhpdCgxKQpQWQp9CmhhbmRvZmY9Jyc7IGNyZWF0ZWRfYXJrZF91c2VyPScnOyBjcmVhdGVkX2Fya3ZtX3VzZXI9Jyc7IGNyZWF0ZWRfYXJrZF9ncm91cD0nJzsgY3JlYXRlZF9hcmt2bV9ncm91cD0nJzsgY3JlYXRlZF9zdWJ1aWQ9Jyc7IGNyZWF0ZWRfc3ViZ2lkPScnOyBpcF9wcmV2aW91cz0nJzsgY2hhbmdlZF9pcD0nJzsgY3JlYXRlZF9zeXNjdGw9JycKZmlsZT0kcm9vdC9ldGMvYXJrZC91bmluc3RhbGwuZW52CmlmIFsgLWYgIiRmaWxlIiBdICYmIFsgISAtTCAiJGZpbGUiIF07IHRoZW4KIFsgIiR0ZXN0X21vZGUiID0gMSBdIHx8IFsgIiQoc3RhdCAtYyAldTolYSAiJGZpbGUiKSIgPSAwOjYwMCBdIHx8IGV4aXQgMQogeyBJRlM9IHJlYWQgLXIgb25lOyBJRlM9IHJlYWQgLXIgdHdvOyBJRlM9IHJlYWQgLXIgdGhyZWU7IElGUz0gcmVhZCAtciBmb3VyOyBJRlM9IHJlYWQgLXIgZml2ZTsgSUZTPSByZWFkIC1yIHNpeDsgSUZTPSByZWFkIC1yIHNldmVuOyBJRlM9IHJlYWQgLXIgZWlnaHQ7IElGUz0gcmVhZCAtciBuaW5lOyBJRlM9IHJlYWQgLXIgdGVuOyBJRlM9IHJlYWQgLXIgZXh0cmEgfHwgOjsgfSA8ICIkZmlsZSIKIFsgLXogIiRleHRyYSIgXSB8fCBleGl0IDEKIHNldCAtLSAiJG9uZSIgIiR0d28iICIkdGhyZWUiICIkZm91ciIgIiRmaXZlIiAiJHNpeCIgIiRzZXZlbiIgIiRlaWdodCIgIiRuaW5lIiAiJHRlbiIKIGNhc2UgIiQxOiQyOiQzOiQ0OiQ1OiQ2OiQ3OiQ4OiQ5OiR7MTB9IiBpbgogIEFSS19IQU5ET0ZGPSo6QVJLX0NSRUFURURfQVJLRF9VU0VSPVswMV06QVJLX0NSRUFURURfQVJLVk1fVVNFUj1bMDFdOkFSS19DUkVBVEVEX0FSS0RfR1JPVVA9WzAxXTpBUktfQ1JFQVRFRF9BUktWTV9HUk9VUD1bMDFdOkFSS19DUkVBVEVEX0FSS0RfU1VCVUlEPVswMV06QVJLX0NSRUFURURfQVJLRF9TVUJHSUQ9WzAxXTpBUktfSVBfRk9SV0FSRF9QUkVWSU9VUz1bMDFdOkFSS19DSEFOR0VEX0lQX0ZPUldBUkQ9WzAxXTpBUktfQ1JFQVRFRF9TWVNDVEw9WzAxXSkgOjs7ICopIGV4aXQgMTs7CiBlc2FjCiBoYW5kb2ZmPSR7MSNBUktfSEFORE9GRj19CiBpZiBbICIkdGVzdF9tb2RlIiA9IDEgXTsgdGhlbgogIGNhc2UgIiRoYW5kb2ZmIiBpbiAvKi8uY29uZmlnL2Fyay9zZXJ2ZXIuZW52KSA6OzsgKikgZXhpdCAxOzsgZXNhYwogZWxzZQogIGNhc2UgIiRoYW5kb2ZmIiBpbgogICAvcm9vdC8uY29uZmlnL2Fyay9zZXJ2ZXIuZW52KSA6IDs7CiAgIC9ob21lLyovLmNvbmZpZy9hcmsvc2VydmVyLmVudikKICAgIHVzZXI9JHtoYW5kb2ZmIy9ob21lL307IHVzZXI9JHt1c2VyJSUvKn0KICAgIGNhc2UgIiR1c2VyIiBpbiAnJ3wqWyFBLVphLXowLTlfLi1dKikgZXhpdCAxOzsgZXNhYwogICAgWyAiJGhhbmRvZmYiID0gIi9ob21lLyR1c2VyLy5jb25maWcvYXJrL3NlcnZlci5lbnYiIF0gfHwgZXhpdCAxCiAgICA7OwogICAqKSBleGl0IDEgOzsKICBlc2FjCiBmaQogY3JlYXRlZF9hcmtkX3VzZXI9JHsyIyo9fTsgY3JlYXRlZF9hcmt2bV91c2VyPSR7MyMqPX07IGNyZWF0ZWRfYXJrZF9ncm91cD0kezQjKj19OyBjcmVhdGVkX2Fya3ZtX2dyb3VwPSR7NSMqPX07IGNyZWF0ZWRfc3VidWlkPSR7NiMqPX07IGNyZWF0ZWRfc3ViZ2lkPSR7NyMqPX07IGlwX3ByZXZpb3VzPSR7OCMqPX07IGNoYW5nZWRfaXA9JHs5Iyo9fTsgY3JlYXRlZF9zeXNjdGw9JHsxMCMqPX0KZmkKbGF1bmNoZXJfbG9hZD0kKHN5c3RlbWN0bCBzaG93IC1wIExvYWRTdGF0ZSAtLXZhbHVlIGFyay12bS1sYXVuY2hlci5zZXJ2aWNlKQpsb2cgc3RvcC1hcmtkOyBzdG9wIGFya2QgfHwgZXhpdCAxCmxvZyBzdG9wLWxhdW5jaGVyOyBzdG9wIGFyay12bS1sYXVuY2hlciB8fCBleGl0IDEKaWYgWyAiJGxhdW5jaGVyX2xvYWQiICE9IG5vdC1mb3VuZCBdOyB0aGVuCiBsb2cgcmVjb25jaWxlLWxhdW5jaGVyOyBzeXN0ZW1jdGwgc3RhcnQgYXJrLXZtLWxhdW5jaGVyLnNlcnZpY2UgJiYgc3lzdGVtY3RsIGlzLWFjdGl2ZSAtLXF1aWV0IGFyay12bS1sYXVuY2hlci5zZXJ2aWNlICYmIHJlYWR5IHx8IGV4aXQgMQogbG9nIHN0b3AtcmVjb25jaWxlZC1sYXVuY2hlcjsgc3RvcCBhcmstdm0tbGF1bmNoZXIgfHwgZXhpdCAxCmZpCnN5c3RlbWN0bCBkaXNhYmxlIGFya2Quc2VydmljZSB8fCBbICIkKHN5c3RlbWN0bCBzaG93IC1wIExvYWRTdGF0ZSAtLXZhbHVlIGFya2Quc2VydmljZSkiID0gbm90LWZvdW5kIF0gfHwgZXhpdCAxCnN5c3RlbWN0bCBkaXNhYmxlIGFyay12bS1sYXVuY2hlci5zZXJ2aWNlIHx8IFsgIiRsYXVuY2hlcl9sb2FkIiA9IG5vdC1mb3VuZCBdIHx8IGV4aXQgMQpbIC16ICIkaGFuZG9mZiIgXSB8fCByZW1vdmUgIiRoYW5kb2ZmIgpbICIkY3JlYXRlZF9zeXNjdGwiICE9IDEgXSB8fCByZW1vdmUgL2V0Yy9zeXNjdGwuZC85OS1hcmsuY29uZgpyZW1vdmUgL2V0Yy9zeXN0ZW1kL3N5c3RlbS9hcmtkLnNlcnZpY2UKcmVtb3ZlIC9ldGMvc3lzdGVtZC9zeXN0ZW0vYXJrLXZtLWxhdW5jaGVyLnNlcnZpY2UKcmVtb3ZlIC91c3IvbG9jYWwvYmluL2FyawpyZW1vdmUgL3Vzci9sb2NhbC9saWIvYXJrCnJlbW92ZSAvZXRjL2Fya2QKcmVtb3ZlIC92YXIvbGliL2Fya2QKcmVtb3ZlIC9zcnYvYXJrL3N0YXRlCnJlbW92ZSAvc3J2L2Fyay9qYWlsZXIKcm1kaXIgLS0gIiRyb290L3Nydi9hcmsiIDI+L2Rldi9udWxsIHx8IDoKcmVtb3ZlIC9ydW4vYXJrCmlmIFsgIiR0ZXN0X21vZGUiICE9IDEgXTsgdGhlbgogWyAiJGNyZWF0ZWRfc3VidWlkIiAhPSAxIF0gfHwgc2VkIC1pICcvXmFya2Q6L2QnIC9ldGMvc3VidWlkCiBbICIkY3JlYXRlZF9zdWJnaWQiICE9IDEgXSB8fCBzZWQgLWkgJy9eYXJrZDovZCcgL2V0Yy9zdWJnaWQKIFsgIiRjcmVhdGVkX2Fya2RfdXNlciIgIT0gMSBdIHx8IHVzZXJkZWwgYXJrZAogWyAiJGNyZWF0ZWRfYXJrdm1fdXNlciIgIT0gMSBdIHx8IHVzZXJkZWwgYXJrdm0KIFsgIiRjcmVhdGVkX2Fya2RfZ3JvdXAiICE9IDEgXSB8fCBncm91cGRlbCBhcmtkCiBbICIkY3JlYXRlZF9hcmt2bV9ncm91cCIgIT0gMSBdIHx8IGdyb3VwZGVsIGFya3ZtCiBpZiBbICIkY2hhbmdlZF9pcCIgPSAxIF0gJiYgISBncmVwIC1ScXMgJ15bWzpzcGFjZTpdXSpuZXQuaXB2NC5pcF9mb3J3YXJkW1s6c3BhY2U6XV0qPVtbOnNwYWNlOl1dKjFbWzpzcGFjZTpdXSokJyAvZXRjL3N5c2N0bC5jb25mIC9ldGMvc3lzY3RsLmQgMj4vZGV2L251bGw7IHRoZW4gc3lzY3RsIC13ICJuZXQuaXB2NC5pcF9mb3J3YXJkPSRpcF9wcmV2aW91cyIgPi9kZXYvbnVsbDsgZmkKZmkKc3lzdGVtY3RsIGRhZW1vbi1yZWxvYWQKbG9nIGNvbXBsZXRlCg=='
 fail() { printf '%s\n' "$1" >&2; exit 1; }
 usage() { printf '%s\n' 'Enter user@server for a remote server, local for this machine, or leave blank for client only.' >&2; }
 https_url() { [[ $1 =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/%+-]*)?$ ]]; }
@@ -77,7 +78,7 @@ release_metadata() {
  installer_sha=$listed_installer
 }
 client_install() (
- local home bin lib work actual client_sha
+ local home bin lib work actual client_sha uninstaller_sha
  home=${HOME:?HOME is required}
  bin=${ARK_INSTALL_BIN_DIR:-$home/.local/bin}
  lib=${ARK_INSTALL_LIB_DIR:-$home/.local/lib/ark}
@@ -92,14 +93,43 @@ client_install() (
  [[ $actual == "$client_sha" ]] || fail 'client checksum mismatch'
  install -d -m 0755 "$bin" "$lib"
  install -m 0755 "$work/ark" "$lib/ark-$version"
+ cat > "$work/ark-uninstall" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+fail() { printf '%s\n' "$1" >&2; exit 1; }
+[[ ( $# -eq 1 && $1 == uninstall ) || ( $# -eq 2 && $1 == uninstall && $2 == --yes ) ]] || fail 'usage: ark uninstall [--yes]'
+[[ ${ARK_UNINSTALL_CONFIG:-} == "$HOME/.config/ark/server.env" ]] || fail 'refusing to remove an unexpected Ark configuration path'
+if [[ $# -eq 1 ]]; then
+ [[ -r /dev/tty ]] || fail 'a terminal is required; use ark uninstall --yes for noninteractive use'
+ printf "Type uninstall to permanently remove Ark and all VMs: " >/dev/tty
+ IFS= read -r answer </dev/tty || fail 'unable to read confirmation'
+ [[ $answer == uninstall ]] || fail 'uninstall cancelled'
+fi
+if [[ ${ARK_UNINSTALL_LOCAL:-0} == 1 ]]; then
+ sudo /usr/local/lib/ark/ark-uninstall-server
+else
+ ssh -tt -- "$ARK_UNINSTALL_JUMP" 'sudo /usr/local/lib/ark/ark-uninstall-server'
+fi
+rm -f -- "$ARK_UNINSTALL_CONFIG" "$ARK_UNINSTALL_BIN" "$ARK_UNINSTALL_SELF"
+rm -f -- "$HOME/.config/ark/known_hosts" "$HOME/.config/ark/keys/id_ed25519" "$HOME/.config/ark/keys/id_ed25519.pub"
+for client in "$ARK_UNINSTALL_LIB"/ark-*; do
+ [[ -f $client && ! -L $client && ${client##*/} =~ ^ark-[0-9]+\.[0-9]+\.[0-9]+$ ]] && rm -f -- "$client"
+done
+rm -f -- "$ARK_UNINSTALL_LIB/ark-uninstall"
+rmdir -- "$ARK_UNINSTALL_LIB" "$HOME/.config/ark/keys" "$HOME/.config/ark" 2>/dev/null || :
+EOF
+ install -m 0700 "$work/ark-uninstall" "$lib/ark-uninstall"
+ uninstaller_sha=$(sha256sum "$lib/ark-uninstall" | awk '{print $1}')
  cat > "$work/ark-wrapper" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 config=\${ARK_CONFIG_FILE:-\$HOME/.config/ark/server.env}
-real=\${ARK_REAL_BINARY:-\$HOME/.local/lib/ark/ark-$version}
+real=\${ARK_REAL_BINARY:-$lib/ark-$version}
+uninstaller=$lib/ark-uninstall
 fail() { printf '%s\\n' "\$1" >&2; exit 1; }
-[[ -f \$real && ! -L \$real ]] || fail 'Ark client is not installed'
-[[ \$(sha256sum "\$real" | awk '{print \$1}') == $client_sha ]] || fail 'Ark client checksum mismatch'
+if [[ ( \$# -eq 1 && \$1 == uninstall ) || ( \$# -eq 2 && \$1 == uninstall && \$2 == --yes ) ]]; then
+ [[ -e \$config ]] || fail 'invalid Ark configuration'
+fi
 if [[ -e \$config ]]; then
  [[ -f \$config && ! -L \$config ]] || fail 'invalid Ark configuration'
  mode=\$(stat -c %a "\$config")
@@ -118,11 +148,22 @@ if [[ -e \$config ]]; then
  done < "\$config"
  valid_ipv4() { local IFS=. a b c d extra octet; read -r a b c d extra <<< "\$1"; [[ -z \${extra:-} && -n \${a:-} && -n \${b:-} && -n \${c:-} && -n \${d:-} ]] || return 1; for octet in "\$a" "\$b" "\$c" "\$d"; do [[ \$octet =~ ^[0-9]{1,3}\$ ]] && ((10#\$octet <= 255)) || return 1; done; }
  valid_server() { local address host port; [[ \$1 =~ ^https?://[^/]+\$ ]] || return 1; address=\${1#*://}; host=\${address%:*}; port=\${address##*:}; [[ \$host != "\$address" && \$port =~ ^[1-9][0-9]{0,4}\$ ]] && ((10#\$port <= 65535)) && valid_ipv4 "\$host"; }
- [[ \$count -eq 3 && \$token =~ ^[A-Za-z0-9+/=]{20,256}\$ && \$jump =~ ^[A-Za-z_][A-Za-z0-9_-]{0,31}@[A-Za-z0-9][A-Za-z0-9.-]{0,251}\$ && \$jump != *..* ]] && valid_server "\$server" || fail 'invalid Ark configuration'
+ local_config=0
+ if [[ \$count -eq 2 && -z \$jump ]]; then local_config=1; elif [[ \$count -eq 3 && \$jump =~ ^[A-Za-z_][A-Za-z0-9_-]{0,31}@[A-Za-z0-9][A-Za-z0-9.-]{0,251}\$ && \$jump != *..* ]]; then :; else fail 'invalid Ark configuration'; fi
+ [[ \$token =~ ^[A-Za-z0-9+/=]{20,256}\$ ]] && valid_server "\$server" || fail 'invalid Ark configuration'
  [[ -n \${ARK_SERVER:-} ]] || export ARK_SERVER=\$server
  [[ -n \${ARK_TOKEN:-} ]] || export ARK_TOKEN=\$token
- [[ -n \${ARK_SSH_PROXY_JUMP:-} ]] || export ARK_SSH_PROXY_JUMP=\$jump
+ [[ \$local_config == 1 || -n \${ARK_SSH_PROXY_JUMP:-} ]] || export ARK_SSH_PROXY_JUMP=\$jump
+ if [[ ( \$# -eq 1 && \$1 == uninstall ) || ( \$# -eq 2 && \$1 == uninstall && \$2 == --yes ) ]]; then
+  [[ \$config == "\$HOME/.config/ark/server.env" ]] || fail 'refusing to remove an unexpected Ark configuration path'
+  [[ -f \$uninstaller && ! -L \$uninstaller ]] || fail 'Ark uninstaller is not installed'
+  [[ \$(sha256sum "\$uninstaller" | awk '{print \$1}') == $uninstaller_sha ]] || fail 'Ark uninstaller checksum mismatch'
+  export ARK_UNINSTALL_CONFIG=\$config ARK_UNINSTALL_JUMP=\$jump ARK_UNINSTALL_LOCAL=\$local_config ARK_UNINSTALL_BIN=$bin/ark ARK_UNINSTALL_LIB=$lib ARK_UNINSTALL_SELF=\$uninstaller
+  exec "\$uninstaller" "\$@"
+ fi
 fi
+[[ -f \$real && ! -L \$real ]] || fail 'Ark client is not installed'
+[[ \$(sha256sum "\$real" | awk '{print \$1}') == $client_sha ]] || fail 'Ark client checksum mismatch'
 exec "\$real" "\$@"
 EOF
  install -m 0755 "$work/ark-wrapper" "$bin/ark"
@@ -148,12 +189,44 @@ install_server_packages() {
   *) fail 'invalid package manager' ;;
  esac
 }
+validate_handoff() {
+ local handoff=$1 account_home
+ if [[ ${ARK_INSTALL_TEST:-0} == 1 ]]; then
+  [[ $handoff == "$HOME/.config/ark/server.env" ]] || fail 'invalid client handoff path'
+ else
+  account_home=$(getent passwd "$(id -u)" | awk -F: 'NR == 1 && NF == 7 { print $6 }')
+  [[ $account_home =~ ^(/home/[A-Za-z0-9_.-]+|/root)$ && $handoff == "$account_home/.config/ark/server.env" ]] || fail 'invalid client handoff path'
+ fi
+}
+load_uninstall_marker() {
+ local marker
+ if ! sudo test -e /etc/arkd/uninstall.env; then return 1; fi
+ [[ $(sudo stat -c '%F:%a:%u:%g' /etc/arkd/uninstall.env) == 'regular file:600:0:0' ]] || fail 'invalid Ark uninstall marker'
+ marker=$(sudo cat /etc/arkd/uninstall.env) || fail 'invalid Ark uninstall marker'
+ mapfile -t marker_lines <<< "$marker"
+ [[ ${#marker_lines[@]} == 10 ]] || fail 'invalid Ark uninstall marker'
+ [[ ${marker_lines[0]} =~ ^ARK_HANDOFF=(/home/[A-Za-z0-9_.-]+|/root)/\.config/ark/server\.env$ && ${marker_lines[1]} =~ ^ARK_CREATED_ARKD_USER=[01]$ && ${marker_lines[2]} =~ ^ARK_CREATED_ARKVM_USER=[01]$ && ${marker_lines[3]} =~ ^ARK_CREATED_ARKD_GROUP=[01]$ && ${marker_lines[4]} =~ ^ARK_CREATED_ARKVM_GROUP=[01]$ && ${marker_lines[5]} =~ ^ARK_CREATED_ARKD_SUBUID=[01]$ && ${marker_lines[6]} =~ ^ARK_CREATED_ARKD_SUBGID=[01]$ && ${marker_lines[7]} =~ ^ARK_IP_FORWARD_PREVIOUS=[01]$ && ${marker_lines[8]} =~ ^ARK_CHANGED_IP_FORWARD=[01]$ && ${marker_lines[9]} =~ ^ARK_CREATED_SYSCTL=[01]$ ]] || fail 'invalid Ark uninstall marker'
+ created_arkd_user=${marker_lines[1]#*=}; created_arkvm_user=${marker_lines[2]#*=}; created_arkd_group=${marker_lines[3]#*=}; created_arkvm_group=${marker_lines[4]#*=}; created_subuid=${marker_lines[5]#*=}; created_subgid=${marker_lines[6]#*=}; ip_previous=${marker_lines[7]#*=}; changed_ip=${marker_lines[8]#*=}; created_sysctl=${marker_lines[9]#*=}
+ return 0
+}
+install_server_helper() {
+ local handoff
+ handoff=${ARK_CLIENT_HANDOFF:-$HOME/.config/ark/server.env}
+ validate_handoff "$handoff"
+ printf '%s' "$server_uninstaller_b64" | base64 -d | sudo install -o root -g root -m 0700 /dev/stdin /usr/local/lib/ark/ark-uninstall-server
+ printf 'ARK_HANDOFF=%s\nARK_CREATED_ARKD_USER=%s\nARK_CREATED_ARKVM_USER=%s\nARK_CREATED_ARKD_GROUP=%s\nARK_CREATED_ARKVM_GROUP=%s\nARK_CREATED_ARKD_SUBUID=%s\nARK_CREATED_ARKD_SUBGID=%s\nARK_IP_FORWARD_PREVIOUS=%s\nARK_CHANGED_IP_FORWARD=%s\nARK_CREATED_SYSCTL=%s\n' "$handoff" "$created_arkd_user" "$created_arkvm_user" "$created_arkd_group" "$created_arkvm_group" "$created_subuid" "$created_subgid" "$ip_previous" "$changed_ip" "$created_sysctl" | sudo tee /etc/arkd/uninstall.env >/dev/null
+ sudo chown root:root /etc/arkd/uninstall.env
+ sudo chmod 0600 /etc/arkd/uninstall.env
+}
 server_install() (
- local work ip uplink actual
+ local work ip uplink actual handoff created_arkd_user created_arkvm_user created_arkd_group created_arkvm_group created_subuid created_subgid ip_previous changed_ip created_sysctl
  [[ $(uname -s) == Linux ]] || fail 'Linux is required'
  [[ $(uname -m) == x86_64 ]] || fail 'x86-64 is required'
  command -v sudo >/dev/null 2>&1 || fail 'sudo is required'
  command -v tailscale >/dev/null 2>&1 || fail 'Tailscale is required'
+ handoff=${ARK_CLIENT_HANDOFF:-$HOME/.config/ark/server.env}
+ validate_handoff "$handoff"
+ load_uninstall_marker || true
  install_server_packages
  work=$(mktemp -d "${TMPDIR:-/tmp}/ark-server-install.XXXXXX")
  trap 'rm -rf "$work"' EXIT HUP INT TERM
@@ -165,16 +238,32 @@ server_install() (
  if [[ ${ARK_INSTALL_TEST:-0} != 1 ]]; then
   [[ -r /dev/kvm && -c /dev/net/tun && -c /dev/userfaultfd && -f /sys/fs/cgroup/cgroup.controllers ]] || fail 'KVM, TUN, userfaultfd, and cgroup v2 are required'
  fi
- printf '%s\n' 'net.ipv4.ip_forward=1' | sudo tee /etc/sysctl.d/99-ark.conf >/dev/null
- sudo sysctl --system >/dev/null
+ if [[ -z ${created_arkd_user:-} ]]; then
+  created_arkd_user=0; created_arkvm_user=0; created_arkd_group=0; created_arkvm_group=0; created_subuid=0; created_subgid=0
+  id arkd >/dev/null 2>&1 || created_arkd_user=1
+  id arkvm >/dev/null 2>&1 || created_arkvm_user=1
+  getent group arkd >/dev/null || created_arkd_group=1
+  getent group arkvm >/dev/null || created_arkvm_group=1
+  grep -q '^arkd:' /etc/subuid 2>/dev/null || created_subuid=1
+  grep -q '^arkd:' /etc/subgid 2>/dev/null || created_subgid=1
+  ip_previous=$(sysctl -n net.ipv4.ip_forward); [[ $ip_previous =~ ^[01]$ ]] || fail 'invalid IPv4 forwarding state'
+  changed_ip=0; [[ $ip_previous == 1 ]] || changed_ip=1; created_sysctl=1
+ fi
+ if [[ -e /etc/sysctl.d/99-ark.conf || -L /etc/sysctl.d/99-ark.conf ]]; then
+  [[ -f /etc/sysctl.d/99-ark.conf && ! -L /etc/sysctl.d/99-ark.conf && $(cat /etc/sysctl.d/99-ark.conf) == net.ipv4.ip_forward=1 ]] || fail 'Ark sysctl path contains unexpected content'
+ else
+  printf '%s\n' 'net.ipv4.ip_forward=1' | sudo tee /etc/sysctl.d/99-ark.conf >/dev/null
+ fi
+ sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
  actual=$(sha256sum "$work/install-server" | awk '{print $1}')
  [[ $actual == "$installer_sha" ]] || fail 'server installer checksum mismatch'
- sudo env ARK_VERSION="$version" ARK_UPLINK="$uplink" ARK_LISTEN="$ip:17890" ARK_SERVER="http://$ip:17890" ARK_RELEASE_URL="$release" ARK_ASSETS_MANIFEST_SHA256="$manifest_sha" sh "$work/install-server"
+ sudo env ARK_VERSION="$version" ARK_UPLINK="$uplink" ARK_LISTEN="$ip:17890" ARK_SERVER="http://$ip:17890" ARK_CLIENT_HANDOFF="$handoff" ARK_RELEASE_URL="$release" ARK_ASSETS_MANIFEST_SHA256="$manifest_sha" sh "$work/install-server"
+ install_server_helper
 )
 main() {
  local mode=${ARK_INSTALL_MODE:-} target=${ARK_INSTALL_TARGET:-} work server token config_dir config_tmp
  case $mode in ''|client|server) ;; *) fail 'invalid ARK_INSTALL_MODE' ;; esac
- if [[ $mode == server || $target == local ]]; then server_install; return; fi
+ if [[ $mode == server || $target == local ]]; then client_install; server_install; return; fi
  if [[ -z $target && $mode != client ]]; then
   [[ -r /dev/tty ]] || fail 'no terminal available; set ARK_INSTALL_MODE=client, server, or ARK_INSTALL_TARGET for automation'
   printf 'Ark server (user@server, local, or blank for client only): ' >/dev/tty

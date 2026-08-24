@@ -14,7 +14,7 @@ Ark runs persistent Firecracker VMs on a remote Linux server.
 curl -fsSL https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh | bash
 ```
 
-The installer asks for `user@server` to install both the client and remote server, `local` to install a server on this machine, or nothing for the client only. It installs `ark` in `~/.local/bin`; after a remote install, `ark list` works immediately. On Arch, required packages must already be installed; Ark never upgrades the system.
+The installer asks for `user@server` to install both the client and remote server, `local` to install a server on this machine, or nothing for the client only. It installs `ark` in `~/.local/bin`; after a remote install, `ark list` works immediately. On Arch, required packages must already be installed; Ark never upgrades the system. Re-run the installer before using `ark uninstall`; it confirms `uninstall` (or accepts `--yes`) and removes the configured server and local Ark files.
 
 ## Usage
 
@@ -31,4 +31,5 @@ ark delete dev
 ark image list
 ark image build -t coding:latest ./images/coding
 ark create coding --image coding:latest --cpus 4 --memory 8G --disk 32G
+ark uninstall
 ```
