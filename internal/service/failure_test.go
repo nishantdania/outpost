@@ -6,27 +6,27 @@ import (
 	"testing"
 
 	"github.com/nishantdania/outpost/internal/outpost"
-	"github.com/nishantdania/outpost/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/testutil"
 )
 
 func TestManagerFailuresAreRetained(t *testing.T) {
 	failure := errors.New("manager failed")
 	for _, test := range []struct {
 		name    string
-		manager *vmapi.FakeManager
+		manager *testutil.FakeManager
 		action  func(*Service) error
 		desired string
 	}{
-		{"create", &vmapi.FakeManager{CreateFunc: func(context.Context, outpost.Outpost) error { return failure }}, func(s *Service) error { _, err := s.Create(context.Background(), input("demo")); return err }, outpost.DesiredRunning},
-		{"start", &vmapi.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "", failure }}, func(s *Service) error { _, err := s.Create(context.Background(), input("demo")); return err }, outpost.DesiredRunning},
-		{"stop", &vmapi.FakeManager{StopFunc: func(context.Context, string) error { return failure }}, func(s *Service) error {
+		{"create", &testutil.FakeManager{CreateFunc: func(context.Context, outpost.Outpost) error { return failure }}, func(s *Service) error { _, err := s.Create(context.Background(), input("demo")); return err }, outpost.DesiredRunning},
+		{"start", &testutil.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "", failure }}, func(s *Service) error { _, err := s.Create(context.Background(), input("demo")); return err }, outpost.DesiredRunning},
+		{"stop", &testutil.FakeManager{StopFunc: func(context.Context, string) error { return failure }}, func(s *Service) error {
 			if _, err := s.Create(context.Background(), input("demo")); err != nil {
 				return err
 			}
 			_, err := s.Stop(context.Background(), "demo")
 			return err
 		}, outpost.DesiredStopped},
-		{"delete", &vmapi.FakeManager{DeleteFunc: func(context.Context, string) error { return failure }}, func(s *Service) error {
+		{"delete", &testutil.FakeManager{DeleteFunc: func(context.Context, string) error { return failure }}, func(s *Service) error {
 			if _, err := s.Create(context.Background(), input("demo")); err != nil {
 				return err
 			}

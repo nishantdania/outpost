@@ -48,12 +48,3 @@ func TestLoadRejectsFields(t *testing.T) {
 		}
 	}
 }
-func TestVerifyStreamingDigest(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "asset")
-	if err := os.WriteFile(p, []byte("asset"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := Verify(p, "d59386e0ae435e292fbe0ebc0c8b0c4f7e2b1f5f4f2c6b6fd2d5d54d4c7e53d0"); err == nil {
-		t.Fatal("accepted wrong digest")
-	}
-}

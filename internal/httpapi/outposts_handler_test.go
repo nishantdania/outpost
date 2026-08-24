@@ -12,7 +12,7 @@ import (
 	"github.com/nishantdania/outpost/internal/api"
 	"github.com/nishantdania/outpost/internal/outpost"
 	"github.com/nishantdania/outpost/internal/service"
-	"github.com/nishantdania/outpost/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/testutil"
 )
 
 func TestCreateOutpostAndListOutposts(t *testing.T) {
@@ -118,7 +118,7 @@ func createOutpost(t *testing.T, handler handler, name string) *httptest.Respons
 
 func testHandler(t *testing.T, store *outpost.Store) handler {
 	t.Helper()
-	return handler{service: service.New(store, &vmapi.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "172.30.0.2", nil }})}
+	return handler{service: service.New(store, &testutil.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "172.30.0.2", nil }})}
 }
 
 func newTestStore(t *testing.T) *outpost.Store {

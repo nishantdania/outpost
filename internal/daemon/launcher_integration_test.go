@@ -15,12 +15,13 @@ import (
 	"github.com/nishantdania/outpost/internal/launcherclient"
 	"github.com/nishantdania/outpost/internal/outpost"
 	"github.com/nishantdania/outpost/internal/service"
+	"github.com/nishantdania/outpost/internal/testutil"
 )
 
 func TestOutpostdLifecycleCrossesLauncherUnixSocket(t *testing.T) {
 	directory := t.TempDir()
 	socket := filepath.Join(directory, "launcher.sock")
-	launcherServer, err := launcher.NewServer(launcher.Config{SocketPath: socket, RuntimeDir: directory, StateDir: filepath.Join(directory, "state"), SocketGID: -1, Authorize: func(int) bool { return true }}, launcher.NewMemoryRuntime())
+	launcherServer, err := launcher.NewServer(launcher.Config{SocketPath: socket, RuntimeDir: directory, StateDir: filepath.Join(directory, "state"), SocketGID: -1, Authorize: func(int) bool { return true }}, testutil.NewMemoryRuntime())
 	if err != nil {
 		t.Fatal(err)
 	}
