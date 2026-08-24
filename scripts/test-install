@@ -74,6 +74,12 @@ cat > "$bin/sysctl" <<'EOF'
 #!/bin/sh
 :
 EOF
+for command in podman fuse-overlayfs; do
+ cat > "$bin/$command" <<'EOF'
+#!/bin/sh
+:
+EOF
+done
 cat > "$bin/ssh" <<'EOF'
 #!/bin/sh
 for arg do command=$arg; done
@@ -85,7 +91,7 @@ HOME=$ARK_TEST_REMOTE_HOME ARK_INSTALL_TEST=1 ARK_TEST_RELEASE=$ARK_TEST_RELEASE
 EOF
 cat > "$bin/python3" <<'EOF'
 #!/bin/sh
-exit 127
+[ "${ARK_TEST_BROKEN_PYTHON:-0}" != 1 ]
 EOF
 cat > "$bin/scp" <<'EOF'
 #!/bin/sh
@@ -129,6 +135,8 @@ rm -rf "$home/.config/ark"
 run ARK_INSTALL_MODE=server
 [ "$(stat -c %a "$home/.config/ark/server.env")" = 600 ]
 grep -q '^apt-get install -y ' "$work/log"
+before=$(grep -c '^pacman ' "$work/log" || true)
 run ARK_INSTALL_MODE=server ARK_INSTALL_PACKAGE_MANAGER=pacman
-grep -q '^pacman -S --needed --noconfirm ' "$work/log"
+[ "$before" = "$(grep -c '^pacman ' "$work/log" || true)" ]
+if run ARK_INSTALL_MODE=server ARK_INSTALL_PACKAGE_MANAGER=pacman ARK_TEST_BROKEN_PYTHON=1 >/dev/null 2>&1; then exit 1; fi
 printf '%s\n' TestInstallIntegration
