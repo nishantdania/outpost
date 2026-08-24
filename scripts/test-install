@@ -42,7 +42,7 @@ done
 case "$url" in
  https://github.com/nishantdania/ark/releases/latest) printf '%s' https://github.com/nishantdania/ark/releases/tag/v1.2.3 ;;
  https://github.com/nishantdania/ark/releases/download/v1.2.3/*) cp "$ARK_TEST_RELEASE/${url##*/}" "$out" ;;
- https://raw.githubusercontent.com/nishantdania/ark/main/install.sh) printf '%s\n' "$url" >> "$ARK_TEST_CURL_LOG"; cat "$ARK_TEST_INSTALLER" ;;
+ https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh) printf '%s\n' "$url" >> "$ARK_TEST_CURL_LOG"; cat "$ARK_TEST_INSTALLER" ;;
  *) exit 22 ;;
 esac
 EOF
@@ -112,8 +112,8 @@ PY
 if run ARK_INSTALL_TARGET='bad;target' >/dev/null 2>&1; then exit 1; fi
 run ARK_INSTALL_TARGET=user@server
 [ "$(cat "$work/ssh-stdin.log")" = tty-input ]
-grep -Fqx 'https://raw.githubusercontent.com/nishantdania/ark/main/install.sh' "$work/curl.log"
-grep -Fq 'https://raw.githubusercontent.com/nishantdania/ark/main/install.sh' "$work/ssh-command.log"
+grep -Fqx 'https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh' "$work/curl.log"
+grep -Fq 'https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh' "$work/ssh-command.log"
 config=$home/.config/ark/server.env
 [ "$(stat -c %a "$config")" = 600 ]
 [ "$(stat -c %a "$home/.config/ark")" = 700 ]

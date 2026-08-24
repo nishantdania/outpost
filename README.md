@@ -11,7 +11,7 @@ Ark runs persistent Firecracker VMs on a remote Linux server.
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nishantdania/ark/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh | bash
 ```
 
 The installer asks for `user@server` to install both the client and remote server, `local` to install a server on this machine, or nothing for the client only. It installs `ark` in `~/.local/bin`; after a remote install, `ark list` works immediately.

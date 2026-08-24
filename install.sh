@@ -188,7 +188,7 @@ main() {
  handoff_work=$work
  trap 'rm -rf "$handoff_work"' EXIT HUP INT TERM
  local remote_script remote_command ssh_stdin
- printf -v remote_script 'set -o pipefail; curl --fail --location --proto %q --tlsv1.2 %q | ARK_INSTALL_MODE=server ARK_RELEASE_URL=%q ARK_RELEASE_VERSION=%q ARK_ASSETS_MANIFEST_SHA256=%q ARK_INSTALL_SERVER_SHA256=%q bash' '=https' 'https://raw.githubusercontent.com/nishantdania/ark/main/install.sh' "$release" "$version" "$manifest_sha" "$installer_sha"
+ printf -v remote_script 'set -o pipefail; curl --fail --location --proto %q --tlsv1.2 %q | ARK_INSTALL_MODE=server ARK_RELEASE_URL=%q ARK_RELEASE_VERSION=%q ARK_ASSETS_MANIFEST_SHA256=%q ARK_INSTALL_SERVER_SHA256=%q bash' '=https' 'https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh' "$release" "$version" "$manifest_sha" "$installer_sha"
  printf -v remote_command 'bash -c %q' "$remote_script"
  ssh_stdin=${ARK_INSTALL_SSH_STDIN:-/dev/tty}
  [[ $ssh_stdin == /dev/tty || ${ARK_INSTALL_TEST:-0} == 1 ]] || fail 'SSH input must be /dev/tty'
