@@ -737,54 +737,6 @@ func scrubArchiveName(name string) bool {
 	return name == ".dockerenv" || name == "run/.containerenv" || name == "etc/machine-id" || name == "var/lib/dbus/machine-id" || name == "var/lib/systemd/random-seed" || strings.HasPrefix(name, "etc/ssh/ssh_host_") || strings.HasSuffix(name, "/.ssh/authorized_keys") || name == "root/.ssh/authorized_keys"
 }
 
-func directoryUsage(root string) (int64, error) {
-	var used int64
-	err := filepath.Walk(root, func(_ string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.Mode().IsRegular() {
-			used += info.Size()
-		}
-		return nil
-	})
-	return used, err
-}
-func contentSeed(root string) ([]byte, error) {
-	h := sha256.New()
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(root, path)
-		uid, gid := int64(0), int64(0)
-		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
-			uid, gid = int64(stat.Uid), int64(stat.Gid)
-		}
-		io.WriteString(h, filepath.ToSlash(rel)+"\x00"+info.Mode().String()+"\x00"+strconv.FormatInt(uid, 10)+":"+strconv.FormatInt(gid, 10)+"\x00")
-		if info.Mode()&os.ModeSymlink != 0 {
-			link, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			io.WriteString(h, link+"\x00")
-		}
-		if info.Mode().IsRegular() {
-			f, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(h, f)
-			closeErr := f.Close()
-			if err == nil {
-				err = closeErr
-			}
-			return err
-		}
-		return nil
-	})
-	return h.Sum(nil), err
-}
 func seedUUID(seed []byte) string {
 	v := append([]byte(nil), seed[:16]...)
 	v[6] = v[6]&0x0f | 0x40

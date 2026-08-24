@@ -15,12 +15,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/nishantdania/outpost/internal/launcherclient"
 	"github.com/nishantdania/outpost/internal/outpost"
+	"github.com/nishantdania/outpost/internal/testutil"
 	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 func TestServerLifecycleAndSocketPermissions(t *testing.T) {
 	socket := filepath.Join(t.TempDir(), "run", "launcher.sock")
-	server, err := NewServer(Config{SocketPath: socket, RuntimeDir: filepath.Dir(socket), StateDir: filepath.Join(t.TempDir(), "state"), SocketGID: -1, AllowedUID: os.Getuid()}, NewMemoryRuntime())
+	server, err := NewServer(Config{SocketPath: socket, RuntimeDir: filepath.Dir(socket), StateDir: filepath.Join(t.TempDir(), "state"), SocketGID: -1, AllowedUID: os.Getuid()}, testutil.NewMemoryRuntime())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +72,7 @@ func TestServerLifecycleAndSocketPermissions(t *testing.T) {
 
 func TestServerRejectsMalformedProtocol(t *testing.T) {
 	socket := filepath.Join(t.TempDir(), "launcher.sock")
-	server, err := NewServer(Config{SocketPath: socket, RuntimeDir: filepath.Dir(socket), StateDir: filepath.Join(t.TempDir(), "state"), SocketGID: -1, AllowedUID: os.Getuid()}, NewMemoryRuntime())
+	server, err := NewServer(Config{SocketPath: socket, RuntimeDir: filepath.Dir(socket), StateDir: filepath.Join(t.TempDir(), "state"), SocketGID: -1, AllowedUID: os.Getuid()}, testutil.NewMemoryRuntime())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestServerRejectsMalformedProtocol(t *testing.T) {
 
 func TestServerRejectsUnauthorizedPeer(t *testing.T) {
 	socket := filepath.Join(t.TempDir(), "launcher.sock")
-	server, err := NewServer(Config{SocketPath: socket, RuntimeDir: filepath.Dir(socket), StateDir: filepath.Join(t.TempDir(), "state"), SocketGID: -1, Authorize: func(int) bool { return false }}, NewMemoryRuntime())
+	server, err := NewServer(Config{SocketPath: socket, RuntimeDir: filepath.Dir(socket), StateDir: filepath.Join(t.TempDir(), "state"), SocketGID: -1, Authorize: func(int) bool { return false }}, testutil.NewMemoryRuntime())
 	if err != nil {
 		t.Fatal(err)
 	}

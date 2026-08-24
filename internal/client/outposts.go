@@ -6,16 +6,11 @@ import (
 	"net/http"
 
 	"github.com/nishantdania/outpost/internal/api"
-	"github.com/nishantdania/outpost/internal/outpost"
 )
 
 type CreateOutpostInput struct {
 	Name, ImageID, SSHPublicKey string
 	VCPUs, MemoryMiB, DiskGiB   int
-}
-
-func (c *Client) CreateOutpost(ctx context.Context, name string) (api.Outpost, error) {
-	return c.CreateOutpostWith(ctx, CreateOutpostInput{Name: name, ImageID: outpost.DefaultImageID, VCPUs: outpost.DefaultVCPUs, MemoryMiB: outpost.DefaultMemoryMiB, DiskGiB: outpost.DefaultDiskGiB})
 }
 
 func (c *Client) CreateOutpostWith(ctx context.Context, input CreateOutpostInput) (api.Outpost, error) {

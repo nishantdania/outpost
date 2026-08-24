@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	"github.com/nishantdania/outpost/internal/outpost"
-	"github.com/nishantdania/outpost/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/testutil"
 )
 
 func TestLifecycleTransitions(t *testing.T) {
 	store := testStore(t)
-	manager := &vmapi.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "172.30.0.2", nil }}
+	manager := &testutil.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "172.30.0.2", nil }}
 	application := New(store, manager)
 	created, err := application.Create(context.Background(), input("demo"))
 	if err != nil {
@@ -54,7 +54,7 @@ func TestLifecycleTransitions(t *testing.T) {
 
 func TestFailureIsRetainedAndInvalidTransitionDoesNotCallManager(t *testing.T) {
 	store := testStore(t)
-	manager := &vmapi.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "", errors.New("boot failed") }}
+	manager := &testutil.FakeManager{StartFunc: func(context.Context, string) (string, error) { return "", errors.New("boot failed") }}
 	application := New(store, manager)
 	if _, err := application.Create(context.Background(), input("demo")); err == nil {
 		t.Fatal("Create() error = nil, want error")
@@ -83,7 +83,7 @@ func TestStaleTransitionIsRejected(t *testing.T) {
 	if _, err := store.Transition(context.Background(), created.ID, outpost.StatusStopped, outpost.DesiredRunning, outpost.StatusProvisioning, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	application := New(store, &vmapi.FakeManager{})
+	application := New(store, &testutil.FakeManager{})
 	if _, err := application.transition(context.Background(), created.ID, outpost.StatusStopped, outpost.DesiredRunning, outpost.StatusProvisioning, "", ""); !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("transition error = %v, want %v", err, ErrInvalidState)
 	}

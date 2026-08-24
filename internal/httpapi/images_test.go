@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/nishantdania/outpost/internal/service"
-	"github.com/nishantdania/outpost/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/testutil"
 )
 
 func TestImageRoutesRequireAuthAndAreUnavailableWithoutPodman(t *testing.T) {
-	router := newRouter(service.New(newTestStore(t), &vmapi.FakeManager{}), "token")
+	router := newRouter(service.New(newTestStore(t), &testutil.FakeManager{}), "token")
 	for _, request := range []*http.Request{
 		httptest.NewRequest(http.MethodGet, "/v1/images", nil),
 		httptest.NewRequest(http.MethodPost, "/v1/images?tag=coding:latest", strings.NewReader("x")),
@@ -43,7 +43,7 @@ func TestImageRoutesRequireAuthAndAreUnavailableWithoutPodman(t *testing.T) {
 }
 
 func TestImageUploadRejectsExactWrongContentType(t *testing.T) {
-	router := newRouter(service.New(newTestStore(t), &vmapi.FakeManager{}), "token")
+	router := newRouter(service.New(newTestStore(t), &testutil.FakeManager{}), "token")
 	request := httptest.NewRequest(http.MethodPost, "/v1/images?tag=coding:latest", strings.NewReader("x"))
 	request.Header.Set("Authorization", "Bearer token")
 	request.Header.Set("Content-Type", "application/octet-stream; charset=binary")

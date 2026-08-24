@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestCreateOutpost(t *testing.T) {
+func TestCreateOutpostWith(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodPost)
@@ -30,12 +30,12 @@ func TestCreateOutpost(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	created, err := client.CreateOutpost(context.Background(), "demo")
+	created, err := client.CreateOutpostWith(context.Background(), CreateOutpostInput{Name: "demo"})
 	if err != nil {
-		t.Fatalf("CreateOutpost() error = %v", err)
+		t.Fatalf("CreateOutpostWith() error = %v", err)
 	}
 
 	if created.Id == "" || created.Name != "demo" {
-		t.Fatalf("CreateOutpost() = %v, want created demo", created)
+		t.Fatalf("CreateOutpostWith() = %v, want created demo", created)
 	}
 }

@@ -1,14 +1,11 @@
 package assets
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 )
 
@@ -58,23 +55,4 @@ func Load(path string) (Manifest, error) {
 		seenName[a.Name], seenFile[a.File] = true, true
 	}
 	return m, nil
-}
-
-func Verify(path, want string) error {
-	if !digest.MatchString(want) {
-		return fmt.Errorf("invalid checksum")
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return err
-	}
-	if hex.EncodeToString(hash.Sum(nil)) != want {
-		return fmt.Errorf("checksum mismatch for %s", filepath.Base(path))
-	}
-	return nil
 }

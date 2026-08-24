@@ -305,7 +305,6 @@ func regular(p Probe, name, path string, max os.FileMode) Check {
 	}
 	return Check{Name: name, OK: true, Detail: path}
 }
-func exists(p Probe, name, path string) Check { _, err := p.Stat(path); return result(name, err, path) }
 func charDevice(p Probe, name, path string) Check {
 	info, err := p.Stat(path)
 	if err != nil {
