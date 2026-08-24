@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nishantdania/ark/internal/doctor"
+	"github.com/nishantdania/outpost/internal/doctor"
 	"github.com/spf13/cobra"
 )
 
@@ -15,9 +15,9 @@ func newDoctorCmd(options *rootOptions) *cobra.Command {
 
 func newDoctorCmdWith(options *rootOptions, probe doctor.Probe, client doctor.HTTPClient) *cobra.Command {
 	var jsonOutput bool
-	command := &cobra.Command{Use: "doctor", Short: "Check local Ark client requirements", RunE: func(cmd *cobra.Command, args []string) error {
+	command := &cobra.Command{Use: "doctor", Short: "Check local Outpost client requirements", RunE: func(cmd *cobra.Command, args []string) error {
 		report := doctor.Local(probe, options.ssh.IdentityFile, options.ssh.KnownHostsFile)
-		request, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, options.serverURL+"/v1/arks", nil)
+		request, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, options.serverURL+"/v1/outposts", nil)
 		if err == nil && options.token != "" {
 			request.Header.Set("Authorization", "Bearer "+options.token)
 		}

@@ -20,93 +20,59 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
-// Defines values for ArkDesiredState.
+// Defines values for OutpostDesiredState.
 const (
-	ArkDesiredStateDeleted ArkDesiredState = "deleted"
-	ArkDesiredStateRunning ArkDesiredState = "running"
-	ArkDesiredStateStopped ArkDesiredState = "stopped"
+	OutpostDesiredStateDeleted OutpostDesiredState = "deleted"
+	OutpostDesiredStateRunning OutpostDesiredState = "running"
+	OutpostDesiredStateStopped OutpostDesiredState = "stopped"
 )
 
-// Valid indicates whether the value is a known member of the ArkDesiredState enum.
-func (e ArkDesiredState) Valid() bool {
+// Valid indicates whether the value is a known member of the OutpostDesiredState enum.
+func (e OutpostDesiredState) Valid() bool {
 	switch e {
-	case ArkDesiredStateDeleted:
+	case OutpostDesiredStateDeleted:
 		return true
-	case ArkDesiredStateRunning:
+	case OutpostDesiredStateRunning:
 		return true
-	case ArkDesiredStateStopped:
+	case OutpostDesiredStateStopped:
 		return true
 	default:
 		return false
 	}
 }
 
-// Defines values for ArkStatus.
+// Defines values for OutpostStatus.
 const (
-	ArkStatusDeleting     ArkStatus = "deleting"
-	ArkStatusFailed       ArkStatus = "failed"
-	ArkStatusProvisioning ArkStatus = "provisioning"
-	ArkStatusRunning      ArkStatus = "running"
-	ArkStatusStopped      ArkStatus = "stopped"
-	ArkStatusStopping     ArkStatus = "stopping"
+	OutpostStatusDeleting     OutpostStatus = "deleting"
+	OutpostStatusFailed       OutpostStatus = "failed"
+	OutpostStatusProvisioning OutpostStatus = "provisioning"
+	OutpostStatusRunning      OutpostStatus = "running"
+	OutpostStatusStopped      OutpostStatus = "stopped"
+	OutpostStatusStopping     OutpostStatus = "stopping"
 )
 
-// Valid indicates whether the value is a known member of the ArkStatus enum.
-func (e ArkStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the OutpostStatus enum.
+func (e OutpostStatus) Valid() bool {
 	switch e {
-	case ArkStatusDeleting:
+	case OutpostStatusDeleting:
 		return true
-	case ArkStatusFailed:
+	case OutpostStatusFailed:
 		return true
-	case ArkStatusProvisioning:
+	case OutpostStatusProvisioning:
 		return true
-	case ArkStatusRunning:
+	case OutpostStatusRunning:
 		return true
-	case ArkStatusStopped:
+	case OutpostStatusStopped:
 		return true
-	case ArkStatusStopping:
+	case OutpostStatusStopping:
 		return true
 	default:
 		return false
 	}
 }
 
-// Ark defines model for Ark.
-type Ark struct {
-	CreatedAt    time.Time       `json:"created_at"`
-	DesiredState ArkDesiredState `json:"desired_state"`
-
-	// DiskGib Example: 8
-	DiskGib int    `json:"disk_gib"`
-	Failure string `json:"failure"`
-	GuestIp string `json:"guest_ip"`
-
-	// Id Example: 550e8400-e29b-41d4-a716-446655440000
-	Id string `json:"id"`
-
-	// ImageId Example: default
-	ImageId string `json:"image_id"`
-
-	// MemoryMib Example: 4096
-	MemoryMib int `json:"memory_mib"`
-
-	// Name Example: investigate-deploy
-	Name      string    `json:"name"`
-	Status    ArkStatus `json:"status"`
-	UpdatedAt time.Time `json:"updated_at"`
-
-	// Vcpus Example: 2
-	Vcpus int `json:"vcpus"`
-}
-
-// ArkDesiredState defines model for Ark.DesiredState.
-type ArkDesiredState string
-
-// ArkStatus defines model for Ark.Status.
-type ArkStatus string
-
-// CreateArkRequest defines model for CreateArkRequest.
-type CreateArkRequest struct {
+// CreateOutpostRequest defines model for CreateOutpostRequest.
+type CreateOutpostRequest struct {
 	// DiskGib Example: 8
 	DiskGib int `json:"disk_gib"`
 
@@ -137,8 +103,42 @@ type Image struct {
 	Tags      []string  `json:"tags"`
 }
 
-// ArkName defines model for ArkName.
-type ArkName = string
+// Outpost defines model for Outpost.
+type Outpost struct {
+	CreatedAt    time.Time           `json:"created_at"`
+	DesiredState OutpostDesiredState `json:"desired_state"`
+
+	// DiskGib Example: 8
+	DiskGib int    `json:"disk_gib"`
+	Failure string `json:"failure"`
+	GuestIp string `json:"guest_ip"`
+
+	// Id Example: 550e8400-e29b-41d4-a716-446655440000
+	Id string `json:"id"`
+
+	// ImageId Example: default
+	ImageId string `json:"image_id"`
+
+	// MemoryMib Example: 4096
+	MemoryMib int `json:"memory_mib"`
+
+	// Name Example: investigate-deploy
+	Name      string        `json:"name"`
+	Status    OutpostStatus `json:"status"`
+	UpdatedAt time.Time     `json:"updated_at"`
+
+	// Vcpus Example: 2
+	Vcpus int `json:"vcpus"`
+}
+
+// OutpostDesiredState defines model for Outpost.DesiredState.
+type OutpostDesiredState string
+
+// OutpostStatus defines model for Outpost.Status.
+type OutpostStatus string
+
+// OutpostName defines model for OutpostName.
+type OutpostName = string
 
 // Conflict defines model for Conflict.
 type Conflict = Error
@@ -174,8 +174,8 @@ type BuildImageParams struct {
 	Tag string `form:"tag" json:"tag"`
 }
 
-// CreateArkJSONRequestBody defines body for CreateArk for application/json ContentType.
-type CreateArkJSONRequestBody = CreateArkRequest
+// CreateOutpostJSONRequestBody defines body for CreateOutpost for application/json ContentType.
+type CreateOutpostJSONRequestBody = CreateOutpostRequest
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -251,45 +251,6 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
-	// ListArks List Arks
-	//
-	// Corresponds with GET /v1/arks (the `ListArks` operationId).
-	ListArks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateArkWithBody Create an Ark
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
-	CreateArkWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateArk Create an Ark
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
-	CreateArk(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteArk Delete an Ark
-	//
-	// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
-	DeleteArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetArk Get an Ark
-	//
-	// Corresponds with GET /v1/arks/{name} (the `GetArk` operationId).
-	GetArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// StartArk Start an Ark
-	//
-	// Corresponds with POST /v1/arks/{name}/start (the `StartArk` operationId).
-	StartArk(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// StopArk Stop an Ark
-	//
-	// Corresponds with POST /v1/arks/{name}/stop (the `StopArk` operationId).
-	StopArk(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListImages performs a GET /v1/images (the `ListImages` operationId) request.
 	ListImages(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -309,115 +270,45 @@ type ClientInterface interface {
 
 	// GetImage performs a GET /v1/images/{reference} (the `GetImage` operationId) request.
 	GetImage(ctx context.Context, reference string, reqEditors ...RequestEditorFn) (*http.Response, error)
-}
 
-// ListArks List Arks
-//
-// Corresponds with GET /v1/arks (the `ListArks` operationId).
-func (c *Client) ListArks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListArksRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
+	// ListOutposts List Outposts
+	//
+	// Corresponds with GET /v1/outposts (the `ListOutposts` operationId).
+	ListOutposts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-// CreateArkWithBody Create an Ark
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /v1/arks (the `CreateArk` operationId).
-func (c *Client) CreateArkWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateArkRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
+	// CreateOutpostWithBody Create an Outpost
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/outposts (the `CreateOutpost` operationId).
+	CreateOutpostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-// CreateArk Create an Ark
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /v1/arks (the `CreateArk` operationId).
-func (c *Client) CreateArk(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateArkRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
+	// CreateOutpost Create an Outpost
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/outposts (the `CreateOutpost` operationId).
+	CreateOutpost(ctx context.Context, body CreateOutpostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-// DeleteArk Delete an Ark
-//
-// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
-func (c *Client) DeleteArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteArkRequest(c.Server, name)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
+	// DeleteOutpost Delete an Outpost
+	//
+	// Corresponds with DELETE /v1/outposts/{name} (the `DeleteOutpost` operationId).
+	DeleteOutpost(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-// GetArk Get an Ark
-//
-// Corresponds with GET /v1/arks/{name} (the `GetArk` operationId).
-func (c *Client) GetArk(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetArkRequest(c.Server, name)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
+	// GetOutpost Get an Outpost
+	//
+	// Corresponds with GET /v1/outposts/{name} (the `GetOutpost` operationId).
+	GetOutpost(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-// StartArk Start an Ark
-//
-// Corresponds with POST /v1/arks/{name}/start (the `StartArk` operationId).
-func (c *Client) StartArk(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStartArkRequest(c.Server, name)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
+	// StartOutpost Start an Outpost
+	//
+	// Corresponds with POST /v1/outposts/{name}/start (the `StartOutpost` operationId).
+	StartOutpost(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-// StopArk Stop an Ark
-//
-// Corresponds with POST /v1/arks/{name}/stop (the `StopArk` operationId).
-func (c *Client) StopArk(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStopArkRequest(c.Server, name)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
+	// StopOutpost Stop an Outpost
+	//
+	// Corresponds with POST /v1/outposts/{name}/stop (the `StopOutpost` operationId).
+	StopOutpost(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListImages performs a GET /v1/images (the `ListImages` operationId) request.
@@ -500,207 +391,113 @@ func (c *Client) GetImage(ctx context.Context, reference string, reqEditors ...R
 	return c.Client.Do(req)
 }
 
-// NewListArksRequest constructs an http.Request for the ListArks method
-func NewListArksRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
+// ListOutposts List Outposts
+//
+// Corresponds with GET /v1/outposts (the `ListOutposts` operationId).
+func (c *Client) ListOutposts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOutpostsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
-
-	operationPath := fmt.Sprintf("/v1/arks")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
+	return c.Client.Do(req)
 }
 
-// NewCreateArkRequest calls the generic CreateArk builder with application/json body
-func NewCreateArkRequest(server string, body CreateArkJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
+// CreateOutpostWithBody Create an Outpost
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/outposts (the `CreateOutpost` operationId).
+func (c *Client) CreateOutpostWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOutpostRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateArkRequestWithBody(server, "application/json", bodyReader)
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
-// NewCreateArkRequestWithBody constructs an http.Request for the CreateArk method, with any body, and a specified content type
-func NewCreateArkRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
+// CreateOutpost Create an Outpost
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/outposts (the `CreateOutpost` operationId).
+func (c *Client) CreateOutpost(ctx context.Context, body CreateOutpostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOutpostRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
-
-	operationPath := fmt.Sprintf("/v1/arks")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
+	return c.Client.Do(req)
 }
 
-// NewDeleteArkRequest constructs an http.Request for the DeleteArk method
-func NewDeleteArkRequest(server string, name string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+// DeleteOutpost Delete an Outpost
+//
+// Corresponds with DELETE /v1/outposts/{name} (the `DeleteOutpost` operationId).
+func (c *Client) DeleteOutpost(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOutpostRequest(c.Server, name)
 	if err != nil {
 		return nil, err
 	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
-
-	operationPath := fmt.Sprintf("/v1/arks/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
+	return c.Client.Do(req)
 }
 
-// NewGetArkRequest constructs an http.Request for the GetArk method
-func NewGetArkRequest(server string, name string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+// GetOutpost Get an Outpost
+//
+// Corresponds with GET /v1/outposts/{name} (the `GetOutpost` operationId).
+func (c *Client) GetOutpost(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOutpostRequest(c.Server, name)
 	if err != nil {
 		return nil, err
 	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
-
-	operationPath := fmt.Sprintf("/v1/arks/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
+	return c.Client.Do(req)
 }
 
-// NewStartArkRequest constructs an http.Request for the StartArk method
-func NewStartArkRequest(server string, name ArkName) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+// StartOutpost Start an Outpost
+//
+// Corresponds with POST /v1/outposts/{name}/start (the `StartOutpost` operationId).
+func (c *Client) StartOutpost(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartOutpostRequest(c.Server, name)
 	if err != nil {
 		return nil, err
 	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
-
-	operationPath := fmt.Sprintf("/v1/arks/%s/start", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
+	return c.Client.Do(req)
 }
 
-// NewStopArkRequest constructs an http.Request for the StopArk method
-func NewStopArkRequest(server string, name ArkName) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+// StopOutpost Stop an Outpost
+//
+// Corresponds with POST /v1/outposts/{name}/stop (the `StopOutpost` operationId).
+func (c *Client) StopOutpost(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStopOutpostRequest(c.Server, name)
 	if err != nil {
 		return nil, err
 	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
-
-	operationPath := fmt.Sprintf("/v1/arks/%s/stop", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
+	return c.Client.Do(req)
 }
 
 // NewListImagesRequest constructs an http.Request for the ListImages method
@@ -929,6 +726,209 @@ func NewGetImageRequest(server string, reference string) (*http.Request, error) 
 	return req, nil
 }
 
+// NewListOutpostsRequest constructs an http.Request for the ListOutposts method
+func NewListOutpostsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/outposts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateOutpostRequest calls the generic CreateOutpost builder with application/json body
+func NewCreateOutpostRequest(server string, body CreateOutpostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateOutpostRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateOutpostRequestWithBody constructs an http.Request for the CreateOutpost method, with any body, and a specified content type
+func NewCreateOutpostRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/outposts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOutpostRequest constructs an http.Request for the DeleteOutpost method
+func NewDeleteOutpostRequest(server string, name string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/outposts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOutpostRequest constructs an http.Request for the GetOutpost method
+func NewGetOutpostRequest(server string, name string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/outposts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartOutpostRequest constructs an http.Request for the StartOutpost method
+func NewStartOutpostRequest(server string, name OutpostName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/outposts/%s/start", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStopOutpostRequest constructs an http.Request for the StopOutpost method
+func NewStopOutpostRequest(server string, name OutpostName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/outposts/%s/stop", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -973,55 +973,6 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
-	// ListArksWithResponse List Arks
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/arks (the `ListArks` operationId).
-	ListArksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListArksResponse, error)
-
-	// CreateArkWithBodyWithResponse Create an Ark
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
-	CreateArkWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateArkResponse, error)
-
-	// CreateArkWithResponse Create an Ark
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/arks (the `CreateArk` operationId).
-	CreateArkWithResponse(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateArkResponse, error)
-
-	// DeleteArkWithResponse Delete an Ark
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
-	DeleteArkWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*DeleteArkResponse, error)
-
-	// GetArkWithResponse Get an Ark
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/arks/{name} (the `GetArk` operationId).
-	GetArkWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetArkResponse, error)
-
-	// StartArkWithResponse Start an Ark
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/arks/{name}/start (the `StartArk` operationId).
-	StartArkWithResponse(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*StartArkResponse, error)
-
-	// StopArkWithResponse Stop an Ark
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/arks/{name}/stop (the `StopArk` operationId).
-	StopArkWithResponse(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*StopArkResponse, error)
-
 	// ListImagesWithResponse performs a GET /v1/images (the `ListImages` operationId) request.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -1053,399 +1004,55 @@ type ClientWithResponsesInterface interface {
 	//
 	// Returns a wrapper object for the known response body format(s).
 	GetImageWithResponse(ctx context.Context, reference string, reqEditors ...RequestEditorFn) (*GetImageResponse, error)
-}
 
-type ListArksResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *[]Ark
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Unauthorized
-	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *ServerError
-}
+	// ListOutpostsWithResponse List Outposts
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/outposts (the `ListOutposts` operationId).
+	ListOutpostsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOutpostsResponse, error)
 
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListArksResponse) GetJSON200() *[]Ark {
-	return r.JSON200
-}
+	// CreateOutpostWithBodyWithResponse Create an Outpost
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/outposts (the `CreateOutpost` operationId).
+	CreateOutpostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOutpostResponse, error)
 
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r ListArksResponse) GetJSON401() *Unauthorized {
-	return r.JSON401
-}
+	// CreateOutpostWithResponse Create an Outpost
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/outposts (the `CreateOutpost` operationId).
+	CreateOutpostWithResponse(ctx context.Context, body CreateOutpostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOutpostResponse, error)
 
-// GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r ListArksResponse) GetJSON500() *ServerError {
-	return r.JSON500
-}
+	// DeleteOutpostWithResponse Delete an Outpost
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/outposts/{name} (the `DeleteOutpost` operationId).
+	DeleteOutpostWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*DeleteOutpostResponse, error)
 
-// GetBody returns the raw response body bytes
-func (r ListArksResponse) GetBody() []byte {
-	return r.Body
-}
+	// GetOutpostWithResponse Get an Outpost
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/outposts/{name} (the `GetOutpost` operationId).
+	GetOutpostWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetOutpostResponse, error)
 
-// Status returns HTTPResponse.Status
-func (r ListArksResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
+	// StartOutpostWithResponse Start an Outpost
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/outposts/{name}/start (the `StartOutpost` operationId).
+	StartOutpostWithResponse(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*StartOutpostResponse, error)
 
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListArksResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListArksResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type CreateArkResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *Ark
-	// JSON400 the response for an HTTP 400 `application/json` response
-	JSON400 *InvalidRequest
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Unauthorized
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Conflict
-	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *ServerError
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateArkResponse) GetJSON201() *Ark {
-	return r.JSON201
-}
-
-// GetJSON400 returns the response for an HTTP 400 `application/json` response
-func (r CreateArkResponse) GetJSON400() *InvalidRequest {
-	return r.JSON400
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r CreateArkResponse) GetJSON401() *Unauthorized {
-	return r.JSON401
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r CreateArkResponse) GetJSON409() *Conflict {
-	return r.JSON409
-}
-
-// GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r CreateArkResponse) GetJSON500() *ServerError {
-	return r.JSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r CreateArkResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateArkResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateArkResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CreateArkResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type DeleteArkResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Ark
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Unauthorized
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Conflict
-	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *ServerError
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r DeleteArkResponse) GetJSON200() *Ark {
-	return r.JSON200
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r DeleteArkResponse) GetJSON401() *Unauthorized {
-	return r.JSON401
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r DeleteArkResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r DeleteArkResponse) GetJSON409() *Conflict {
-	return r.JSON409
-}
-
-// GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r DeleteArkResponse) GetJSON500() *ServerError {
-	return r.JSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r DeleteArkResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteArkResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteArkResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DeleteArkResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type GetArkResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Ark
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Unauthorized
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *ServerError
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetArkResponse) GetJSON200() *Ark {
-	return r.JSON200
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r GetArkResponse) GetJSON401() *Unauthorized {
-	return r.JSON401
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r GetArkResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r GetArkResponse) GetJSON500() *ServerError {
-	return r.JSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r GetArkResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetArkResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetArkResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetArkResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type StartArkResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Ark
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Unauthorized
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Conflict
-	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *ServerError
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r StartArkResponse) GetJSON200() *Ark {
-	return r.JSON200
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r StartArkResponse) GetJSON401() *Unauthorized {
-	return r.JSON401
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r StartArkResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r StartArkResponse) GetJSON409() *Conflict {
-	return r.JSON409
-}
-
-// GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r StartArkResponse) GetJSON500() *ServerError {
-	return r.JSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r StartArkResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r StartArkResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r StartArkResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r StartArkResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type StopArkResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Ark
-	// JSON401 the response for an HTTP 401 `application/json` response
-	JSON401 *Unauthorized
-	// JSON404 the response for an HTTP 404 `application/json` response
-	JSON404 *NotFound
-	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *Conflict
-	// JSON500 the response for an HTTP 500 `application/json` response
-	JSON500 *ServerError
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r StopArkResponse) GetJSON200() *Ark {
-	return r.JSON200
-}
-
-// GetJSON401 returns the response for an HTTP 401 `application/json` response
-func (r StopArkResponse) GetJSON401() *Unauthorized {
-	return r.JSON401
-}
-
-// GetJSON404 returns the response for an HTTP 404 `application/json` response
-func (r StopArkResponse) GetJSON404() *NotFound {
-	return r.JSON404
-}
-
-// GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r StopArkResponse) GetJSON409() *Conflict {
-	return r.JSON409
-}
-
-// GetJSON500 returns the response for an HTTP 500 `application/json` response
-func (r StopArkResponse) GetJSON500() *ServerError {
-	return r.JSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r StopArkResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r StopArkResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r StopArkResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r StopArkResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
+	// StopOutpostWithResponse Stop an Outpost
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/outposts/{name}/stop (the `StopOutpost` operationId).
+	StopOutpostWithResponse(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*StopOutpostResponse, error)
 }
 
 type ListImagesResponse struct {
@@ -1890,95 +1497,397 @@ func (r GetImageResponse) ContentType() string {
 	return ""
 }
 
-// ListArksWithResponse List Arks
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/arks (the `ListArks` operationId).
-func (c *ClientWithResponses) ListArksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListArksResponse, error) {
-	rsp, err := c.ListArks(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListArksResponse(rsp)
+type ListOutpostsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]Outpost
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
 }
 
-// CreateArkWithBodyWithResponse Create an Ark
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/arks (the `CreateArk` operationId).
-func (c *ClientWithResponses) CreateArkWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateArkResponse, error) {
-	rsp, err := c.CreateArkWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateArkResponse(rsp)
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListOutpostsResponse) GetJSON200() *[]Outpost {
+	return r.JSON200
 }
 
-// CreateArkWithResponse Create an Ark
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/arks (the `CreateArk` operationId).
-func (c *ClientWithResponses) CreateArkWithResponse(ctx context.Context, body CreateArkJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateArkResponse, error) {
-	rsp, err := c.CreateArk(ctx, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateArkResponse(rsp)
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListOutpostsResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
 }
 
-// DeleteArkWithResponse Delete an Ark
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /v1/arks/{name} (the `DeleteArk` operationId).
-func (c *ClientWithResponses) DeleteArkWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*DeleteArkResponse, error) {
-	rsp, err := c.DeleteArk(ctx, name, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteArkResponse(rsp)
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListOutpostsResponse) GetJSON500() *ServerError {
+	return r.JSON500
 }
 
-// GetArkWithResponse Get an Ark
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/arks/{name} (the `GetArk` operationId).
-func (c *ClientWithResponses) GetArkWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetArkResponse, error) {
-	rsp, err := c.GetArk(ctx, name, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetArkResponse(rsp)
+// GetBody returns the raw response body bytes
+func (r ListOutpostsResponse) GetBody() []byte {
+	return r.Body
 }
 
-// StartArkWithResponse Start an Ark
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/arks/{name}/start (the `StartArk` operationId).
-func (c *ClientWithResponses) StartArkWithResponse(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*StartArkResponse, error) {
-	rsp, err := c.StartArk(ctx, name, reqEditors...)
-	if err != nil {
-		return nil, err
+// Status returns HTTPResponse.Status
+func (r ListOutpostsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
 	}
-	return ParseStartArkResponse(rsp)
+	return http.StatusText(0)
 }
 
-// StopArkWithResponse Stop an Ark
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/arks/{name}/stop (the `StopArk` operationId).
-func (c *ClientWithResponses) StopArkWithResponse(ctx context.Context, name ArkName, reqEditors ...RequestEditorFn) (*StopArkResponse, error) {
-	rsp, err := c.StopArk(ctx, name, reqEditors...)
-	if err != nil {
-		return nil, err
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOutpostsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
 	}
-	return ParseStopArkResponse(rsp)
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListOutpostsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateOutpostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Outpost
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateOutpostResponse) GetJSON201() *Outpost {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r CreateOutpostResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r CreateOutpostResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r CreateOutpostResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r CreateOutpostResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateOutpostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateOutpostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateOutpostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateOutpostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOutpostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Outpost
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteOutpostResponse) GetJSON200() *Outpost {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteOutpostResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteOutpostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r DeleteOutpostResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r DeleteOutpostResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOutpostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOutpostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOutpostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOutpostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOutpostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Outpost
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOutpostResponse) GetJSON200() *Outpost {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetOutpostResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetOutpostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetOutpostResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOutpostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOutpostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOutpostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOutpostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StartOutpostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Outpost
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r StartOutpostResponse) GetJSON200() *Outpost {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r StartOutpostResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r StartOutpostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r StartOutpostResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r StartOutpostResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r StartOutpostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StartOutpostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartOutpostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StartOutpostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StopOutpostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Outpost
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r StopOutpostResponse) GetJSON200() *Outpost {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r StopOutpostResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r StopOutpostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r StopOutpostResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r StopOutpostResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r StopOutpostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StopOutpostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StopOutpostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StopOutpostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 // ListImagesWithResponse performs a GET /v1/images (the `ListImages` operationId) request.
@@ -2049,307 +1958,95 @@ func (c *ClientWithResponses) GetImageWithResponse(ctx context.Context, referenc
 	return ParseGetImageResponse(rsp)
 }
 
-// ParseListArksResponse parses an HTTP response from a ListArksWithResponse call
-func ParseListArksResponse(rsp *http.Response) (*ListArksResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
+// ListOutpostsWithResponse List Outposts
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/outposts (the `ListOutposts` operationId).
+func (c *ClientWithResponses) ListOutpostsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOutpostsResponse, error) {
+	rsp, err := c.ListOutposts(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-
-	response := &ListArksResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []Ark
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthorized
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ServerError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
+	return ParseListOutpostsResponse(rsp)
 }
 
-// ParseCreateArkResponse parses an HTTP response from a CreateArkWithResponse call
-func ParseCreateArkResponse(rsp *http.Response) (*CreateArkResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
+// CreateOutpostWithBodyWithResponse Create an Outpost
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/outposts (the `CreateOutpost` operationId).
+func (c *ClientWithResponses) CreateOutpostWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOutpostResponse, error) {
+	rsp, err := c.CreateOutpostWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-
-	response := &CreateArkResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest Ark
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest InvalidRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthorized
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ServerError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
+	return ParseCreateOutpostResponse(rsp)
 }
 
-// ParseDeleteArkResponse parses an HTTP response from a DeleteArkWithResponse call
-func ParseDeleteArkResponse(rsp *http.Response) (*DeleteArkResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
+// CreateOutpostWithResponse Create an Outpost
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/outposts (the `CreateOutpost` operationId).
+func (c *ClientWithResponses) CreateOutpostWithResponse(ctx context.Context, body CreateOutpostJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOutpostResponse, error) {
+	rsp, err := c.CreateOutpost(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-
-	response := &DeleteArkResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Ark
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthorized
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ServerError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
+	return ParseCreateOutpostResponse(rsp)
 }
 
-// ParseGetArkResponse parses an HTTP response from a GetArkWithResponse call
-func ParseGetArkResponse(rsp *http.Response) (*GetArkResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
+// DeleteOutpostWithResponse Delete an Outpost
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/outposts/{name} (the `DeleteOutpost` operationId).
+func (c *ClientWithResponses) DeleteOutpostWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*DeleteOutpostResponse, error) {
+	rsp, err := c.DeleteOutpost(ctx, name, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-
-	response := &GetArkResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Ark
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthorized
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ServerError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
+	return ParseDeleteOutpostResponse(rsp)
 }
 
-// ParseStartArkResponse parses an HTTP response from a StartArkWithResponse call
-func ParseStartArkResponse(rsp *http.Response) (*StartArkResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
+// GetOutpostWithResponse Get an Outpost
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/outposts/{name} (the `GetOutpost` operationId).
+func (c *ClientWithResponses) GetOutpostWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetOutpostResponse, error) {
+	rsp, err := c.GetOutpost(ctx, name, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-
-	response := &StartArkResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Ark
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthorized
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ServerError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
+	return ParseGetOutpostResponse(rsp)
 }
 
-// ParseStopArkResponse parses an HTTP response from a StopArkWithResponse call
-func ParseStopArkResponse(rsp *http.Response) (*StopArkResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
+// StartOutpostWithResponse Start an Outpost
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/outposts/{name}/start (the `StartOutpost` operationId).
+func (c *ClientWithResponses) StartOutpostWithResponse(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*StartOutpostResponse, error) {
+	rsp, err := c.StartOutpost(ctx, name, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
+	return ParseStartOutpostResponse(rsp)
+}
 
-	response := &StopArkResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
+// StopOutpostWithResponse Stop an Outpost
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/outposts/{name}/stop (the `StopOutpost` operationId).
+func (c *ClientWithResponses) StopOutpostWithResponse(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*StopOutpostResponse, error) {
+	rsp, err := c.StopOutpost(ctx, name, reqEditors...)
+	if err != nil {
+		return nil, err
 	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Ark
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthorized
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ServerError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
+	return ParseStopOutpostResponse(rsp)
 }
 
 // ParseListImagesResponse parses an HTTP response from a ListImagesWithResponse call
@@ -2707,26 +2404,311 @@ func ParseGetImageResponse(rsp *http.Response) (*GetImageResponse, error) {
 	return response, nil
 }
 
+// ParseListOutpostsResponse parses an HTTP response from a ListOutpostsWithResponse call
+func ParseListOutpostsResponse(rsp *http.Response) (*ListOutpostsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOutpostsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Outpost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateOutpostResponse parses an HTTP response from a CreateOutpostWithResponse call
+func ParseCreateOutpostResponse(rsp *http.Response) (*CreateOutpostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateOutpostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Outpost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOutpostResponse parses an HTTP response from a DeleteOutpostWithResponse call
+func ParseDeleteOutpostResponse(rsp *http.Response) (*DeleteOutpostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOutpostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Outpost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOutpostResponse parses an HTTP response from a GetOutpostWithResponse call
+func ParseGetOutpostResponse(rsp *http.Response) (*GetOutpostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOutpostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Outpost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStartOutpostResponse parses an HTTP response from a StartOutpostWithResponse call
+func ParseStartOutpostResponse(rsp *http.Response) (*StartOutpostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartOutpostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Outpost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStopOutpostResponse parses an HTTP response from a StopOutpostWithResponse call
+func ParseStopOutpostResponse(rsp *http.Response) (*StopOutpostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StopOutpostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Outpost
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// ListArks List Arks
-	// (GET /v1/arks)
-	ListArks(w http.ResponseWriter, r *http.Request)
-	// CreateArk Create an Ark
-	// (POST /v1/arks)
-	CreateArk(w http.ResponseWriter, r *http.Request)
-	// DeleteArk Delete an Ark
-	// (DELETE /v1/arks/{name})
-	DeleteArk(w http.ResponseWriter, r *http.Request, name string)
-	// GetArk Get an Ark
-	// (GET /v1/arks/{name})
-	GetArk(w http.ResponseWriter, r *http.Request, name string)
-	// StartArk Start an Ark
-	// (POST /v1/arks/{name}/start)
-	StartArk(w http.ResponseWriter, r *http.Request, name ArkName)
-	// StopArk Stop an Ark
-	// (POST /v1/arks/{name}/stop)
-	StopArk(w http.ResponseWriter, r *http.Request, name ArkName)
 
 	// (GET /v1/images)
 	ListImages(w http.ResponseWriter, r *http.Request)
@@ -2745,6 +2727,24 @@ type ServerInterface interface {
 
 	// (GET /v1/images/{reference})
 	GetImage(w http.ResponseWriter, r *http.Request, reference string)
+	// ListOutposts List Outposts
+	// (GET /v1/outposts)
+	ListOutposts(w http.ResponseWriter, r *http.Request)
+	// CreateOutpost Create an Outpost
+	// (POST /v1/outposts)
+	CreateOutpost(w http.ResponseWriter, r *http.Request)
+	// DeleteOutpost Delete an Outpost
+	// (DELETE /v1/outposts/{name})
+	DeleteOutpost(w http.ResponseWriter, r *http.Request, name string)
+	// GetOutpost Get an Outpost
+	// (GET /v1/outposts/{name})
+	GetOutpost(w http.ResponseWriter, r *http.Request, name string)
+	// StartOutpost Start an Outpost
+	// (POST /v1/outposts/{name}/start)
+	StartOutpost(w http.ResponseWriter, r *http.Request, name OutpostName)
+	// StopOutpost Stop an Outpost
+	// (POST /v1/outposts/{name}/stop)
+	StopOutpost(w http.ResponseWriter, r *http.Request, name OutpostName)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -2755,138 +2755,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// ListArks operation middleware
-func (siw *ServerInterfaceWrapper) ListArks(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListArks(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateArk operation middleware
-func (siw *ServerInterfaceWrapper) CreateArk(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateArk(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteArk operation middleware
-func (siw *ServerInterfaceWrapper) DeleteArk(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "name" -------------
-	var name string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteArk(w, r, name)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetArk operation middleware
-func (siw *ServerInterfaceWrapper) GetArk(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "name" -------------
-	var name string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetArk(w, r, name)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// StartArk operation middleware
-func (siw *ServerInterfaceWrapper) StartArk(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "name" -------------
-	var name ArkName
-
-	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.StartArk(w, r, name)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// StopArk operation middleware
-func (siw *ServerInterfaceWrapper) StopArk(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "name" -------------
-	var name ArkName
-
-	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.StopArk(w, r, name)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
 
 // ListImages operation middleware
 func (siw *ServerInterfaceWrapper) ListImages(w http.ResponseWriter, r *http.Request) {
@@ -3034,6 +2902,138 @@ func (siw *ServerInterfaceWrapper) GetImage(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListOutposts operation middleware
+func (siw *ServerInterfaceWrapper) ListOutposts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOutposts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOutpost operation middleware
+func (siw *ServerInterfaceWrapper) CreateOutpost(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOutpost(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteOutpost operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOutpost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOutpost(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOutpost operation middleware
+func (siw *ServerInterfaceWrapper) GetOutpost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOutpost(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartOutpost operation middleware
+func (siw *ServerInterfaceWrapper) StartOutpost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name OutpostName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartOutpost(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopOutpost operation middleware
+func (siw *ServerInterfaceWrapper) StopOutpost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name OutpostName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopOutpost(w, r, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -3154,12 +3154,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/arks", wrapper.ListArks)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/arks", wrapper.CreateArk)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/arks/{name}", wrapper.DeleteArk)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/arks/{name}", wrapper.GetArk)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/arks/{name}/start", wrapper.StartArk)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/arks/{name}/stop", wrapper.StopArk)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/outposts", wrapper.ListOutposts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/outposts", wrapper.CreateOutpost)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/outposts/{name}", wrapper.DeleteOutpost)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/outposts/{name}", wrapper.GetOutpost)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/outposts/{name}/start", wrapper.StartOutpost)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/outposts/{name}/stop", wrapper.StopOutpost)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/images", wrapper.ListImages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/images", wrapper.ImportImage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/images/build", wrapper.BuildImage)

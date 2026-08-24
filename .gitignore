@@ -1,9 +1,9 @@
 # Build outputs
-/ark
-/arkd
+/outpost
+/outpostd
 
 # Local daemon database
-/ark.db*
+/outpost.db*
 
 # Host-specific manual Firecracker spike configuration
-/scripts/ark-spike.env
+/scripts/outpost-spike.env

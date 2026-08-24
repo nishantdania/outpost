@@ -8,27 +8,27 @@ bin=$work/bin
 home=$work/home
 remote_home=$work/remote-home
 mkdir -p "$release" "$bin" "$home" "$remote_home"
-cat > "$release/ark" <<'EOF'
+cat > "$release/outpost" <<'EOF'
 #!/bin/sh
-printf '%s|%s|%s\n' "${ARK_SERVER:-}" "${ARK_TOKEN:-}" "${ARK_SSH_PROXY_JUMP:-}" >> "$ARK_CLIENT_LOG"
+printf '%s|%s|%s\n' "${OUTPOST_SERVER:-}" "${OUTPOST_TOKEN:-}" "${OUTPOST_SSH_PROXY_JUMP:-}" >> "$OUTPOST_CLIENT_LOG"
 EOF
-chmod 755 "$release/ark"
+chmod 755 "$release/outpost"
 cat > "$release/install-server" <<'EOF'
 #!/bin/sh
-mkdir -p "$HOME/.config/ark"
-if [ ! -f "$HOME/.config/ark/server.env" ]; then printf '%s\n' "ARK_SERVER=$ARK_SERVER" "ARK_TOKEN=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi=" > "$HOME/.config/ark/server.env"; fi
-chmod 600 "$HOME/.config/ark/server.env"
+mkdir -p "$HOME/.config/outpost"
+if [ ! -f "$HOME/.config/outpost/server.env" ]; then printf '%s\n' "OUTPOST_SERVER=$OUTPOST_SERVER" "OUTPOST_TOKEN=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi=" > "$HOME/.config/outpost/server.env"; fi
+chmod 600 "$HOME/.config/outpost/server.env"
 EOF
 chmod 755 "$release/install-server"
 python3 - "$release" <<'PY'
 import hashlib,json,os,sys
 p=sys.argv[1]
-names=['ark','arkd','ark-vm-launcher','firecracker','jailer','vmlinux','rootfs.ext4','default','arkd.service','ark-vm-launcher.service']
+names=['outpost','outpostd','outpost-vm-launcher','firecracker','jailer','vmlinux','rootfs.ext4','default','outpostd.service','outpost-vm-launcher.service']
 a=[]
 for n in names: a.append({'name':n,'file':n,'sha256':'0'*64,'url':'https://example.test/'+n})
 open(p+'/assets.json','w').write(json.dumps({'version':'1.2.3','architecture':'amd64','assets':a}))
 with open(p+'/checksums.txt','w') as f:
- for n in ('ark','install-server','assets.json'):
+ for n in ('outpost','install-server','assets.json'):
   h=hashlib.sha256(open(p+'/'+n,'rb').read()).hexdigest(); f.write(h+'  '+n+'\n')
 PY
 cat > "$bin/curl" <<'EOF'
@@ -40,25 +40,25 @@ for arg do
  url=$arg
 done
 case "$url" in
- https://github.com/nishantdania/ark/releases/latest) printf '%s' https://github.com/nishantdania/ark/releases/tag/v1.2.3 ;;
- https://github.com/nishantdania/ark/releases/download/v1.2.3/*) cp "$ARK_TEST_RELEASE/${url##*/}" "$out" ;;
- https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh) printf '%s\n' "$url" >> "$ARK_TEST_CURL_LOG"; cat "$ARK_TEST_INSTALLER" ;;
+ https://github.com/nishantdania/outpost/releases/latest) printf '%s' https://github.com/nishantdania/outpost/releases/tag/v1.2.3 ;;
+ https://github.com/nishantdania/outpost/releases/download/v1.2.3/*) cp "$OUTPOST_TEST_RELEASE/${url##*/}" "$out" ;;
+ https://raw.githubusercontent.com/nishantdania/outpost/refs/heads/main/install.sh) printf '%s\n' "$url" >> "$OUTPOST_TEST_CURL_LOG"; cat "$OUTPOST_TEST_INSTALLER" ;;
  *) exit 22 ;;
 esac
 EOF
 cat > "$bin/sudo" <<'EOF'
 #!/bin/sh
-if [ "$1" = install ]; then cat >/dev/null; printf '%s\n' "$*" >> "$ARK_TEST_LOG"; exit 0; fi
+if [ "$1" = install ]; then cat >/dev/null; printf '%s\n' "$*" >> "$OUTPOST_TEST_LOG"; exit 0; fi
 if [ "$1" = chown ] || [ "$1" = chmod ]; then exit 0; fi
 exec "$@"
 EOF
 cat > "$bin/apt-get" <<'EOF'
 #!/bin/sh
-printf 'apt-get %s\n' "$*" >> "$ARK_TEST_LOG"
+printf 'apt-get %s\n' "$*" >> "$OUTPOST_TEST_LOG"
 EOF
 cat > "$bin/pacman" <<'EOF'
 #!/bin/sh
-printf 'pacman %s\n' "$*" >> "$ARK_TEST_LOG"
+printf 'pacman %s\n' "$*" >> "$OUTPOST_TEST_LOG"
 EOF
 cat > "$bin/tailscale" <<'EOF'
 #!/bin/sh
@@ -86,21 +86,21 @@ cat > "$bin/ssh" <<'EOF'
 #!/bin/sh
 for arg do command=$arg; done
 case "$command" in
- 'sudo /usr/local/lib/ark/ark-uninstall-server') printf '%s\n' "$command" > "$ARK_TEST_UNINSTALL_COMMAND_LOG"; exit 0;;
+ 'sudo /usr/local/lib/outpost/outpost-uninstall-server') printf '%s\n' "$command" > "$OUTPOST_TEST_UNINSTALL_COMMAND_LOG"; exit 0;;
 esac
 IFS= read -r input
 [ "$input" = tty-input ]
-printf '%s\n' "$input" > "$ARK_TEST_SSH_STDIN_LOG"
-printf '%s\n' "$command" > "$ARK_TEST_SSH_COMMAND_LOG"
-HOME=$ARK_TEST_REMOTE_HOME ARK_INSTALL_TEST=1 ARK_TEST_RELEASE=$ARK_TEST_RELEASE ARK_TEST_INSTALLER=$ARK_TEST_INSTALLER ARK_TEST_CURL_LOG=$ARK_TEST_CURL_LOG PATH=$PATH /bin/bash -c "$command"
+printf '%s\n' "$input" > "$OUTPOST_TEST_SSH_STDIN_LOG"
+printf '%s\n' "$command" > "$OUTPOST_TEST_SSH_COMMAND_LOG"
+HOME=$OUTPOST_TEST_REMOTE_HOME OUTPOST_INSTALL_TEST=1 OUTPOST_TEST_RELEASE=$OUTPOST_TEST_RELEASE OUTPOST_TEST_INSTALLER=$OUTPOST_TEST_INSTALLER OUTPOST_TEST_CURL_LOG=$OUTPOST_TEST_CURL_LOG PATH=$PATH /bin/bash -c "$command"
 EOF
 cat > "$bin/python3" <<'EOF'
 #!/bin/sh
-[ "${ARK_TEST_BROKEN_PYTHON:-0}" != 1 ]
+[ "${OUTPOST_TEST_BROKEN_PYTHON:-0}" != 1 ]
 EOF
 cat > "$bin/scp" <<'EOF'
 #!/bin/sh
-cp "$ARK_TEST_REMOTE_HOME/.config/ark/server.env" "$2"
+cp "$OUTPOST_TEST_REMOTE_HOME/.config/outpost/server.env" "$2"
 EOF
 chmod 755 "$bin"/*
 printf '%s\n' tty-input > "$work/tty"
@@ -109,60 +109,60 @@ import base64,re,sys
 value=re.search(r"server_uninstaller_b64='([^']+)'",open(sys.argv[1]).read()).group(1)
 if base64.b64decode(value)!=open(sys.argv[2],'rb').read(): raise SystemExit('embedded uninstaller drift')
 PY
-run() { env HOME="$home" PATH="$bin:$PATH" ARK_INSTALL_TEST=1 ARK_INSTALL_SSH_STDIN="$work/tty" ARK_TEST_RELEASE="$release" ARK_TEST_INSTALLER="$repo/install.sh" ARK_TEST_REMOTE_HOME="$remote_home" ARK_TEST_LOG="$work/log" ARK_TEST_CURL_LOG="$work/curl.log" ARK_TEST_SSH_STDIN_LOG="$work/ssh-stdin.log" ARK_TEST_SSH_COMMAND_LOG="$work/ssh-command.log" ARK_TEST_UNINSTALL_COMMAND_LOG="$work/uninstall-command.log" ARK_CLIENT_LOG="$work/client.log" "$@" bash "$repo/install.sh"; }
-run ARK_INSTALL_MODE=client
-[ -x "$home/.local/bin/ark" ]
-[ -x "$home/.local/lib/ark/ark-1.2.3" ]
-[ ! -e "$home/.config/ark/server.env" ]
-cp "$release/ark" "$release/ark.good"
-printf x >> "$release/ark"
-if run ARK_INSTALL_MODE=client >/dev/null 2>&1; then exit 1; fi
-mv "$release/ark.good" "$release/ark"
+run() { env HOME="$home" PATH="$bin:$PATH" OUTPOST_INSTALL_TEST=1 OUTPOST_INSTALL_SSH_STDIN="$work/tty" OUTPOST_TEST_RELEASE="$release" OUTPOST_TEST_INSTALLER="$repo/install.sh" OUTPOST_TEST_REMOTE_HOME="$remote_home" OUTPOST_TEST_LOG="$work/log" OUTPOST_TEST_CURL_LOG="$work/curl.log" OUTPOST_TEST_SSH_STDIN_LOG="$work/ssh-stdin.log" OUTPOST_TEST_SSH_COMMAND_LOG="$work/ssh-command.log" OUTPOST_TEST_UNINSTALL_COMMAND_LOG="$work/uninstall-command.log" OUTPOST_CLIENT_LOG="$work/client.log" "$@" bash "$repo/install.sh"; }
+run OUTPOST_INSTALL_MODE=client
+[ -x "$home/.local/bin/outpost" ]
+[ -x "$home/.local/lib/outpost/outpost-1.2.3" ]
+[ ! -e "$home/.config/outpost/server.env" ]
+cp "$release/outpost" "$release/outpost.good"
+printf x >> "$release/outpost"
+if run OUTPOST_INSTALL_MODE=client >/dev/null 2>&1; then exit 1; fi
+mv "$release/outpost.good" "$release/outpost"
 python3 - "$release" <<'PY'
 import hashlib,sys
 p=sys.argv[1]
 with open(p+'/checksums.txt','w') as f:
- for n in ('ark','install-server','assets.json'):
+ for n in ('outpost','install-server','assets.json'):
   f.write(hashlib.sha256(open(p+'/'+n,'rb').read()).hexdigest()+'  '+n+'\n')
 PY
-if run ARK_INSTALL_TARGET='bad;target' >/dev/null 2>&1; then exit 1; fi
-run ARK_INSTALL_TARGET=user@server
+if run OUTPOST_INSTALL_TARGET='bad;target' >/dev/null 2>&1; then exit 1; fi
+run OUTPOST_INSTALL_TARGET=user@server
 [ "$(cat "$work/ssh-stdin.log")" = tty-input ]
-grep -Fqx 'https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh' "$work/curl.log"
-grep -Fq 'https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh' "$work/ssh-command.log"
-config=$home/.config/ark/server.env
+grep -Fqx 'https://raw.githubusercontent.com/nishantdania/outpost/refs/heads/main/install.sh' "$work/curl.log"
+grep -Fq 'https://raw.githubusercontent.com/nishantdania/outpost/refs/heads/main/install.sh' "$work/ssh-command.log"
+config=$home/.config/outpost/server.env
 [ "$(stat -c %a "$config")" = 600 ]
-[ "$(stat -c %a "$home/.config/ark")" = 700 ]
-grep -qx 'ARK_SSH_PROXY_JUMP=user@server' "$config"
-HOME="$home" ARK_CLIENT_LOG="$work/client.log" "$home/.local/bin/ark" list
+[ "$(stat -c %a "$home/.config/outpost")" = 700 ]
+grep -qx 'OUTPOST_SSH_PROXY_JUMP=user@server' "$config"
+HOME="$home" OUTPOST_CLIENT_LOG="$work/client.log" "$home/.local/bin/outpost" list
 expected='http://100.64.0.2:17890|ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi=|user@server'
 grep -qx "$expected" "$work/client.log"
 if grep -q 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi=' "$work/log"; then exit 1; fi
 before=$(sha256sum "$config")
-run ARK_INSTALL_TARGET=user@server
+run OUTPOST_INSTALL_TARGET=user@server
 [ "$before" = "$(sha256sum "$config")" ]
-rm -rf "$home/.config/ark"
-run ARK_INSTALL_MODE=server
-[ "$(stat -c %a "$home/.config/ark/server.env")" = 600 ]
+rm -rf "$home/.config/outpost"
+run OUTPOST_INSTALL_MODE=server
+[ "$(stat -c %a "$home/.config/outpost/server.env")" = 600 ]
 grep -q '^apt-get install -y ' "$work/log"
 before=$(grep -c '^pacman ' "$work/log" || true)
-run ARK_INSTALL_MODE=server ARK_INSTALL_PACKAGE_MANAGER=pacman
+run OUTPOST_INSTALL_MODE=server OUTPOST_INSTALL_PACKAGE_MANAGER=pacman
 [ "$before" = "$(grep -c '^pacman ' "$work/log" || true)" ]
-if run ARK_INSTALL_MODE=server ARK_INSTALL_PACKAGE_MANAGER=pacman ARK_TEST_BROKEN_PYTHON=1 >/dev/null 2>&1; then exit 1; fi
-for handoff in /etc/ld.so.preload /root/.ssh/authorized_keys /home/victim/.config/ark/server.env; do
+if run OUTPOST_INSTALL_MODE=server OUTPOST_INSTALL_PACKAGE_MANAGER=pacman OUTPOST_TEST_BROKEN_PYTHON=1 >/dev/null 2>&1; then exit 1; fi
+for handoff in /etc/ld.so.preload /root/.ssh/authorized_keys /home/victim/.config/outpost/server.env; do
  before=$(wc -l < "$work/log" 2>/dev/null || true)
- if run ARK_INSTALL_MODE=server ARK_CLIENT_HANDOFF="$handoff" >/dev/null 2>&1; then exit 1; fi
+ if run OUTPOST_INSTALL_MODE=server OUTPOST_CLIENT_HANDOFF="$handoff" >/dev/null 2>&1; then exit 1; fi
  [ "$before" = "$(wc -l < "$work/log" 2>/dev/null || true)" ]
 done
-printf 'ARK_SERVER=http://127.0.0.1:17890\nARK_TOKEN=bad\nARK_SSH_PROXY_JUMP=user@server\n' > "$config"
+printf 'OUTPOST_SERVER=http://127.0.0.1:17890\nOUTPOST_TOKEN=bad\nOUTPOST_SSH_PROXY_JUMP=user@server\n' > "$config"
 chmod 600 "$config"
-if HOME="$home" "$home/.local/bin/ark" uninstall --yes >/dev/null 2>&1; then exit 1; fi
-run ARK_INSTALL_TARGET=user@server
-printf x >> "$home/.local/lib/ark/ark-1.2.3"
-if HOME="$home" "$home/.local/bin/ark" uninstall </dev/null >/dev/null 2>&1; then exit 1; fi
-HOME="$home" PATH="$bin:$PATH" ARK_TEST_UNINSTALL_COMMAND_LOG="$work/uninstall-command.log" "$home/.local/bin/ark" uninstall --yes
-grep -Fqx 'sudo /usr/local/lib/ark/ark-uninstall-server' "$work/uninstall-command.log"
-[ ! -e "$home/.local/bin/ark" ]
-[ ! -e "$home/.local/lib/ark" ]
-[ ! -e "$home/.config/ark/server.env" ]
+if HOME="$home" "$home/.local/bin/outpost" uninstall --yes >/dev/null 2>&1; then exit 1; fi
+run OUTPOST_INSTALL_TARGET=user@server
+printf x >> "$home/.local/lib/outpost/outpost-1.2.3"
+if HOME="$home" "$home/.local/bin/outpost" uninstall </dev/null >/dev/null 2>&1; then exit 1; fi
+HOME="$home" PATH="$bin:$PATH" OUTPOST_TEST_UNINSTALL_COMMAND_LOG="$work/uninstall-command.log" "$home/.local/bin/outpost" uninstall --yes
+grep -Fqx 'sudo /usr/local/lib/outpost/outpost-uninstall-server' "$work/uninstall-command.log"
+[ ! -e "$home/.local/bin/outpost" ]
+[ ! -e "$home/.local/lib/outpost" ]
+[ ! -e "$home/.config/outpost/server.env" ]
 printf '%s\n' TestInstallIntegration

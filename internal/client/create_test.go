@@ -7,13 +7,13 @@ import (
 	"testing"
 )
 
-func TestCreateArk(t *testing.T) {
+func TestCreateOutpost(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodPost)
 		}
-		if r.URL.Path != "/v1/arks" {
-			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/arks")
+		if r.URL.Path != "/v1/outposts" {
+			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/outposts")
 		}
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			t.Errorf("Authorization = %q, want bearer token", r.Header.Get("Authorization"))
@@ -30,12 +30,12 @@ func TestCreateArk(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	created, err := client.CreateArk(context.Background(), "demo")
+	created, err := client.CreateOutpost(context.Background(), "demo")
 	if err != nil {
-		t.Fatalf("CreateArk() error = %v", err)
+		t.Fatalf("CreateOutpost() error = %v", err)
 	}
 
 	if created.Id == "" || created.Name != "demo" {
-		t.Fatalf("CreateArk() = %v, want created demo", created)
+		t.Fatalf("CreateOutpost() = %v, want created demo", created)
 	}
 }

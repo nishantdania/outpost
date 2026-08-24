@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nishantdania/ark/internal/ark"
-	"github.com/nishantdania/ark/internal/launcherclient"
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/launcherclient"
+	"github.com/nishantdania/outpost/internal/outpost"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 func TestServerLifecycleAndSocketPermissions(t *testing.T) {
@@ -35,7 +35,7 @@ func TestServerLifecycleAndSocketPermissions(t *testing.T) {
 	}
 	client := launcherclient.New(socket)
 	defer client.Close()
-	a := testArk()
+	a := testOutpost()
 	if err := client.Create(context.Background(), a); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestServerRejectsMalformedProtocol(t *testing.T) {
 	}
 	done := serve(t, server, socket)
 	defer func() { stop(t, server, done) }()
-	a := testArk()
+	a := testOutpost()
 	valid := `{"version":1,"spec":{"id":"` + a.ID + `","image_id":"default","vcpus":2,"memory_mib":1024,"disk_gib":8}}`
 	for _, body := range []string{
 		valid + ` {}`,
@@ -100,7 +100,7 @@ func TestServerRejectsUnauthorizedPeer(t *testing.T) {
 	defer func() { stop(t, server, done) }()
 	client := launcherclient.New(socket)
 	defer client.Close()
-	if err := client.Create(context.Background(), testArk()); err == nil {
+	if err := client.Create(context.Background(), testOutpost()); err == nil {
 		t.Fatal("unauthorized Create() error = nil")
 	}
 }
@@ -183,6 +183,6 @@ func stop(t *testing.T, server *Server, done chan error) {
 		t.Errorf("socket remains after shutdown: %v", err)
 	}
 }
-func testArk() ark.Ark {
-	return ark.Ark{ID: uuid.NewString(), ImageID: "default", VCPUs: 2, MemoryMiB: 1024, DiskGiB: 8}
+func testOutpost() outpost.Outpost {
+	return outpost.Outpost{ID: uuid.NewString(), ImageID: "default", VCPUs: 2, MemoryMiB: 1024, DiskGiB: 8}
 }

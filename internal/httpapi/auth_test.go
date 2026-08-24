@@ -9,7 +9,7 @@ import (
 func TestRouterRequiresBearerToken(t *testing.T) {
 	router := newRouter(testHandler(t, newTestStore(t)).service, "test-token")
 	for _, authorization := range []string{"", "Bearer wrong", "Bearer a-much-longer-wrong-token", "Bearer", "Basic test-token"} {
-		req := httptest.NewRequest(http.MethodGet, "/v1/arks", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/outposts", nil)
 		if authorization != "" {
 			req.Header.Set("Authorization", authorization)
 		}
@@ -23,7 +23,7 @@ func TestRouterRequiresBearerToken(t *testing.T) {
 		}
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/arks", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/outposts", nil)
 	req.Header.Set("Authorization", "Bearer test-token")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

@@ -1,0 +1,26 @@
+[Unit]
+Description=outpostd API daemon
+Wants=network-online.target
+Requires=outpost-vm-launcher.service
+After=network-online.target outpost-vm-launcher.service
+
+[Service]
+Type=exec
+User=outpostd
+Group=outpostd
+EnvironmentFile=@CONFIG@/outpostd.env
+UMask=0077
+Delegate=yes
+ExecStart=@PREFIX@/lib/outpost/outpostd --listen=@LISTEN@ --database=@STATE@/outpost.db
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+SupplementaryGroups=outpostd
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectHome=tmpfs
+ProtectSystem=strict
+ReadWritePaths=@STATE@ @RUNTIME@
+
+[Install]
+WantedBy=multi-user.target

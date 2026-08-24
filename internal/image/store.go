@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nishantdania/ark/internal/ark"
+	"github.com/nishantdania/outpost/internal/outpost"
 )
 
 const (
@@ -79,13 +79,13 @@ func (ExecRunner) RunIO(ctx context.Context, in io.Reader, name string, args ...
 
 type Store struct {
 	root   string
-	db     *ark.Store
+	db     *outpost.Store
 	runner Runner
 	podman string
 	mu     sync.Mutex
 }
 
-func New(root string, db *ark.Store, runner Runner) (*Store, error) {
+func New(root string, db *outpost.Store, runner Runner) (*Store, error) {
 	if runner == nil {
 		runner = ExecRunner{}
 	}
@@ -111,7 +111,7 @@ func (s *Store) reconcile(ctx context.Context) error {
 	}
 	known := make(map[string]bool, len(images))
 	for _, image := range images {
-		if ark.ValidDigest(image.Digest) {
+		if outpost.ValidDigest(image.Digest) {
 			known[strings.TrimPrefix(image.Digest, "sha256:")] = true
 		}
 	}
@@ -146,22 +146,22 @@ func (s *Store) reconcile(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) Import(ctx context.Context, input io.Reader, tag string) (ark.Image, error) {
-	if !ark.ValidImageTag(tag) {
-		return ark.Image{}, ark.ErrInvalidImage
+func (s *Store) Import(ctx context.Context, input io.Reader, tag string) (outpost.Image, error) {
+	if !outpost.ValidImageTag(tag) {
+		return outpost.Image{}, outpost.ErrInvalidImage
 	}
 	archive, err := s.copyInput(ctx, input, maxArchiveBytes, ".oci-")
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	defer os.Remove(archive)
 	output, err := s.run(ctx, s.podman, "load", "--input", archive)
 	if err != nil {
-		return ark.Image{}, fmt.Errorf("podman load: %w", err)
+		return outpost.Image{}, fmt.Errorf("podman load: %w", err)
 	}
 	id, err := loadedImageID(string(output))
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	return s.export(ctx, id, tag)
 }
@@ -178,49 +178,49 @@ func loadedImageID(output string) (string, error) {
 	return "", errors.New("podman did not report a loaded image")
 }
 
-func (s *Store) Build(ctx context.Context, input io.Reader, tag string) (ark.Image, error) {
-	if !ark.ValidImageTag(tag) {
-		return ark.Image{}, ark.ErrInvalidImage
+func (s *Store) Build(ctx context.Context, input io.Reader, tag string) (outpost.Image, error) {
+	if !outpost.ValidImageTag(tag) {
+		return outpost.Image{}, outpost.ErrInvalidImage
 	}
 	dir, err := s.context(ctx, input)
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	defer s.cleanupExtracted(dir)
-	name := "ark-" + strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatInt(int64(os.Getpid()), 36)
+	name := "outpost-" + strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatInt(int64(os.Getpid()), 36)
 	if _, err := s.runFor(ctx, 30*time.Minute, s.podman, "build", "--pull=never", "--tag", name, dir); err != nil {
-		return ark.Image{}, fmt.Errorf("podman build: %w", err)
+		return outpost.Image{}, fmt.Errorf("podman build: %w", err)
 	}
 	defer s.cleanup(s.podman, "image", "rm", "--force", name)
 	return s.export(ctx, name, tag)
 }
 
-func (s *Store) export(ctx context.Context, source, tag string) (ark.Image, error) {
+func (s *Store) export(ctx context.Context, source, tag string) (outpost.Image, error) {
 	containerOut, err := s.run(ctx, s.podman, "create", source)
 	if err != nil {
-		return ark.Image{}, fmt.Errorf("podman create: %w", err)
+		return outpost.Image{}, fmt.Errorf("podman create: %w", err)
 	}
 	container := strings.TrimSpace(string(containerOut))
 	if container == "" || strings.ContainsAny(container, " \t\r\n") {
-		return ark.Image{}, errors.New("podman returned an invalid container ID")
+		return outpost.Image{}, errors.New("podman returned an invalid container ID")
 	}
 	defer s.cleanup(s.podman, "rm", "--force", container)
 	archive, err := os.CreateTemp(s.root, ".export-")
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	archiveName := archive.Name()
 	if err := archive.Close(); err != nil {
 		os.Remove(archiveName)
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	defer os.Remove(archiveName)
 	if _, err := s.run(ctx, s.podman, "export", "--output", archiveName, container); err != nil {
-		return ark.Image{}, fmt.Errorf("podman export: %w", err)
+		return outpost.Image{}, fmt.Errorf("podman export: %w", err)
 	}
 	input, err := os.Open(archiveName)
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	rootfs, err := s.convert(ctx, input)
 	closeErr := input.Close()
@@ -228,12 +228,12 @@ func (s *Store) export(ctx context.Context, source, tag string) (ark.Image, erro
 		err = closeErr
 	}
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	defer os.Remove(rootfs)
 	file, err := os.Open(rootfs)
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	digest, size, err := s.publish(file)
 	closeErr = file.Close()
@@ -241,10 +241,10 @@ func (s *Store) export(ctx context.Context, source, tag string) (ark.Image, erro
 		err = closeErr
 	}
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	if err = s.db.PutImage(ctx, digest, size, tag); err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	return s.db.GetImage(ctx, digest)
 }
@@ -916,7 +916,7 @@ func (s *Store) Remove(ctx context.Context, ref string) error {
 	if err = s.db.RemoveImage(ctx, ref); err != nil {
 		return err
 	}
-	if ark.ValidDigest(ref) {
+	if outpost.ValidDigest(ref) {
 		return os.RemoveAll(filepath.Dir(s.imagePath(image.Digest)))
 	}
 	return nil
@@ -934,7 +934,7 @@ func (s *Store) GC(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 func (s *Store) ImportDefault(ctx context.Context, archive string) error {
-	canonical := "ark/default:1"
+	canonical := "outpost/default:1"
 	if _, err := s.run(ctx, s.podman, "image", "exists", canonical); err == nil {
 		return nil
 	}

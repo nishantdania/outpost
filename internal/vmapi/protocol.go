@@ -4,7 +4,7 @@ import (
 	"regexp"
 
 	"github.com/google/uuid"
-	"github.com/nishantdania/ark/internal/ark"
+	"github.com/nishantdania/outpost/internal/outpost"
 )
 
 const Version = 1
@@ -77,10 +77,10 @@ func ValidateID(request IDRequest) error {
 }
 
 func validSpec(spec VMSpec) bool {
-	return validID(spec.ID) && imageID.MatchString(spec.ImageID) && ark.ValidateSSHPublicKey(spec.SSHPublicKey) == nil &&
-		spec.VCPUs >= ark.MinVCPUs && spec.VCPUs <= ark.MaxVCPUs &&
-		spec.MemoryMiB >= ark.MinMemoryMiB && spec.MemoryMiB <= ark.MaxMemoryMiB &&
-		spec.DiskGiB >= ark.MinDiskGiB && spec.DiskGiB <= ark.MaxDiskGiB
+	return validID(spec.ID) && imageID.MatchString(spec.ImageID) && outpost.ValidateSSHPublicKey(spec.SSHPublicKey) == nil &&
+		spec.VCPUs >= outpost.MinVCPUs && spec.VCPUs <= outpost.MaxVCPUs &&
+		spec.MemoryMiB >= outpost.MinMemoryMiB && spec.MemoryMiB <= outpost.MaxMemoryMiB &&
+		spec.DiskGiB >= outpost.MinDiskGiB && spec.DiskGiB <= outpost.MaxDiskGiB
 }
 func validID(id string) bool {
 	parsed, err := uuid.Parse(id)

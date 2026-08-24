@@ -8,23 +8,23 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nishantdania/ark/internal/api"
+	"github.com/nishantdania/outpost/internal/api"
 )
 
 func TestCreateCommand(t *testing.T) {
-	t.Setenv("ARK_TOKEN", "test-token")
+	t.Setenv("OUTPOST_TOKEN", "test-token")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodPost)
 		}
-		if r.URL.Path != "/v1/arks" {
-			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/arks")
+		if r.URL.Path != "/v1/outposts" {
+			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/outposts")
 		}
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			t.Errorf("Authorization = %q, want bearer token", r.Header.Get("Authorization"))
 		}
 
-		var request api.CreateArkRequest
+		var request api.CreateOutpostRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Errorf("decode request: %v", err)
 		}
@@ -55,7 +55,7 @@ func TestCreateCommand(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	var created api.Ark
+	var created api.Outpost
 	if err := json.Unmarshal(output.Bytes(), &created); err != nil {
 		t.Fatalf("decode JSON output: %v", err)
 	}

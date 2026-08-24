@@ -1,38 +1,39 @@
 #!/bin/sh
 set -eu
-version=${ARK_VERSION:?ARK_VERSION is required}
-arch=${ARK_ARCH:-amd64}
+version=${OUTPOST_VERSION:?OUTPOST_VERSION is required}
+printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo 'OUTPOST_VERSION must be semver without v' >&2; exit 1; }
+arch=${OUTPOST_ARCH:-amd64}
 [ "$arch" = amd64 ] || { echo "unsupported architecture: $arch" >&2; exit 1; }
-out=${ARK_OUTPUT_DIR:-dist}
+out=${OUTPOST_OUTPUT_DIR:-dist}
 release=$out/release
 rm -rf "$release"
 mkdir -p "$release"
 copy() { cp "$1" "$release/$2"; }
-copy "$out/ark" ark
-copy "$out/arkd" arkd
-copy "$out/ark-vm-launcher" ark-vm-launcher
-copy deploy/systemd/arkd.service arkd.service
-copy deploy/systemd/ark-vm-launcher.service ark-vm-launcher.service
+copy "$out/outpost" outpost
+copy "$out/outpostd" outpostd
+copy "$out/outpost-vm-launcher" outpost-vm-launcher
+copy deploy/systemd/outpostd.service outpostd.service
+copy deploy/systemd/outpost-vm-launcher.service outpost-vm-launcher.service
 copy scripts/install-server install-server
 chmod 0755 "$release/install-server"
-copy "${ARK_FIRECRACKER:?ARK_FIRECRACKER is required}" firecracker
-copy "${ARK_JAILER:?ARK_JAILER is required}" jailer
-copy "${ARK_KERNEL:?ARK_KERNEL is required}" vmlinux
-zstd -q --no-progress -19 -c "$out/ark-default-$version-$arch.ext4" > "$release/rootfs.ext4.zst"
-zstd -q --no-progress -19 -c "$out/ark-default-$version-$arch.oci.tar" > "$release/default.oci.tar.zst"
+copy "${OUTPOST_FIRECRACKER:?OUTPOST_FIRECRACKER is required}" firecracker
+copy "${OUTPOST_JAILER:?OUTPOST_JAILER is required}" jailer
+copy "${OUTPOST_KERNEL:?OUTPOST_KERNEL is required}" vmlinux
+zstd -q --no-progress -19 -c "$out/outpost-default-$version-$arch.ext4" > "$release/rootfs.ext4.zst"
+zstd -q --no-progress -19 -c "$out/outpost-default-$version-$arch.oci.tar" > "$release/default.oci.tar.zst"
 [ "$(wc -c < "$release/rootfs.ext4.zst")" -le 1610612736 ] || { echo 'compressed rootfs exceeds release size limit' >&2; exit 1; }
 [ "$(wc -c < "$release/default.oci.tar.zst")" -le 1610612736 ] || { echo 'compressed OCI archive exceeds release size limit' >&2; exit 1; }
 python3 - "$release" "$version" "$arch" <<'PY'
 import hashlib,json,os,sys
 root,version,arch=sys.argv[1:]
-files={'ark':'ark','arkd':'arkd','ark-vm-launcher':'ark-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','arkd.service':'arkd.service','ark-vm-launcher.service':'ark-vm-launcher.service'}
+files={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service'}
 assets=[]
 for name,file in files.items():
  published=file
  h=hashlib.sha256()
  with open(os.path.join(root,published),'rb') as f:
   for b in iter(lambda:f.read(1024*1024),b''): h.update(b)
- assets.append({'name':name,'file':file,'sha256':h.hexdigest(),'url':'https://github.com/nishantdania/ark/releases/download/v'+version+'/'+published})
+ assets.append({'name':name,'file':file,'sha256':h.hexdigest(),'url':'https://github.com/nishantdania/outpost/releases/download/v'+version+'/'+published})
 with open(os.path.join(root,'assets.json'),'w') as f: json.dump({'version':version,'architecture':arch,'assets':assets},f,sort_keys=True,separators=(',',':'))
 PY
-( cd "$release" && sha256sum ark arkd ark-vm-launcher firecracker jailer vmlinux rootfs.ext4.zst default.oci.tar.zst arkd.service ark-vm-launcher.service install-server assets.json > checksums.txt )
+( cd "$release" && sha256sum outpost outpostd outpost-vm-launcher firecracker jailer vmlinux rootfs.ext4.zst default.oci.tar.zst outpostd.service outpost-vm-launcher.service install-server assets.json > checksums.txt )

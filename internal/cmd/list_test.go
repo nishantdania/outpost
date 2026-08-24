@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/nishantdania/ark/internal/api"
+	"github.com/nishantdania/outpost/internal/api"
 )
 
 func TestListCommandWritesJSON(t *testing.T) {
@@ -15,12 +15,12 @@ func TestListCommandWritesJSON(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodGet)
 		}
-		if r.URL.Path != "/v1/arks" {
-			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/arks")
+		if r.URL.Path != "/v1/outposts" {
+			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/outposts")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`[{"id":"ark_123","name":"investigate-deploy"}]`))
+		_, _ = w.Write([]byte(`[{"id":"outpost_123","name":"investigate-deploy"}]`))
 	}))
 	defer server.Close()
 
@@ -34,12 +34,12 @@ func TestListCommandWritesJSON(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	var arks []api.Ark
-	if err := json.Unmarshal(output.Bytes(), &arks); err != nil {
+	var outposts []api.Outpost
+	if err := json.Unmarshal(output.Bytes(), &outposts); err != nil {
 		t.Fatalf("decode JSON output: %v", err)
 	}
 
-	if len(arks) != 1 || arks[0].Id != "ark_123" {
-		t.Fatalf("JSON output = %v, want ark_123", arks)
+	if len(outposts) != 1 || outposts[0].Id != "outpost_123" {
+		t.Fatalf("JSON output = %v, want outpost_123", outposts)
 	}
 }

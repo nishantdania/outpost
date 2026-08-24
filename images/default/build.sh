@@ -1,23 +1,23 @@
 #!/bin/sh
 set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
-version=${ARK_VERSION:?ARK_VERSION is required}
-arch=${ARK_ARCH:-amd64}
+version=${OUTPOST_VERSION:?OUTPOST_VERSION is required}
+arch=${OUTPOST_ARCH:-amd64}
 [ "$arch" = amd64 ] || { echo "unsupported architecture: $arch" >&2; exit 1; }
-out=${ARK_OUTPUT_DIR:-$root/dist}
+out=${OUTPOST_OUTPUT_DIR:-$root/dist}
 engine=${OCI_ENGINE:-docker}
 epoch=${SOURCE_DATE_EPOCH:?SOURCE_DATE_EPOCH is required}
 mkdir -p "$out"
-tag="ark/default:$version-$arch"
+tag="outpost/default:$version-$arch"
 tmp=$(mktemp -d)
 container=
 cleanup() { [ -z "$container" ] || "$engine" rm -f "$container" >/dev/null 2>&1 || true; [ ! -d "$tmp/root" ] || "$engine" run --rm -v "$tmp/root:/out" "$tag" sh -c 'rm -rf /out/* /out/.[!.]* /out/..?*' >/dev/null 2>&1 || true; rm -rf "$tmp"; }
 trap cleanup EXIT INT TERM
-if [ "${ARK_NO_CACHE:-0}" = 1 ]; then cache=--no-cache; else cache=; fi
+if [ "${OUTPOST_NO_CACHE:-0}" = 1 ]; then cache=--no-cache; else cache=; fi
 "$engine" build $cache --provenance=false --platform="linux/$arch" --build-arg SOURCE_DATE_EPOCH="$epoch" -t "$tag" "$root/images/default"
 container=$("$engine" create "$tag")
 "$engine" export "$container" > "$tmp/export.tar"
-python3 - "$tmp/export.tar" "$tmp/layer.tar" "$out/ark-default-$version-$arch.oci.tar" "$version" "$epoch" <<'PY'
+python3 - "$tmp/export.tar" "$tmp/layer.tar" "$out/outpost-default-$version-$arch.oci.tar" "$version" "$epoch" <<'PY'
 import hashlib,json,os,sys,tarfile,tempfile,shutil
 source,layer,archive,version,epoch=sys.argv[1:]; epoch=int(epoch)
 with tarfile.open(source) as src, tarfile.open(layer,'w',format=tarfile.PAX_FORMAT) as dst:
@@ -30,9 +30,9 @@ with tarfile.open(source) as src, tarfile.open(layer,'w',format=tarfile.PAX_FORM
 def digest(data): return hashlib.sha256(data).hexdigest()
 layer_data=open(layer,'rb').read(); layer_hash=digest(layer_data)
 created='1970-01-01T00:00:00Z'
-config=json.dumps({'architecture':'amd64','config':{},'created':created,'history':[{'created':created,'created_by':'ark default image'}],'os':'linux','rootfs':{'diff_ids':['sha256:'+layer_hash],'type':'layers'}},sort_keys=True,separators=(',',':')).encode(); config_hash=digest(config)
+config=json.dumps({'architecture':'amd64','config':{},'created':created,'history':[{'created':created,'created_by':'outpost default image'}],'os':'linux','rootfs':{'diff_ids':['sha256:'+layer_hash],'type':'layers'}},sort_keys=True,separators=(',',':')).encode(); config_hash=digest(config)
 manifest=json.dumps({'config':{'digest':'sha256:'+config_hash,'mediaType':'application/vnd.oci.image.config.v1+json','size':len(config)},'layers':[{'digest':'sha256:'+layer_hash,'mediaType':'application/vnd.oci.image.layer.v1.tar','size':len(layer_data)}],'mediaType':'application/vnd.oci.image.manifest.v1+json','schemaVersion':2},sort_keys=True,separators=(',',':')).encode(); manifest_hash=digest(manifest)
-index=json.dumps({'manifests':[{'annotations':{'org.opencontainers.image.ref.name':'ark/default:'+version+'-amd64'},'digest':'sha256:'+manifest_hash,'mediaType':'application/vnd.oci.image.manifest.v1+json','size':len(manifest)}],'schemaVersion':2},sort_keys=True,separators=(',',':')).encode()
+index=json.dumps({'manifests':[{'annotations':{'org.opencontainers.image.ref.name':'outpost/default:'+version+'-amd64'},'digest':'sha256:'+manifest_hash,'mediaType':'application/vnd.oci.image.manifest.v1+json','size':len(manifest)}],'schemaVersion':2},sort_keys=True,separators=(',',':')).encode()
 layout=b'{"imageLayoutVersion":"1.0.0"}'
 d=tempfile.mkdtemp()
 try:
@@ -49,7 +49,7 @@ PY
 mkdir "$tmp/root"
 "$engine" run --rm -i -v "$tmp/root:/out" "$tag" tar -C /out -xf - < "$tmp/layer.tar"
 "$engine" run --rm -v "$tmp/root:/out" "$tag" find /out -exec touch -h -d "@$epoch" '{}' +
-image="ark-default-$version-$arch.ext4"
+image="outpost-default-$version-$arch.ext4"
 cat > "$tmp/make-ext4" <<'SH'
 #!/bin/sh
 set -eu
@@ -64,7 +64,7 @@ debugfs -w -f /work/debugfs.commands "/work/$IMAGE" >/dev/null 2>&1
 chown "$OWNER" "/work/$IMAGE"
 SH
 chmod 0755 "$tmp/make-ext4"
-"$engine" run --rm -e EPOCH="$epoch" -e SIZE="${ARK_ROOTFS_SIZE:-4G}" -e IMAGE="$image" -e OWNER="$(id -u):$(id -g)" -v "$tmp:/work" "$tag" /work/make-ext4
+"$engine" run --rm -e EPOCH="$epoch" -e SIZE="${OUTPOST_ROOTFS_SIZE:-4G}" -e IMAGE="$image" -e OWNER="$(id -u):$(id -g)" -v "$tmp:/work" "$tag" /work/make-ext4
 python3 - "$tmp/$image" "$epoch" <<'PY'
 import struct,sys
 path,epoch=sys.argv[1:]
@@ -72,4 +72,4 @@ with open(path,'r+b') as f:
  for offset in (1024+48,1024+64,1024+264): f.seek(offset); f.write(struct.pack('<I',int(epoch)))
 PY
 mv "$tmp/$image" "$out/$image"
-( cd "$out" && sha256sum "ark-default-$version-$arch.oci.tar" "$image" > checksums.txt )
+( cd "$out" && sha256sum "outpost-default-$version-$arch.oci.tar" "$image" > checksums.txt )

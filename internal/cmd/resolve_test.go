@@ -6,11 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/nishantdania/ark/internal/remote"
+	"github.com/nishantdania/outpost/internal/remote"
 	"github.com/spf13/cobra"
 )
 
-func TestResolveRemoteRejectsUnavailableArks(t *testing.T) {
+func TestResolveRemoteRejectsUnavailableOutposts(t *testing.T) {
 	for _, result := range []struct {
 		status int
 		body   string
@@ -32,7 +32,7 @@ func TestResolveRemoteRejectsUnavailableArks(t *testing.T) {
 			command := &cobra.Command{}
 			command.SetContext(context.Background())
 			if _, err := resolveRemote(command, options, "work"); err == nil {
-				t.Fatal("resolved unavailable Ark")
+				t.Fatal("resolved unavailable Outpost")
 			}
 			if runner.name != "" {
 				t.Fatal("runner was invoked")

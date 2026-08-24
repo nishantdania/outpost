@@ -13,13 +13,13 @@ func TestParseConfig(t *testing.T) {
 		{
 			name:     "default configuration",
 			wantAddr: "127.0.0.1:17890",
-			wantDB:   "./ark.db",
+			wantDB:   "./outpost.db",
 		},
 		{
 			name:     "custom configuration",
-			args:     []string{"--listen", ":8080", "--database", "data/ark.db"},
+			args:     []string{"--listen", ":8080", "--database", "data/outpost.db"},
 			wantAddr: ":8080",
-			wantDB:   "data/ark.db",
+			wantDB:   "data/outpost.db",
 		},
 		{
 			name:    "unknown flag",

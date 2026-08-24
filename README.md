@@ -1,6 +1,6 @@
-# Ark
+# Outpost
 
-Ark runs persistent Firecracker VMs on a remote Linux server.
+Outpost runs persistent Firecracker VMs on a remote Linux server.
 
 ## Requirements
 
@@ -11,25 +11,25 @@ Ark runs persistent Firecracker VMs on a remote Linux server.
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nishantdania/ark/refs/heads/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nishantdania/outpost/refs/heads/main/install.sh | bash
 ```
 
-The installer asks for `user@server` to install both the client and remote server, `local` to install a server on this machine, or nothing for the client only. It installs `ark` in `~/.local/bin`; after a remote install, `ark list` works immediately. On Arch, required packages must already be installed; Ark never upgrades the system. Re-run the installer before using `ark uninstall`; it confirms `uninstall` (or accepts `--yes`) and removes the configured server and local Ark files.
+The installer asks for `user@server` to install both the client and remote server, `local` to install a server on this machine, or nothing for the client only. It installs `outpost` in `~/.local/bin`; after a remote install, `outpost list` works immediately. On Arch, required packages must already be installed; Outpost never upgrades the system. Re-run the installer before using `outpost uninstall`; it confirms `uninstall` (or accepts `--yes`) and removes the configured server and local Outpost files.
 
 ## Usage
 
 ```bash
-ark create dev
-ark list
-ark ssh dev
-ark exec dev -- uname -a
-ark copy ./file dev:/root/file
-ark sync ./project/ dev:/root/project/
-ark stop dev
-ark start dev
-ark delete dev
-ark image list
-ark image build -t coding:latest ./images/coding
-ark create coding --image coding:latest --cpus 4 --memory 8G --disk 32G
-ark uninstall
+outpost create dev
+outpost list
+outpost ssh dev
+outpost exec dev -- uname -a
+outpost copy ./file dev:/root/file
+outpost sync ./project/ dev:/root/project/
+outpost stop dev
+outpost start dev
+outpost delete dev
+outpost image list
+outpost image build -t coding:latest ./images/coding
+outpost create coding --image coding:latest --cpus 4 --memory 8G --disk 32G
+outpost uninstall
 ```

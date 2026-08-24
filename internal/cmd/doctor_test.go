@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nishantdania/ark/internal/doctor"
-	"github.com/nishantdania/ark/internal/remote"
+	"github.com/nishantdania/outpost/internal/doctor"
+	"github.com/nishantdania/outpost/internal/remote"
 )
 
 type doctorHTTP struct{ status int }

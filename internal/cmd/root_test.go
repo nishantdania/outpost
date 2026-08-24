@@ -3,7 +3,7 @@ package cmd
 import "testing"
 
 func TestRootCommandUsesServerEnvironment(t *testing.T) {
-	t.Setenv("ARK_SERVER", "https://handoff.example")
+	t.Setenv("OUTPOST_SERVER", "https://handoff.example")
 	root := newRootCmd()
 	if got, _ := root.PersistentFlags().GetString("server"); got != "https://handoff.example" {
 		t.Fatalf("server = %q", got)

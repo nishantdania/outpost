@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 const maxBodyBytes = 64 << 10
@@ -27,7 +27,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{SocketPath: "/run/ark/vm-launcher.sock", StateDir: "/srv/ark/state", RuntimeDir: "/run/ark", SocketGID: -1}
+	return Config{SocketPath: "/run/outpost/vm-launcher.sock", StateDir: "/srv/outpost/state", RuntimeDir: "/run/outpost", SocketGID: -1}
 }
 
 type Server struct {

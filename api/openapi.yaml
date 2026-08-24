@@ -1,101 +1,101 @@
 openapi: 3.0.3
 info:
-  title: Ark API
+  title: Outpost API
   version: 1.0.0
 security:
   - bearerAuth: []
 paths:
-  /v1/arks:
+  /v1/outposts:
     get:
-      operationId: listArks
-      summary: List Arks
+      operationId: listOutposts
+      summary: List Outposts
       responses:
         "200":
-          description: Arks were listed successfully.
+          description: Outposts were listed successfully.
           content:
             application/json:
               schema:
                 type: array
-                items: {$ref: "#/components/schemas/Ark"}
+                items: {$ref: "#/components/schemas/Outpost"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "500": {$ref: "#/components/responses/ServerError"}
     post:
-      operationId: createArk
-      summary: Create an Ark
+      operationId: createOutpost
+      summary: Create an Outpost
       requestBody:
         required: true
         content:
           application/json:
-            schema: {$ref: "#/components/schemas/CreateArkRequest"}
+            schema: {$ref: "#/components/schemas/CreateOutpostRequest"}
       responses:
         "201":
-          description: Ark was created successfully.
+          description: Outpost was created successfully.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/Ark"}
+              schema: {$ref: "#/components/schemas/Outpost"}
         "400": {$ref: "#/components/responses/InvalidRequest"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "409": {$ref: "#/components/responses/Conflict"}
         "500": {$ref: "#/components/responses/ServerError"}
-  /v1/arks/{name}:
+  /v1/outposts/{name}:
     parameters:
       - name: name
         in: path
         required: true
         schema: {type: string}
     get:
-      operationId: getArk
-      summary: Get an Ark
+      operationId: getOutpost
+      summary: Get an Outpost
       responses:
         "200":
-          description: Ark was found.
+          description: Outpost was found.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/Ark"}
+              schema: {$ref: "#/components/schemas/Outpost"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "500": {$ref: "#/components/responses/ServerError"}
     delete:
-      operationId: deleteArk
-      summary: Delete an Ark
+      operationId: deleteOutpost
+      summary: Delete an Outpost
       responses:
         "200":
-          description: Ark was deleted successfully.
+          description: Outpost was deleted successfully.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/Ark"}
+              schema: {$ref: "#/components/schemas/Outpost"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "409": {$ref: "#/components/responses/Conflict"}
         "500": {$ref: "#/components/responses/ServerError"}
-  /v1/arks/{name}/start:
+  /v1/outposts/{name}/start:
     post:
-      operationId: startArk
-      summary: Start an Ark
+      operationId: startOutpost
+      summary: Start an Outpost
       parameters:
-        - $ref: "#/components/parameters/ArkName"
+        - $ref: "#/components/parameters/OutpostName"
       responses:
         "200":
-          description: Ark was started successfully.
+          description: Outpost was started successfully.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/Ark"}
+              schema: {$ref: "#/components/schemas/Outpost"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "409": {$ref: "#/components/responses/Conflict"}
         "500": {$ref: "#/components/responses/ServerError"}
-  /v1/arks/{name}/stop:
+  /v1/outposts/{name}/stop:
     post:
-      operationId: stopArk
-      summary: Stop an Ark
+      operationId: stopOutpost
+      summary: Stop an Outpost
       parameters:
-        - $ref: "#/components/parameters/ArkName"
+        - $ref: "#/components/parameters/OutpostName"
       responses:
         "200":
-          description: Ark was stopped successfully.
+          description: Outpost was stopped successfully.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/Ark"}
+              schema: {$ref: "#/components/schemas/Outpost"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "409": {$ref: "#/components/responses/Conflict"}
@@ -133,7 +133,7 @@ components:
       type: http
       scheme: bearer
   parameters:
-    ArkName:
+    OutpostName:
       name: name
       in: path
       required: true
@@ -146,10 +146,10 @@ components:
       description: Request is invalid.
       content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
     Conflict:
-      description: Ark lifecycle operation conflicts with its current state.
+      description: Outpost lifecycle operation conflicts with its current state.
       content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
     NotFound:
-      description: Ark was not found.
+      description: Outpost was not found.
       content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
     TooLarge:
       description: Request body is too large.
@@ -164,7 +164,7 @@ components:
       description: Server failed to process the request.
       content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
   schemas:
-    Ark:
+    Outpost:
       type: object
       required: [id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, created_at, updated_at]
       properties:
@@ -180,7 +180,7 @@ components:
         failure: {type: string}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
-    CreateArkRequest:
+    CreateOutpostRequest:
       type: object
       required: [name, image_id, vcpus, memory_mib, disk_gib]
       properties:

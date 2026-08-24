@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
 type Runtime interface {

@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/nishantdania/ark/internal/api"
+	"github.com/nishantdania/outpost/internal/api"
 )
 
 func TestDeleteCommand(t *testing.T) {
@@ -15,8 +15,8 @@ func TestDeleteCommand(t *testing.T) {
 		if r.Method != http.MethodDelete {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodDelete)
 		}
-		if r.URL.Path != "/v1/arks/demo" {
-			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/arks/demo")
+		if r.URL.Path != "/v1/outposts/demo" {
+			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/outposts/demo")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -34,7 +34,7 @@ func TestDeleteCommand(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	var deleted api.Ark
+	var deleted api.Outpost
 	if err := json.Unmarshal(output.Bytes(), &deleted); err != nil {
 		t.Fatalf("decode JSON output: %v", err)
 	}

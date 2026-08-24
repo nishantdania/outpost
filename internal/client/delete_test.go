@@ -7,13 +7,13 @@ import (
 	"testing"
 )
 
-func TestDeleteArk(t *testing.T) {
+func TestDeleteOutpost(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
 			t.Errorf("method = %q, want %q", r.Method, http.MethodDelete)
 		}
-		if r.URL.Path != "/v1/arks/demo" {
-			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/arks/demo")
+		if r.URL.Path != "/v1/outposts/demo" {
+			t.Errorf("path = %q, want %q", r.URL.Path, "/v1/outposts/demo")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -26,11 +26,11 @@ func TestDeleteArk(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	deleted, err := client.DeleteArk(context.Background(), "demo")
+	deleted, err := client.DeleteOutpost(context.Background(), "demo")
 	if err != nil {
-		t.Fatalf("DeleteArk() error = %v", err)
+		t.Fatalf("DeleteOutpost() error = %v", err)
 	}
 	if deleted.Id == "" || deleted.Name != "demo" {
-		t.Fatalf("DeleteArk() = %v, want deleted demo", deleted)
+		t.Fatalf("DeleteOutpost() = %v, want deleted demo", deleted)
 	}
 }

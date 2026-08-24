@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/nishantdania/ark/internal/api"
+	"github.com/nishantdania/outpost/internal/api"
 )
 
 const lifecycleRequestTimeout = 5 * time.Minute

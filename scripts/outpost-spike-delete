@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Idempotently remove resources created by outpost-spike-launch. Run as root.
+set -euo pipefail
+IFS=$'\n\t'
+
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+config=${OUTPOST_SPIKE_CONFIG:-"$here/outpost-spike.env"}
+[[ ${EUID} -eq 0 ]] || { echo "run as root" >&2; exit 1; }
+[[ -r $config ]] || { echo "missing configuration: $config" >&2; exit 1; }
+# shellcheck disable=SC1090
+source "$config"
+[[ $RUNTIME_BASE == /* && $RUNTIME_BASE != / && $JAILER_BASE == /* && $JAILER_BASE != / ]] || { echo "runtime and jail bases must be non-root absolute paths" >&2; exit 2; }
+exec_name=$(basename -- "$FIRECRACKER")
+[[ $exec_name =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Firecracker executable name is invalid" >&2; exit 2; }
+[[ $# -eq 1 && $1 =~ ^[A-Za-z0-9-]{1,64}$ ]] || { echo "usage: $0 <id>" >&2; exit 2; }
+id=$1
+hash=$(printf '%s' "$id" | sha256sum | cut -c1-4)
+tap="outpost${hash}"
+runtime="$RUNTIME_BASE/vms/$id"
+jail_root="$JAILER_BASE/$exec_name/$id/root"
+metadata="$runtime/runtime.json"
+
+pid=
+starttime=
+pid_file=
+if [[ -r $metadata ]]; then
+  pid=$(sed -nE 's/.*"pid":([0-9]+).*/\1/p' "$metadata")
+  starttime=$(sed -nE 's/.*"process_starttime":"([0-9]+)".*/\1/p' "$metadata")
+fi
+if [[ -r $jail_root/$exec_name.pid ]]; then
+  pid_file=$(<"$jail_root/$exec_name.pid")
+fi
+if [[ ( ! $pid =~ ^[0-9]+$ || ! -r /proc/$pid/stat ) && $pid_file =~ ^[0-9]+$ ]]; then
+  pid=$pid_file
+  starttime=
+fi
+same_process() {
+  local candidate=$1 expected_starttime=$2 current_starttime exe_link state stat_line
+  IFS= read -r stat_line 2>/dev/null < "/proc/$candidate/stat" || return 1
+  current_starttime=$(awk '{print $22}' <<< "$stat_line")
+  state=$(awk '{print $3}' <<< "$stat_line")
+  [[ -n $current_starttime && ( -z $expected_starttime || $current_starttime == "$expected_starttime" ) ]] || return 1
+  [[ $state != Z ]] || return 1
+  exe_link=$(readlink "/proc/$candidate/exe" 2>/dev/null || true)
+  if [[ -n $expected_starttime ]]; then
+    [[ $exe_link == "/$exec_name" && ${exe_link##*/} == "$exec_name" ]]
+  else
+    [[ -e $jail_root/$exec_name ]] || return 1
+    [[ $exe_link == "/$exec_name" && ${exe_link##*/} == "$exec_name" ]] || return 1
+    [[ $(stat -Lc '%d:%i' "/proc/$candidate/exe") == $(stat -Lc '%d:%i' "$jail_root/$exec_name") ]]
+  fi
+}
+if [[ $pid =~ ^[0-9]+$ && -r /proc/$pid/stat ]]; then
+  same_process "$pid" "$starttime" || { echo "refusing to signal an unverified PID $pid" >&2; exit 1; }
+  kill -TERM "$pid" 2>/dev/null || { echo "could not stop PID $pid" >&2; exit 1; }
+  for _ in {1..50}; do same_process "$pid" "$starttime" || break; sleep 0.1; done
+  if same_process "$pid" "$starttime"; then
+    kill -KILL "$pid" 2>/dev/null || { echo "could not kill PID $pid" >&2; exit 1; }
+    for _ in {1..50}; do same_process "$pid" "$starttime" || break; sleep 0.1; done
+  fi
+  if same_process "$pid" "$starttime"; then
+    echo "PID $pid survived cleanup; preserving runtime state" >&2
+    exit 1
+  fi
+fi
+
+# Delete only rules carrying this VM's exact comment; leave all other tables/rules alone.
+delete_rules() {
+  local chain=$1 comment=$2 handle
+  while IFS= read -r handle; do
+    if [[ $handle =~ ^[0-9]+$ ]]; then
+      nft delete rule inet outpost_spike "$chain" handle "$handle" || true
+    fi
+  done < <(nft -a list chain inet outpost_spike "$chain" 2>/dev/null | awk -v c="$comment" 'index($0, "comment \"" c "\"") { print $NF }')
+}
+delete_rules forward "outpost-spike:$id:out"
+delete_rules forward "outpost-spike:$id:in"
+delete_rules postrouting "outpost-spike:$id:nat"
+if [[ -r /sys/class/net/$tap/ifalias && $(<"/sys/class/net/$tap/ifalias") == "outpost-spike:$id" ]]; then
+  ip link del "$tap" 2>/dev/null || true
+fi
+
+# Both paths are fully ID-derived, never read from mutable runtime metadata.
+jail_vm_dir="$JAILER_BASE/$exec_name/$id"
+rm -rf -- "$runtime" "${jail_vm_dir:?}"
+echo "deleted $id"

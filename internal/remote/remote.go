@@ -33,7 +33,7 @@ func (systemRunner) Run(ctx context.Context, name string, args []string, streams
 }
 func SystemRunner() Runner { return systemRunner{} }
 func DefaultConfig(home string) Config {
-	base := filepath.Join(home, ".config", "ark")
+	base := filepath.Join(home, ".config", "outpost")
 	return Config{User: "root", IdentityFile: filepath.Join(base, "keys", "id_ed25519"), KnownHostsFile: filepath.Join(base, "known_hosts")}
 }
 

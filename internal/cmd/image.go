@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/nishantdania/ark/internal/client"
+	"github.com/nishantdania/outpost/internal/client"
 	"github.com/spf13/cobra"
 	"io"
 	"os"

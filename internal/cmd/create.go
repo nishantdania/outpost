@@ -8,15 +8,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nishantdania/ark/internal/api"
-	"github.com/nishantdania/ark/internal/ark"
-	"github.com/nishantdania/ark/internal/client"
+	"github.com/nishantdania/outpost/internal/api"
+	"github.com/nishantdania/outpost/internal/client"
+	"github.com/nishantdania/outpost/internal/outpost"
 )
 
 func newCreateCmd(options *rootOptions) *cobra.Command {
-	input := client.CreateArkInput{ImageID: ark.DefaultImageID, VCPUs: ark.DefaultVCPUs, MemoryMiB: ark.DefaultMemoryMiB, DiskGiB: ark.DefaultDiskGiB}
+	input := client.CreateOutpostInput{ImageID: outpost.DefaultImageID, VCPUs: outpost.DefaultVCPUs, MemoryMiB: outpost.DefaultMemoryMiB, DiskGiB: outpost.DefaultDiskGiB}
 	memory, disk, publicKeyPath := "4G", "8G", ""
-	command := &cobra.Command{Use: "create <name>", Short: "Create an Ark", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	command := &cobra.Command{Use: "create <name>", Short: "Create an Outpost", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		var err error
 		input.Name = args[0]
 		if publicKeyPath != "" {
@@ -38,11 +38,11 @@ func newCreateCmd(options *rootOptions) *cobra.Command {
 		if input.DiskGiB, err = parseDiskGiB(disk); err != nil {
 			return fmt.Errorf("parse disk: %w", err)
 		}
-		arkdClient, err := client.New(options.serverURL, options.token)
+		outpostdClient, err := client.New(options.serverURL, options.token)
 		if err != nil {
-			return fmt.Errorf("create arkd client: %w", err)
+			return fmt.Errorf("create outpostd client: %w", err)
 		}
-		result, err := arkdClient.CreateArkWith(cmd.Context(), input)
+		result, err := outpostdClient.CreateOutpostWith(cmd.Context(), input)
 		if err != nil {
 			return err
 		}
@@ -50,7 +50,7 @@ func newCreateCmd(options *rootOptions) *cobra.Command {
 		if err != nil {
 			return err
 		}
-		return writer.Write(result, arkTable([]api.Ark{result}))
+		return writer.Write(result, outpostTable([]api.Outpost{result}))
 	}}
 	command.Flags().StringVar(&input.ImageID, "image", input.ImageID, "image ID")
 	command.Flags().IntVar(&input.VCPUs, "cpus", input.VCPUs, "virtual CPUs")

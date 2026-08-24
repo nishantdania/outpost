@@ -8,32 +8,32 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nishantdania/ark/internal/api"
-	"github.com/nishantdania/ark/internal/ark"
+	"github.com/nishantdania/outpost/internal/api"
+	"github.com/nishantdania/outpost/internal/outpost"
 )
 
-func (c *Client) BuildImage(ctx context.Context, tag, dir string) (ark.Image, error) {
-	file, err := os.CreateTemp("", "ark-context-")
+func (c *Client) BuildImage(ctx context.Context, tag, dir string) (outpost.Image, error) {
+	file, err := os.CreateTemp("", "outpost-context-")
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	name := file.Name()
 	defer os.Remove(name)
 	if err = tarDirectory(file, dir); err != nil {
 		file.Close()
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
 		file.Close()
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	defer file.Close()
 	response, err := c.api.BuildImageWithBodyWithResponse(ctx, &api.BuildImageParams{Tag: tag}, "application/x-tar", file)
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	if response.JSON201 == nil {
-		return ark.Image{}, fmt.Errorf("build image: %s", response.Status())
+		return outpost.Image{}, fmt.Errorf("build image: %s", response.Status())
 	}
 	return image(*response.JSON201), nil
 }
@@ -97,17 +97,17 @@ func tarDirectory(w io.Writer, dir string) error {
 		return err
 	})
 }
-func (c *Client) ImportImage(ctx context.Context, tag string, input io.Reader) (ark.Image, error) {
+func (c *Client) ImportImage(ctx context.Context, tag string, input io.Reader) (outpost.Image, error) {
 	response, err := c.api.ImportImageWithBodyWithResponse(ctx, &api.ImportImageParams{Tag: tag}, "application/octet-stream", input)
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	if response.JSON201 == nil {
-		return ark.Image{}, fmt.Errorf("import image: %s", response.Status())
+		return outpost.Image{}, fmt.Errorf("import image: %s", response.Status())
 	}
 	return image(*response.JSON201), nil
 }
-func (c *Client) ListImages(ctx context.Context) ([]ark.Image, error) {
+func (c *Client) ListImages(ctx context.Context) ([]outpost.Image, error) {
 	response, err := c.api.ListImagesWithResponse(ctx)
 	if err != nil {
 		return nil, err
@@ -115,19 +115,19 @@ func (c *Client) ListImages(ctx context.Context) ([]ark.Image, error) {
 	if response.JSON200 == nil {
 		return nil, fmt.Errorf("list images: %s", response.Status())
 	}
-	out := make([]ark.Image, 0, len(*response.JSON200))
+	out := make([]outpost.Image, 0, len(*response.JSON200))
 	for _, v := range *response.JSON200 {
 		out = append(out, image(v))
 	}
 	return out, nil
 }
-func (c *Client) GetImage(ctx context.Context, ref string) (ark.Image, error) {
+func (c *Client) GetImage(ctx context.Context, ref string) (outpost.Image, error) {
 	response, err := c.api.GetImageWithResponse(ctx, ref)
 	if err != nil {
-		return ark.Image{}, err
+		return outpost.Image{}, err
 	}
 	if response.JSON200 == nil {
-		return ark.Image{}, fmt.Errorf("inspect image: %s", response.Status())
+		return outpost.Image{}, fmt.Errorf("inspect image: %s", response.Status())
 	}
 	return image(*response.JSON200), nil
 }
@@ -151,6 +151,6 @@ func (c *Client) GCImages(ctx context.Context) ([]string, error) {
 	}
 	return *response.JSON200, nil
 }
-func image(v api.Image) ark.Image {
-	return ark.Image{Digest: v.Digest, Size: int64(v.SizeBytes), Tags: v.Tags, CreatedAt: v.CreatedAt}
+func image(v api.Image) outpost.Image {
+	return outpost.Image{Digest: v.Digest, Size: int64(v.SizeBytes), Tags: v.Tags, CreatedAt: v.CreatedAt}
 }

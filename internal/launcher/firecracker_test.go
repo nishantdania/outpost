@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nishantdania/ark/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/vmapi"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -194,8 +194,8 @@ func testRuntime(t *testing.T, configure func(*FirecrackerConfig)) *FirecrackerR
 		DefaultRootFS: filepath.Join(dir, "rootfs"),
 		Uplink:        "eth0",
 		DNS:           "1.1.1.1",
-		ArkVMUID:      os.Getuid(),
-		ArkVMGID:      os.Getgid(),
+		OutpostVMUID:  os.Getuid(),
+		OutpostVMGID:  os.Getgid(),
 		PIDTimeout:    30 * time.Millisecond,
 		StopTimeout:   20 * time.Millisecond,
 		PollInterval:  time.Millisecond,
@@ -220,7 +220,7 @@ func validPublicKey() string {
 	if err != nil {
 		panic(err)
 	}
-	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key))) + " test@ark"
+	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key))) + " test@outpost"
 }
 
 func createRunner(t *testing.T, calls *[]commandCall, e2fsckExit int, failName string) CommandRunner {
@@ -312,12 +312,12 @@ func TestCustomRootFSValidationAndHeldCopy(t *testing.T) {
 	if err != nil || string(got) != string(content) {
 		t.Fatalf("held copy = %q, %v", got, err)
 	}
-	r.config.ArkdUID = os.Getuid() + 1
+	r.config.OutpostdUID = os.Getuid() + 1
 	if rejected, err := r.rootfs(digest); err == nil {
 		rejected.Close()
 		t.Fatal("wrong owner accepted")
 	}
-	r.config.ArkdUID = -1
+	r.config.OutpostdUID = -1
 	for _, test := range []struct {
 		name   string
 		change func()
@@ -385,7 +385,7 @@ func TestCreateCommandSequenceInodeMetadataAndRollback(t *testing.T) {
 			t.Fatalf("rootfs mode = %o", info.Mode().Perm())
 		}
 		stat := info.Sys().(*syscall.Stat_t)
-		if int(stat.Uid) != r.config.ArkVMUID || int(stat.Gid) != r.config.ArkVMGID {
+		if int(stat.Uid) != r.config.OutpostVMUID || int(stat.Gid) != r.config.OutpostVMGID {
 			t.Fatalf("rootfs owner = %d:%d", stat.Uid, stat.Gid)
 		}
 		commands := make(map[string]bool)
@@ -508,20 +508,20 @@ func TestJailPathsLayoutConfigAndExactCleanup(t *testing.T) {
 func TestNetworkUpUsesExactArguments(t *testing.T) {
 	runner := &networkRunner{failAt: -1}
 	r := testRuntime(t, func(config *FirecrackerConfig) { config.Runner = runner })
-	m := manifest{Tap: "ark0001", Gateway: "172.30.0.5", GuestIP: "172.30.0.6"}
+	m := manifest{Tap: "outpost0001", Gateway: "172.30.0.5", GuestIP: "172.30.0.6"}
 	if err := r.networkUp(t.Context(), m); err != nil {
 		t.Fatal(err)
 	}
 	want := []commandCall{
-		{name: "ip", args: []string{"tuntap", "add", "dev", "ark0001", "mode", "tap", "user", fmt.Sprint(os.Getuid())}},
-		{name: "ip", args: []string{"addr", "add", "172.30.0.5/30", "dev", "ark0001"}},
-		{name: "ip", args: []string{"link", "set", "dev", "ark0001", "up"}},
-		{name: "nft", args: []string{"add", "table", "inet", "ark0001"}},
-		{name: "nft", args: []string{"add", "chain", "inet", "ark0001", "forward", "{", "type", "filter", "hook", "forward", "priority", "filter", ";", "policy", "accept", ";", "}"}},
-		{name: "nft", args: []string{"add", "chain", "inet", "ark0001", "postrouting", "{", "type", "nat", "hook", "postrouting", "priority", "srcnat", ";", "policy", "accept", ";", "}"}},
-		{name: "nft", args: []string{"add", "rule", "inet", "ark0001", "forward", "iifname", "ark0001", "oifname", "eth0", "accept"}},
-		{name: "nft", args: []string{"add", "rule", "inet", "ark0001", "forward", "iifname", "eth0", "oifname", "ark0001", "ct", "state", "established,related", "accept"}},
-		{name: "nft", args: []string{"add", "rule", "inet", "ark0001", "postrouting", "ip", "saddr", "172.30.0.6", "oifname", "eth0", "masquerade"}},
+		{name: "ip", args: []string{"tuntap", "add", "dev", "outpost0001", "mode", "tap", "user", fmt.Sprint(os.Getuid())}},
+		{name: "ip", args: []string{"addr", "add", "172.30.0.5/30", "dev", "outpost0001"}},
+		{name: "ip", args: []string{"link", "set", "dev", "outpost0001", "up"}},
+		{name: "nft", args: []string{"add", "table", "inet", "outpost0001"}},
+		{name: "nft", args: []string{"add", "chain", "inet", "outpost0001", "forward", "{", "type", "filter", "hook", "forward", "priority", "filter", ";", "policy", "accept", ";", "}"}},
+		{name: "nft", args: []string{"add", "chain", "inet", "outpost0001", "postrouting", "{", "type", "nat", "hook", "postrouting", "priority", "srcnat", ";", "policy", "accept", ";", "}"}},
+		{name: "nft", args: []string{"add", "rule", "inet", "outpost0001", "forward", "iifname", "outpost0001", "oifname", "eth0", "accept"}},
+		{name: "nft", args: []string{"add", "rule", "inet", "outpost0001", "forward", "iifname", "eth0", "oifname", "outpost0001", "ct", "state", "established,related", "accept"}},
+		{name: "nft", args: []string{"add", "rule", "inet", "outpost0001", "postrouting", "ip", "saddr", "172.30.0.6", "oifname", "eth0", "masquerade"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("calls =\n%#v\nwant\n%#v", runner.calls, want)
@@ -529,7 +529,7 @@ func TestNetworkUpUsesExactArguments(t *testing.T) {
 }
 
 func TestNetworkUpRollsBackEveryPartialFailure(t *testing.T) {
-	m := manifest{Tap: "ark0001", Gateway: "172.30.0.5", GuestIP: "172.30.0.6"}
+	m := manifest{Tap: "outpost0001", Gateway: "172.30.0.5", GuestIP: "172.30.0.6"}
 	for failure := 0; failure < 9; failure++ {
 		t.Run(fmt.Sprint(failure), func(t *testing.T) {
 			runner := &networkRunner{failAt: failure}
@@ -550,7 +550,7 @@ func TestNetworkUpRollsBackEveryPartialFailure(t *testing.T) {
 }
 
 func TestNetworkDownNoopAbsenceAndDeletionFailure(t *testing.T) {
-	m := manifest{Tap: "ark0001", Gateway: "172.30.0.5", GuestIP: "172.30.0.6"}
+	m := manifest{Tap: "outpost0001", Gateway: "172.30.0.5", GuestIP: "172.30.0.6"}
 	t.Run("empty no-op", func(t *testing.T) {
 		runner := &networkRunner{failAt: -1}
 		r := testRuntime(t, func(config *FirecrackerConfig) { config.Runner = runner })
@@ -621,12 +621,12 @@ func TestAllocationPersistsAndAvoidsHashCollision(t *testing.T) {
 }
 
 func TestAllocationValidationRejectsMismatchedFields(t *testing.T) {
-	valid := manifest{Tap: "ark0001", Gateway: "172.30.0.5", GuestIP: "172.30.0.6"}
+	valid := manifest{Tap: "outpost0001", Gateway: "172.30.0.5", GuestIP: "172.30.0.6"}
 	if !allocationValid(valid) {
 		t.Fatal("valid allocation rejected")
 	}
 	for _, m := range []manifest{
-		{Tap: "ark0002", Gateway: valid.Gateway, GuestIP: valid.GuestIP},
+		{Tap: "outpost0002", Gateway: valid.Gateway, GuestIP: valid.GuestIP},
 		{Tap: valid.Tap, Gateway: "172.30.0.1", GuestIP: valid.GuestIP},
 		{Tap: valid.Tap, Gateway: valid.Gateway, GuestIP: "172.31.0.6"},
 		{Tap: valid.Tap, Gateway: valid.Gateway, GuestIP: "172.30.0.7"},

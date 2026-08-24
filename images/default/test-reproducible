@@ -1,20 +1,20 @@
 #!/bin/sh
 set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
-version=${ARK_VERSION:?ARK_VERSION is required}
+version=${OUTPOST_VERSION:?OUTPOST_VERSION is required}
 epoch=${SOURCE_DATE_EPOCH:?SOURCE_DATE_EPOCH is required}
 a=$(mktemp -d)
 b=$(mktemp -d)
 trap 'rm -rf "$a" "$b"' EXIT HUP INT TERM
-ARK_NO_CACHE=1 ARK_VERSION="$version" ARK_OUTPUT_DIR="$a" ARK_ROOTFS_SIZE="${ARK_ROOTFS_SIZE:-1G}" SOURCE_DATE_EPOCH="$epoch" "$root/images/default/build.sh"
-ARK_NO_CACHE=1 ARK_VERSION="$version" ARK_OUTPUT_DIR="$b" ARK_ROOTFS_SIZE="${ARK_ROOTFS_SIZE:-1G}" SOURCE_DATE_EPOCH="$epoch" "$root/images/default/build.sh"
-for image in "$a/ark-default-$version-amd64.ext4" "$b/ark-default-$version-amd64.ext4"; do
+OUTPOST_NO_CACHE=1 OUTPOST_VERSION="$version" OUTPOST_OUTPUT_DIR="$a" OUTPOST_ROOTFS_SIZE="${OUTPOST_ROOTFS_SIZE:-1G}" SOURCE_DATE_EPOCH="$epoch" "$root/images/default/build.sh"
+OUTPOST_NO_CACHE=1 OUTPOST_VERSION="$version" OUTPOST_OUTPUT_DIR="$b" OUTPOST_ROOTFS_SIZE="${OUTPOST_ROOTFS_SIZE:-1G}" SOURCE_DATE_EPOCH="$epoch" "$root/images/default/build.sh"
+for image in "$a/outpost-default-$version-amd64.ext4" "$b/outpost-default-$version-amd64.ext4"; do
  if ! dumpe2fs -h "$image" 2>/dev/null | grep -q 'Filesystem features:.*has_journal' || ! dumpe2fs -h "$image" 2>/dev/null | grep -q 'Filesystem state:.*clean' || ! dumpe2fs -h "$image" 2>/dev/null | grep -q 'Filesystem UUID:.*22222222-2222-2222-2222-222222222222' || ! dumpe2fs -h "$image" 2>/dev/null | grep -q 'Directory Hash Seed:.*11111111-1111-1111-1111-111111111111'; then
   echo 'invalid ext4 metadata' >&2
   exit 1
  fi
 done
-for image in "$a/ark-default-$version-amd64.ext4" "$b/ark-default-$version-amd64.ext4"; do
+for image in "$a/outpost-default-$version-amd64.ext4" "$b/outpost-default-$version-amd64.ext4"; do
  ! debugfs -R 'stat /.dockerenv' "$image" 2>/dev/null | grep -q 'Inode:' || { echo 'docker marker present' >&2; exit 1; }
  debugfs -R 'stat /etc/systemd/system/systemd-firstboot.service' "$image" 2>/dev/null | grep -q '/dev/null' || { echo 'firstboot is not masked' >&2; exit 1; }
  debugfs -R 'stat /etc/systemd/system/default.target' "$image" 2>/dev/null | grep -q 'multi-user.target' || { echo 'wrong default target' >&2; exit 1; }
@@ -23,4 +23,4 @@ for image in "$a/ark-default-$version-amd64.ext4" "$b/ark-default-$version-amd64
  ! debugfs -R 'stat /root/.ssh/authorized_keys' "$image" 2>/dev/null | grep -q 'Inode:' || { echo 'authorized keys present' >&2; exit 1; }
  ! debugfs -R 'stat /etc/machine-id' "$image" 2>/dev/null | grep -q 'Inode:' || { echo 'machine id present' >&2; exit 1; }
 done
-for name in "ark-default-$version-amd64.ext4" "ark-default-$version-amd64.oci.tar"; do hash=$(sha256sum "$a/$name" | awk '{print $1}'); [ "$hash" = "$(sha256sum "$b/$name" | awk '{print $1}')" ] || { echo "non-reproducible $name" >&2; exit 1; }; printf '%s %s\n' "$hash" "$name"; done
+for name in "outpost-default-$version-amd64.ext4" "outpost-default-$version-amd64.oci.tar"; do hash=$(sha256sum "$a/$name" | awk '{print $1}'); [ "$hash" = "$(sha256sum "$b/$name" | awk '{print $1}')" ] || { echo "non-reproducible $name" >&2; exit 1; }; printf '%s %s\n' "$hash" "$name"; done

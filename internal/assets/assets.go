@@ -27,7 +27,7 @@ type Asset struct {
 var fileName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 var digest = regexp.MustCompile(`^[a-f0-9]{64}$`)
 var required = map[string]string{
-	"ark": "ark", "arkd": "arkd", "ark-vm-launcher": "ark-vm-launcher", "firecracker": "firecracker", "jailer": "jailer", "vmlinux": "vmlinux", "rootfs.ext4": "rootfs.ext4", "default": "default.oci.tar",
+	"outpost": "outpost", "outpostd": "outpostd", "outpost-vm-launcher": "outpost-vm-launcher", "firecracker": "firecracker", "jailer": "jailer", "vmlinux": "vmlinux", "rootfs.ext4": "rootfs.ext4", "default": "default.oci.tar",
 }
 
 func Load(path string) (Manifest, error) {
