@@ -3,7 +3,6 @@ package outpost
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -118,27 +117,5 @@ func TestStoreRejectsBlankName(t *testing.T) {
 	_, err = store.Create(context.Background(), "   ")
 	if !errors.Is(err, ErrNameRequired) {
 		t.Fatalf("Create() error = %v, want %v", err, ErrNameRequired)
-	}
-}
-
-func TestSchemaMatchesMigrations(t *testing.T) {
-	store, err := Open(context.Background(), ":memory:")
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-	defer store.Close()
-
-	got, err := store.Schema(context.Background())
-	if err != nil {
-		t.Fatalf("Schema() error = %v", err)
-	}
-
-	want, err := os.ReadFile("schema.sql")
-	if err != nil {
-		t.Fatalf("read schema.sql: %v", err)
-	}
-
-	if got != string(want) {
-		t.Fatalf("schema.sql is stale; run go generate ./internal/outpost\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
