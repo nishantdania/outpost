@@ -129,7 +129,7 @@ EOF
  printf 'Installed Ark %s\n' "$version"
 )
 install_server_packages() {
- local manager=${ARK_INSTALL_PACKAGE_MANAGER:-}
+ local manager=${ARK_INSTALL_PACKAGE_MANAGER:-} command missing=()
  if [[ -z $manager ]]; then
   if command -v apt-get >/dev/null 2>&1; then manager=apt; elif command -v pacman >/dev/null 2>&1; then manager=pacman; else fail 'apt-get or pacman is required'; fi
  fi
@@ -139,7 +139,11 @@ install_server_packages() {
    sudo apt-get install -y curl zstd iproute2 nftables e2fsprogs openssh-client rsync podman uidmap fuse-overlayfs python3
    ;;
   pacman)
-   sudo pacman -S --needed --noconfirm curl zstd iproute2 nftables e2fsprogs openssh rsync podman shadow fuse-overlayfs python
+   for command in curl zstd ip nft mkfs.ext4 e2fsck resize2fs ssh ssh-keygen rsync podman newuidmap newgidmap fuse-overlayfs python3; do
+    command -v "$command" >/dev/null 2>&1 || missing+=("$command")
+   done
+   if command -v python3 >/dev/null 2>&1 && ! python3 -c 'import hashlib, json' >/dev/null 2>&1; then missing+=(python3-unusable); fi
+   ((${#missing[@]} == 0)) || fail "missing or unusable Arch dependencies: ${missing[*]}; install them during your normal system upgrade"
    ;;
   *) fail 'invalid package manager' ;;
  esac
@@ -150,10 +154,10 @@ server_install() (
  [[ $(uname -m) == x86_64 ]] || fail 'x86-64 is required'
  command -v sudo >/dev/null 2>&1 || fail 'sudo is required'
  command -v tailscale >/dev/null 2>&1 || fail 'Tailscale is required'
+ install_server_packages
  work=$(mktemp -d "${TMPDIR:-/tmp}/ark-server-install.XXXXXX")
  trap 'rm -rf "$work"' EXIT HUP INT TERM
  release_metadata "$work"
- install_server_packages
  ip=$(tailscale ip -4 | awk 'NR == 1 { print }')
  valid_ipv4 "$ip" || fail 'a Tailscale IPv4 address is required'
  uplink=$(ip route show default | awk 'NR == 1 { print $5 }')
