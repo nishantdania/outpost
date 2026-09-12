@@ -97,18 +97,30 @@ client_install() (
 #!/usr/bin/env bash
 set -euo pipefail
 fail() { printf '%s\n' "$1" >&2; exit 1; }
-[[ ( $# -eq 1 && $1 == uninstall ) || ( $# -eq 2 && $1 == uninstall && $2 == --yes ) ]] || fail 'usage: outpost uninstall [--yes]'
+[[ $# -ge 1 && $1 == uninstall ]] || fail 'usage: outpost uninstall [--yes] [--client-only]'
+shift
+yes=0; client_only=0
+for option in "$@"; do
+ case $option in
+  --yes) [[ $yes == 0 ]] || fail 'usage: outpost uninstall [--yes] [--client-only]'; yes=1 ;;
+  --client-only) [[ $client_only == 0 ]] || fail 'usage: outpost uninstall [--yes] [--client-only]'; client_only=1 ;;
+  *) fail 'usage: outpost uninstall [--yes] [--client-only]' ;;
+ esac
+done
 [[ ${OUTPOST_UNINSTALL_CONFIG:-} == "$HOME/.config/outpost/server.env" ]] || fail 'refusing to remove an unexpected Outpost configuration path'
-if [[ $# -eq 1 ]]; then
+if [[ $yes == 0 ]]; then
  [[ -r /dev/tty ]] || fail 'a terminal is required; use outpost uninstall --yes for noninteractive use'
- printf "Type uninstall to permanently remove Outpost and all VMs: " >/dev/tty
+ if [[ $client_only == 1 ]]; then prompt='remove only the local Outpost client'; else prompt='permanently remove Outpost and all VMs'; fi
+ printf 'Type uninstall to %s: ' "$prompt" >/dev/tty
  IFS= read -r answer </dev/tty || fail 'unable to read confirmation'
  [[ $answer == uninstall ]] || fail 'uninstall cancelled'
 fi
-if [[ ${OUTPOST_UNINSTALL_LOCAL:-0} == 1 ]]; then
- sudo /usr/local/lib/outpost/outpost-uninstall-server
+if [[ $client_only == 1 ]]; then
+ printf '%s\n' 'Removing only the local Outpost client; the configured server and its VMs will not be removed.' >&2
+elif [[ ${OUTPOST_UNINSTALL_LOCAL:-0} == 1 ]]; then
+ sudo /usr/local/lib/outpost/outpost-uninstall-server || fail 'server uninstall failed; rerun with --client-only to remove only this client'
 else
- ssh -tt -- "$OUTPOST_UNINSTALL_JUMP" 'sudo /usr/local/lib/outpost/outpost-uninstall-server'
+ ssh -tt -- "$OUTPOST_UNINSTALL_JUMP" 'sudo /usr/local/lib/outpost/outpost-uninstall-server' || fail 'server uninstall failed; rerun with --client-only to remove only this client'
 fi
 rm -f -- "$OUTPOST_UNINSTALL_CONFIG" "$OUTPOST_UNINSTALL_BIN" "$OUTPOST_UNINSTALL_SELF"
 rm -f -- "$HOME/.config/outpost/known_hosts" "$HOME/.config/outpost/keys/id_ed25519" "$HOME/.config/outpost/keys/id_ed25519.pub"
@@ -127,7 +139,11 @@ config=\${OUTPOST_CONFIG_FILE:-\$HOME/.config/outpost/server.env}
 real=\${OUTPOST_REAL_BINARY:-$lib/outpost-$version}
 uninstaller=$lib/outpost-uninstall
 fail() { printf '%s\\n' "\$1" >&2; exit 1; }
-if [[ ( \$# -eq 1 && \$1 == uninstall ) || ( \$# -eq 2 && \$1 == uninstall && \$2 == --yes ) ]]; then
+uninstall_command=0
+case "\$*" in
+ uninstall|'uninstall --yes'|'uninstall --client-only'|'uninstall --yes --client-only'|'uninstall --client-only --yes') uninstall_command=1 ;;
+esac
+if [[ \$uninstall_command == 1 ]]; then
  [[ -e \$config ]] || fail 'invalid Outpost configuration'
 fi
 if [[ -e \$config ]]; then
@@ -154,7 +170,7 @@ if [[ -e \$config ]]; then
  [[ -n \${OUTPOST_SERVER:-} ]] || export OUTPOST_SERVER=\$server
  [[ -n \${OUTPOST_TOKEN:-} ]] || export OUTPOST_TOKEN=\$token
  [[ \$local_config == 1 || -n \${OUTPOST_SSH_PROXY_JUMP:-} ]] || export OUTPOST_SSH_PROXY_JUMP=\$jump
- if [[ ( \$# -eq 1 && \$1 == uninstall ) || ( \$# -eq 2 && \$1 == uninstall && \$2 == --yes ) ]]; then
+ if [[ \$uninstall_command == 1 ]]; then
   [[ \$config == "\$HOME/.config/outpost/server.env" ]] || fail 'refusing to remove an unexpected Outpost configuration path'
   [[ -f \$uninstaller && ! -L \$uninstaller ]] || fail 'Outpost uninstaller is not installed'
   [[ \$(sha256sum "\$uninstaller" | awk '{print \$1}') == $uninstaller_sha ]] || fail 'Outpost uninstaller checksum mismatch'

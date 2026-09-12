@@ -71,6 +71,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newExecCmd(options))
 	root.AddCommand(newCopyCmd(options))
 	root.AddCommand(newSyncCmd(options))
+	root.AddCommand(newUninstallCmd())
 	root.AddCommand(newDoctorCmd(options))
 	root.AddCommand(newImageCmd(options))
 

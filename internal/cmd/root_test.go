@@ -16,6 +16,20 @@ func TestRootCommandUsesServerEnvironment(t *testing.T) {
 	}
 }
 
+func TestRootCommandHasUninstallHelp(t *testing.T) {
+	root := newRootCmd()
+	uninstall, args, err := root.Find([]string{"uninstall"})
+	if err != nil {
+		t.Fatalf("find uninstall command: %v", err)
+	}
+	if len(args) != 0 {
+		t.Fatalf("args = %v, want none", args)
+	}
+	if uninstall.Flags().Lookup("client-only") == nil || uninstall.Flags().Lookup("yes") == nil {
+		t.Fatal("uninstall flags are missing")
+	}
+}
+
 func TestRootCommandHasListCommand(t *testing.T) {
 	root := newRootCmd()
 
