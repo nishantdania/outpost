@@ -177,6 +177,7 @@ type manifest struct {
 	Gateway   string       `json:"gateway"`
 	PID       int          `json:"pid"`
 	StartTime string       `json:"start_time"`
+	UFWRoute  bool         `json:"ufw_route"`
 }
 
 type FirecrackerRuntime struct {
@@ -516,6 +517,10 @@ func (r *FirecrackerRuntime) Start(ctx context.Context, id string) (string, erro
 		return "", err
 	}
 	cancel()
+	m.UFWRoute = r.ufwActive(ctx)
+	if err := r.save(id, m); err != nil {
+		return "", err
+	}
 	if err := r.networkUp(ctx, m); err != nil {
 		return "", err
 	}
@@ -1038,13 +1043,39 @@ func (r *FirecrackerRuntime) networkUp(ctx context.Context, m manifest) error {
 		{name: "ip", args: []string{"tuntap", "add", "dev", m.Tap, "mode", "tap", "user", strconv.Itoa(r.config.OutpostVMUID)}},
 		{name: "ip", args: []string{"addr", "add", m.Gateway + "/30", "dev", m.Tap}},
 		{name: "ip", args: []string{"link", "set", "dev", m.Tap, "up"}},
-		{name: "nft", args: []string{"add", "table", "inet", networkTable(m)}},
-		{name: "nft", args: []string{"add", "chain", "inet", networkTable(m), "forward", "{", "type", "filter", "hook", "forward", "priority", "filter", ";", "policy", "accept", ";", "}"}},
-		{name: "nft", args: []string{"add", "chain", "inet", networkTable(m), "postrouting", "{", "type", "nat", "hook", "postrouting", "priority", "srcnat", ";", "policy", "accept", ";", "}"}},
-		{name: "nft", args: []string{"add", "rule", "inet", networkTable(m), "forward", "iifname", m.Tap, "oifname", r.config.Uplink, "accept"}},
-		{name: "nft", args: []string{"add", "rule", "inet", networkTable(m), "forward", "iifname", r.config.Uplink, "oifname", m.Tap, "ct", "state", "established,related", "accept"}},
-		{name: "nft", args: []string{"add", "rule", "inet", networkTable(m), "postrouting", "ip", "saddr", m.GuestIP, "oifname", r.config.Uplink, "masquerade"}},
 	}
+	if m.UFWRoute {
+		commands = append(commands, struct {
+			name string
+			args []string
+		}{name: "ufw", args: []string{"route", "allow", "in", "on", m.Tap, "out", "on", r.config.Uplink}})
+	}
+	commands = append(commands,
+		struct {
+			name string
+			args []string
+		}{name: "nft", args: []string{"add", "table", "inet", networkTable(m)}},
+		struct {
+			name string
+			args []string
+		}{name: "nft", args: []string{"add", "chain", "inet", networkTable(m), "forward", "{", "type", "filter", "hook", "forward", "priority", "filter", ";", "policy", "accept", ";", "}"}},
+		struct {
+			name string
+			args []string
+		}{name: "nft", args: []string{"add", "chain", "inet", networkTable(m), "postrouting", "{", "type", "nat", "hook", "postrouting", "priority", "srcnat", ";", "policy", "accept", ";", "}"}},
+		struct {
+			name string
+			args []string
+		}{name: "nft", args: []string{"add", "rule", "inet", networkTable(m), "forward", "iifname", m.Tap, "oifname", r.config.Uplink, "accept"}},
+		struct {
+			name string
+			args []string
+		}{name: "nft", args: []string{"add", "rule", "inet", networkTable(m), "forward", "iifname", r.config.Uplink, "oifname", m.Tap, "ct", "state", "established,related", "accept"}},
+		struct {
+			name string
+			args []string
+		}{name: "nft", args: []string{"add", "rule", "inet", networkTable(m), "postrouting", "ip", "saddr", m.GuestIP, "oifname", r.config.Uplink, "masquerade"}},
+	)
 	for _, command := range commands {
 		if _, err := r.run(ctx, command.name, command.args...); err != nil {
 			cleanupCtx, cancel := r.cleanupContext()
@@ -1056,6 +1087,11 @@ func (r *FirecrackerRuntime) networkUp(ctx context.Context, m manifest) error {
 	return nil
 }
 
+func (r *FirecrackerRuntime) ufwActive(ctx context.Context) bool {
+	output, err := r.run(ctx, "ufw", "status")
+	return err == nil && strings.HasPrefix(string(output), "Status: active")
+}
+
 func (r *FirecrackerRuntime) networkDown(ctx context.Context, m manifest) error {
 	if m.Tap == "" && m.Gateway == "" && m.GuestIP == "" {
 		return nil
@@ -1064,6 +1100,11 @@ func (r *FirecrackerRuntime) networkDown(ctx context.Context, m manifest) error 
 		return fmt.Errorf("invalid network allocation: %w", vmapi.ErrInvalid)
 	}
 	var result error
+	if m.UFWRoute {
+		if _, err := r.run(ctx, "ufw", "route", "delete", "allow", "in", "on", m.Tap, "out", "on", r.config.Uplink); err != nil {
+			result = errors.Join(result, err)
+		}
+	}
 	table := networkTable(m)
 	if _, err := r.run(ctx, "nft", "list", "table", "inet", table); err == nil {
 		if _, err := r.run(ctx, "nft", "delete", "table", "inet", table); err != nil {
