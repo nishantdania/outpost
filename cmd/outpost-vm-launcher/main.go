@@ -45,9 +45,6 @@ func main() {
 		checksums := map[string]string{}
 		for _, item := range manifest.Assets {
 			path := "/usr/local/lib/outpost/" + item.File
-			if item.File == "outpost" {
-				path = "/usr/local/bin/outpost"
-			}
 			if item.File == "outpost-vm-launcher" || item.File == "firecracker" || item.File == "jailer" || item.File == "vmlinux" {
 				path = "/usr/local/lib/outpost/launcher/" + item.File
 			}
