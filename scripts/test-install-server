@@ -46,12 +46,23 @@ printf '%s\n' "$*" >> "$OUTPOST_FAKE_LN_LOG"
 exec "$OUTPOST_REAL_LN" "$@"
 EOF
 chmod 755 "$work/bin/ln"
+cat > "$work/bin/ufw" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$OUTPOST_FAKE_UFW_LOG"
+if [ "$1" = status ]; then
+ [ "${OUTPOST_TEST_UFW_ACTIVE:-0}" = 1 ] && { printf 'Status: active\n'; exit 0; }
+ printf 'Status: inactive\n'
+fi
+EOF
+chmod 755 "$work/bin/ufw"
 install_uid=$(id -u)
 install_gid=$(id -g)
 root_uid=4242
 root_gid=4243
-run() { timeout "${OUTPOST_INSTALL_TIMEOUT:-30}" env PATH="$work/bin:$PATH" OUTPOST_REAL_CHOWN="$real_chown" OUTPOST_FAKE_CHOWN_LOG="$work/chown" OUTPOST_REAL_LN="$real_ln" OUTPOST_FAKE_LN_LOG="$work/ln" OUTPOST_INSTALL_ROOT="$root" OUTPOST_INSTALL_TEST=1 OUTPOST_INSTALL_UID="$install_uid" OUTPOST_INSTALL_GID="$install_gid" OUTPOST_INSTALL_ROOT_UID="$root_uid" OUTPOST_INSTALL_ROOT_GID="$root_gid" OUTPOST_INSTALL_HANDOFF_HOME=/client OUTPOST_INSTALL_HANDOFF_UID="$install_uid" OUTPOST_INSTALL_HANDOFF_GID="$install_gid" SUDO_UID="$install_uid" SUDO_GID="$install_gid" OUTPOST_VERSION=0.1.0 OUTPOST_UPLINK=eth0 OUTPOST_ARTIFACT_DIR="$artifacts" OUTPOST_FAKE_LOG="$work/log" OUTPOST_INSTALL_TEST_SYSTEMCTL="${OUTPOST_INSTALL_TEST_SYSTEMCTL:-0}" OUTPOST_SYSTEMCTL_FAIL="${OUTPOST_SYSTEMCTL_FAIL:-0}" OUTPOST_INSTALL_TEST_FAIL_HARDLINK="${OUTPOST_INSTALL_TEST_FAIL_HARDLINK:-0}" OUTPOST_INSTALL_TEST_LOG="$work/order" "$installer"; }
+run() { timeout "${OUTPOST_INSTALL_TIMEOUT:-30}" env PATH="$work/bin:$PATH" OUTPOST_REAL_CHOWN="$real_chown" OUTPOST_FAKE_CHOWN_LOG="$work/chown" OUTPOST_REAL_LN="$real_ln" OUTPOST_FAKE_LN_LOG="$work/ln" OUTPOST_INSTALL_ROOT="$root" OUTPOST_INSTALL_TEST=1 OUTPOST_INSTALL_UID="$install_uid" OUTPOST_INSTALL_GID="$install_gid" OUTPOST_INSTALL_ROOT_UID="$root_uid" OUTPOST_INSTALL_ROOT_GID="$root_gid" OUTPOST_INSTALL_HANDOFF_HOME=/client OUTPOST_INSTALL_HANDOFF_UID="$install_uid" OUTPOST_INSTALL_HANDOFF_GID="$install_gid" SUDO_UID="$install_uid" SUDO_GID="$install_gid" OUTPOST_VERSION=0.1.0 OUTPOST_UPLINK=eth0 OUTPOST_ARTIFACT_DIR="$artifacts" OUTPOST_FAKE_LOG="$work/log" OUTPOST_FAKE_UFW_LOG="$work/ufw" OUTPOST_INSTALL_TEST_SYSTEMCTL="${OUTPOST_INSTALL_TEST_SYSTEMCTL:-0}" OUTPOST_SYSTEMCTL_FAIL="${OUTPOST_SYSTEMCTL_FAIL:-0}" OUTPOST_INSTALL_TEST_FAIL_HARDLINK="${OUTPOST_INSTALL_TEST_FAIL_HARDLINK:-0}" OUTPOST_INSTALL_TEST_LOG="$work/order" "$installer"; }
 run
+OUTPOST_TEST_UFW_ACTIVE=1 run
+[ "$(grep -c '^route allow from 172.30.0.0/16 out on eth0$' "$work/ufw")" = 1 ]
 python3 - "$root/usr/local/lib/outpost/assets.json" "$root" <<'PY'
 import hashlib,json,os,sys
 manifest,root=sys.argv[1:]
