@@ -116,6 +116,7 @@ type networkRunner struct {
 	upCalls     int
 	deleteTable error
 	deleteTap   error
+	ufwActive   bool
 	events      *[]string
 }
 
@@ -126,6 +127,12 @@ func (r *networkRunner) Run(ctx context.Context, name string, args ...string) ([
 	r.calls = append(r.calls, call)
 	if r.events != nil {
 		*r.events = append(*r.events, name+" "+strings.Join(args, " "))
+	}
+	if name == "ufw" && reflect.DeepEqual(args, []string{"status"}) {
+		if r.ufwActive {
+			return []byte("Status: active\n"), nil
+		}
+		return []byte("Status: inactive\n"), nil
 	}
 	if name == "ssh-keyscan" {
 		if r.ready {
@@ -525,6 +532,43 @@ func TestNetworkUpUsesExactArguments(t *testing.T) {
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("calls =\n%#v\nwant\n%#v", runner.calls, want)
+	}
+}
+
+func TestUFWActive(t *testing.T) {
+	for _, active := range []bool{false, true} {
+		t.Run(fmt.Sprint(active), func(t *testing.T) {
+			runner := &networkRunner{ufwActive: active}
+			r := testRuntime(t, func(config *FirecrackerConfig) { config.Runner = runner })
+			if got := r.ufwActive(t.Context()); got != active {
+				t.Fatalf("ufwActive() = %t, want %t", got, active)
+			}
+		})
+	}
+}
+
+func TestNetworkUpAddsAndRemovesUFWRouteRule(t *testing.T) {
+	runner := &networkRunner{failAt: -1}
+	r := testRuntime(t, func(config *FirecrackerConfig) { config.Runner = runner })
+	m := manifest{Tap: "outpost0001", Gateway: "172.30.0.5", GuestIP: "172.30.0.6", UFWRoute: true}
+	if err := r.networkUp(t.Context(), m); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.networkDown(t.Context(), m); err != nil {
+		t.Fatal(err)
+	}
+	want := []commandCall{
+		{name: "ufw", args: []string{"route", "allow", "in", "on", "outpost0001", "out", "on", "eth0"}},
+		{name: "ufw", args: []string{"route", "delete", "allow", "in", "on", "outpost0001", "out", "on", "eth0"}},
+	}
+	var got []commandCall
+	for _, call := range runner.calls {
+		if call.name == "ufw" {
+			got = append(got, call)
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("UFW calls = %#v, want %#v", got, want)
 	}
 }
 
