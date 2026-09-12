@@ -263,12 +263,13 @@ server_install() (
 main() {
  local mode=${OUTPOST_INSTALL_MODE:-} target=${OUTPOST_INSTALL_TARGET:-} work server token config_dir config_tmp
  case $mode in ''|client|server) ;; *) fail 'invalid OUTPOST_INSTALL_MODE' ;; esac
- if [[ $mode == server || $target == local ]]; then client_install; server_install; return; fi
+ if [[ $mode == server ]]; then client_install; server_install; return; fi
  if [[ -z $target && $mode != client ]]; then
   [[ -r /dev/tty ]] || fail 'no terminal available; set OUTPOST_INSTALL_MODE=client, server, or OUTPOST_INSTALL_TARGET for automation'
   printf 'Outpost server (user@server, local, or blank for client only): ' >/dev/tty
   IFS= read -r target </dev/tty || fail 'unable to read server target'
  fi
+ if [[ $target == local ]]; then client_install; server_install; return; fi
  if [[ -z $target ]]; then client_install; return; fi
  ssh_target "$target" || { usage; fail 'invalid SSH target'; }
  work=$(mktemp -d "${TMPDIR:-/tmp}/outpost-release-metadata.XXXXXX")
