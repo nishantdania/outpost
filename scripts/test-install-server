@@ -60,7 +60,7 @@ want={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-v
 if set(m)!= {'version','architecture','assets'} or m['version']!='0.1.0' or m['architecture']!='amd64' or len(m['assets'])!=8: raise SystemExit('invalid installed runtime manifest')
 actual={a['name']:a for a in m['assets']}
 if set(actual)!=set(want) or any(set(a)!={'name','file','sha256','url'} or a['file']!=want[n] for n,a in actual.items()): raise SystemExit('runtime manifest has wrong assets')
-paths={'outpost':'/usr/local/bin/outpost','outpostd':'/usr/local/lib/outpost/outpostd','outpost-vm-launcher':'/usr/local/lib/outpost/launcher/outpost-vm-launcher','firecracker':'/usr/local/lib/outpost/launcher/firecracker','jailer':'/usr/local/lib/outpost/launcher/jailer','vmlinux':'/usr/local/lib/outpost/launcher/vmlinux','rootfs.ext4':'/var/lib/outpostd/images/default/rootfs.ext4','default':'/usr/local/lib/outpost/default.oci.tar'}
+paths={'outpost':'/usr/local/lib/outpost/outpost','outpostd':'/usr/local/lib/outpost/outpostd','outpost-vm-launcher':'/usr/local/lib/outpost/launcher/outpost-vm-launcher','firecracker':'/usr/local/lib/outpost/launcher/firecracker','jailer':'/usr/local/lib/outpost/launcher/jailer','vmlinux':'/usr/local/lib/outpost/launcher/vmlinux','rootfs.ext4':'/var/lib/outpostd/images/default/rootfs.ext4','default':'/usr/local/lib/outpost/default.oci.tar'}
 urls=dict(want); urls['rootfs.ext4']='rootfs.ext4.zst'; urls['default']='default.oci.tar.zst'
 for name,path in paths.items():
  if actual[name]['url']!='https://example.test/'+urls[name]: raise SystemExit('runtime URL was not derived from bootstrap '+name)
@@ -73,7 +73,7 @@ PY
 [ "$(head -n 2 "$work/order" | tr '\n' ' ')" = 'hardlink identities ' ]
 grep -Fqx "$root/srv/outpost/state/.outpost-hardlink-probe $root/srv/outpost/jailer/.outpost-hardlink-probe" "$work/ln"
 grep -Fqx "$root_uid:$install_gid $root/usr/local/lib/outpost" "$work/chown"
-grep -q "^$root_uid:$install_gid $root/usr/local/lib/outpost/.outpostd.new" "$work/chown"
+grep -q "^$root_uid:$install_gid $root/usr/local/lib/outpost/.outpost.new.* $root/usr/local/lib/outpost/.outpostd.new" "$work/chown"
 grep -q "^$install_uid:$install_gid $root/var/lib/outpostd/images/default/.rootfs.ext4.new" "$work/chown"
 grep -q "^$install_uid:$install_gid .* $root/var/lib/outpostd/images" "$work/chown"
 grep -Fqx "$root_uid:$root_gid $root/etc/outpostd/launcher.env" "$work/chown"
@@ -149,10 +149,12 @@ artifacts=$work/output/release
 run
 token=$(cat "$root/etc/outpostd/token")
 printf legacy > "$root/usr/local/lib/outpost/firecracker"
+mkdir -p "$root/usr/local/bin"
+printf legacy > "$root/usr/local/bin/outpost"
 : > "$work/chown"
 run
 grep -Fqx "$root_uid:$install_gid $root/usr/local/lib/outpost" "$work/chown"
-grep -q "^$root_uid:$install_gid $root/usr/local/lib/outpost/.outpostd.new" "$work/chown"
+grep -q "^$root_uid:$install_gid $root/usr/local/lib/outpost/.outpost.new.* $root/usr/local/lib/outpost/.outpostd.new" "$work/chown"
 [ ! -e "$root/usr/local/lib/outpost/firecracker" ]
 [ "$token" = "$(cat "$root/etc/outpostd/token")" ]
 [ "$(stat -c %a "$root/etc/outpostd/token")" = 600 ]
@@ -164,7 +166,8 @@ grep -qx 'OUTPOST_SERVER=http://127.0.0.1:17890' "$root$handoff"
 [ "$(stat -c %a "$root/etc/systemd/system/outpost-vm-launcher.service")" = 644 ]
 grep -q -- '--listen=127.0.0.1:17890' "$root/etc/systemd/system/outpostd.service"
 grep -q 'EnvironmentFile=/etc/outpostd/launcher.env' "$root/etc/systemd/system/outpost-vm-launcher.service"
-[ -x "$root/usr/local/bin/outpost" ]
+[ -x "$root/usr/local/lib/outpost/outpost" ]
+[ ! -e "$root/usr/local/bin/outpost" ]
 [ -d "$root/srv/outpost/state" ]
 [ ! -e "$root/var/lib/outpost-vm-launcher" ]
 [ -f "$root/usr/local/lib/outpost/default.oci.tar" ]

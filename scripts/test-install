@@ -84,6 +84,7 @@ EOF
 done
 cat > "$bin/ssh" <<'EOF'
 #!/bin/sh
+[ "${OUTPOST_TEST_SSH_FAIL:-0}" != 1 ] || exit 255
 for arg do command=$arg; done
 case "$command" in
  'sudo /usr/local/lib/outpost/outpost-uninstall-server') printf '%s\n' "$command" > "$OUTPOST_TEST_UNINSTALL_COMMAND_LOG"; exit 0;;
@@ -160,6 +161,16 @@ if HOME="$home" "$home/.local/bin/outpost" uninstall --yes >/dev/null 2>&1; then
 run OUTPOST_INSTALL_TARGET=user@server
 printf x >> "$home/.local/lib/outpost/outpost-1.2.3"
 if HOME="$home" "$home/.local/bin/outpost" uninstall </dev/null >/dev/null 2>&1; then exit 1; fi
+if HOME="$home" PATH="$bin:$PATH" OUTPOST_TEST_SSH_FAIL=1 "$home/.local/bin/outpost" uninstall --yes 2>"$work/uninstall-error"; then exit 1; fi
+grep -Fq 'rerun with --client-only' "$work/uninstall-error"
+[ -e "$home/.local/bin/outpost" ]
+[ -e "$home/.config/outpost/server.env" ]
+HOME="$home" PATH="$bin:$PATH" "$home/.local/bin/outpost" uninstall --client-only --yes 2>"$work/client-only-warning"
+grep -Fq 'configured server and its VMs will not be removed' "$work/client-only-warning"
+[ ! -e "$home/.local/bin/outpost" ]
+[ ! -e "$home/.local/lib/outpost" ]
+[ ! -e "$home/.config/outpost/server.env" ]
+run OUTPOST_INSTALL_TARGET=user@server
 HOME="$home" PATH="$bin:$PATH" OUTPOST_TEST_UNINSTALL_COMMAND_LOG="$work/uninstall-command.log" "$home/.local/bin/outpost" uninstall --yes
 grep -Fqx 'sudo /usr/local/lib/outpost/outpost-uninstall-server' "$work/uninstall-command.log"
 [ ! -e "$home/.local/bin/outpost" ]

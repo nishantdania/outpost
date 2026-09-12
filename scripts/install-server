@@ -278,18 +278,18 @@ chown "$owner_outpostd" "$root$state" "$root$config" "$root$state/images" "$root
 chown "$owner_static" "$root$assets_dir"
 chown "$owner_launcher" "$root$launcher_state" "$root$runtime"
 chown "$owner_vm" "$root$jail" "$root$launcher_assets_dir"
-install -d -m 0755 "$root$prefix/bin"
-install -m 0755 "$stage/verified/outpost" "$root$prefix/bin/.outpost.new.$$"
+install -m 0750 "$stage/verified/outpost" "$root$assets_dir/.outpost.new.$$"
 install -m 0750 "$stage/verified/outpostd" "$root$assets_dir/.outpostd.new.$$"
 for name in default.oci.tar assets.json; do install -m 0640 "$stage/verified/$name" "$root$assets_dir/.$name.new.$$"; done
 for name in outpost-vm-launcher firecracker jailer; do install -m 0750 "$stage/verified/$name" "$root$launcher_assets_dir/.$name.new.$$"; done
 install -m 0640 "$stage/verified/vmlinux" "$root$launcher_assets_dir/.vmlinux.new.$$"
 install -m 0640 "$stage/verified/rootfs.ext4" "$root$state/images/default/.rootfs.ext4.new.$$"
-chown "$owner_static" "$root$assets_dir/.outpostd.new.$$" "$root$assets_dir/.default.oci.tar.new.$$" "$root$assets_dir/.assets.json.new.$$"
+chown "$owner_static" "$root$assets_dir/.outpost.new.$$" "$root$assets_dir/.outpostd.new.$$" "$root$assets_dir/.default.oci.tar.new.$$" "$root$assets_dir/.assets.json.new.$$"
 chown "$owner_outpostd" "$root$state/images/default/.rootfs.ext4.new.$$"
 chown "$owner_vm" "$root$launcher_assets_dir/.outpost-vm-launcher.new.$$" "$root$launcher_assets_dir/.firecracker.new.$$" "$root$launcher_assets_dir/.jailer.new.$$" "$root$launcher_assets_dir/.vmlinux.new.$$"
-mv "$root$prefix/bin/.outpost.new.$$" "$root$prefix/bin/outpost"
+mv "$root$assets_dir/.outpost.new.$$" "$root$assets_dir/outpost"
 mv "$root$assets_dir/.outpostd.new.$$" "$root$assets_dir/outpostd"
+rm -f "$root$prefix/bin/outpost"
 for name in default.oci.tar assets.json; do mv "$root$assets_dir/.$name.new.$$" "$root$assets_dir/$name"; done
 for name in outpost-vm-launcher firecracker jailer vmlinux; do mv "$root$launcher_assets_dir/.$name.new.$$" "$root$launcher_assets_dir/$name"; done
 rm -f "$root$assets_dir/outpost-vm-launcher" "$root$assets_dir/firecracker" "$root$assets_dir/jailer" "$root$assets_dir/vmlinux"
