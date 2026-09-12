@@ -328,7 +328,7 @@ chmod 0600 "$root$config/launcher.env"; chown "$owner_root" "$root$config/launch
 # launcher installs its own nftables forwarding and masquerade rules. Install
 # one persistent rule for Outpost's allocated guest range when UFW is active.
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qx 'Status: active'; then
- ufw route allow from 172.30.0.0/16 out on "$uplink"
+ ufw route allow out on "$uplink" from 172.30.0.0/16
 fi
 sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" -e "s|@LISTEN@|$listen|g" "$stage/verified/outpostd.service" > "$root/etc/systemd/system/outpostd.service"
 sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@LAUNCHER_STATE@|$launcher_state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" "$stage/verified/outpost-vm-launcher.service" > "$root/etc/systemd/system/outpost-vm-launcher.service"
