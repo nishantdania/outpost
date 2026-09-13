@@ -61,6 +61,7 @@ systemctl disable outpost-vm-launcher.service || [ "$launcher_load" = not-found 
 [ "$created_sysctl" != 1 ] || remove /etc/sysctl.d/99-outpost.conf
 remove /etc/systemd/system/outpostd.service
 remove /etc/systemd/system/outpost-vm-launcher.service
+remove /usr/lib/tmpfiles.d/outpost.conf
 remove /usr/local/bin/outpost
 remove /usr/local/lib/outpost
 remove /etc/outpostd

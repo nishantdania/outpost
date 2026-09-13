@@ -83,7 +83,7 @@ def pairs(v):
   if k in d: raise ValueError('duplicate key')
   d[k]=x
  return d
-m=json.load(open(sys.argv[1]),object_pairs_hook=pairs); required={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service'}
+m=json.load(open(sys.argv[1]),object_pairs_hook=pairs); required={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service','tmpfiles':'outpost-tmpfiles.conf'}
 if set(m)!= {'version','architecture','assets'} or m['version']!=sys.argv[2] or m['architecture']!='amd64' or len(m['assets'])!=len(required): raise SystemExit('invalid remote manifest')
 seen=set()
 for a in m['assets']:
@@ -98,7 +98,7 @@ fi
 python3 - "$source" "$version" "$stage/verified" <<'PY'
 import hashlib,json,os,re,stat,sys,urllib.parse
 source,version,out=sys.argv[1:]
-required={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service'}
+required={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service','tmpfiles':'outpost-tmpfiles.conf'}
 try:
  if stat.S_ISLNK(os.lstat(source+'/assets.json').st_mode): raise ValueError('symlink manifest')
  fd=os.open(source+'/assets.json',os.O_RDONLY|os.O_NOFOLLOW)
@@ -274,6 +274,7 @@ PY
  owner_outpostd=outpostd:outpostd; owner_static=root:outpostd; owner_launcher=root:outpostd; owner_vm=root:outpostvm; owner_root=root:root
 else owner_outpostd=${OUTPOST_INSTALL_UID:-0}:${OUTPOST_INSTALL_GID:-0}; root_uid=${OUTPOST_INSTALL_ROOT_UID:-${OUTPOST_INSTALL_UID:-0}}; root_gid=${OUTPOST_INSTALL_ROOT_GID:-${OUTPOST_INSTALL_GID:-0}}; owner_static=$root_uid:${OUTPOST_INSTALL_GID:-0}; owner_launcher=$owner_outpostd; owner_vm=${OUTPOST_INSTALL_OUTPOSTVM_UID:-${OUTPOST_INSTALL_UID:-0}}:${OUTPOST_INSTALL_OUTPOSTVM_GID:-${OUTPOST_INSTALL_GID:-0}}; owner_root=$root_uid:$root_gid; fi
 for path in "$state" "$launcher_state" "$jail" "$runtime" "$config" "$assets_dir" "$launcher_assets_dir" "$state/images" "$state/images/default" "$state/podman" "$runtime/podman" "/etc/systemd/system"; do install -d -m 0750 "$root$path"; done
+install -d -m 0755 "$root/usr/lib/tmpfiles.d"
 chown "$owner_outpostd" "$root$state" "$root$config" "$root$state/images" "$root$state/images/default" "$root$state/podman" "$root$runtime/podman"
 chown "$owner_static" "$root$assets_dir"
 chown "$owner_launcher" "$root$launcher_state" "$root$runtime"
@@ -333,6 +334,7 @@ fi
 sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" -e "s|@LISTEN@|$listen|g" "$stage/verified/outpostd.service" > "$root/etc/systemd/system/outpostd.service"
 sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@LAUNCHER_STATE@|$launcher_state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" "$stage/verified/outpost-vm-launcher.service" > "$root/etc/systemd/system/outpost-vm-launcher.service"
 chmod 0644 "$root/etc/systemd/system/outpostd.service" "$root/etc/systemd/system/outpost-vm-launcher.service"
+install -m 0644 "$stage/verified/outpost-tmpfiles.conf" "$root/usr/lib/tmpfiles.d/outpost.conf"
 install -d -m 0700 "$root$(dirname "$handoff")"
 chown "$handoff_uid:$handoff_gid" "$root$(dirname "$handoff")"
 printf 'OUTPOST_SERVER=%s\nOUTPOST_TOKEN=%s\n' "$server" "$(cat "$root$config/token")" > "$root$handoff"

@@ -12,12 +12,13 @@ installer=$work/standalone/install-server
 for name in outpost outpostd outpost-vm-launcher firecracker jailer vmlinux rootfs.ext4 default.oci.tar; do printf 'tiny %s\n' "$name" > "$artifacts/$name"; done
 cp "$repo/deploy/systemd/outpostd.service" "$artifacts/outpostd.service"
 cp "$repo/deploy/systemd/outpost-vm-launcher.service" "$artifacts/outpost-vm-launcher.service"
+cp "$repo/deploy/tmpfiles.d/outpost.conf" "$artifacts/outpost-tmpfiles.conf"
 zstd -q --no-progress -19 -f "$artifacts/rootfs.ext4" -o "$artifacts/rootfs.ext4.zst"
 zstd -q --no-progress -19 -f "$artifacts/default.oci.tar" -o "$artifacts/default.oci.tar.zst"
 rm "$artifacts/rootfs.ext4" "$artifacts/default.oci.tar"
 python3 - "$artifacts" <<'PY'
 import hashlib,json,os,sys
-p=sys.argv[1]; names={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service'}
+p=sys.argv[1]; names={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service','tmpfiles':'outpost-tmpfiles.conf'}
 a=[]
 for n,f in names.items():
  b=open(os.path.join(p,f),'rb').read(); a.append({'name':n,'file':f,'sha256':hashlib.sha256(b).hexdigest(),'url':'https://example.test/'+f})
@@ -78,7 +79,7 @@ for name,path in paths.items():
 
  with open(root+path,'rb') as f: got=hashlib.sha256(f.read()).hexdigest()
  if actual[name]['sha256']!=got: raise SystemExit('runtime digest does not match installed '+name)
-if {'outpostd.service','outpost-vm-launcher.service'} & set(actual): raise SystemExit('bootstrap-only assets installed in runtime manifest')
+if {'outpostd.service','outpost-vm-launcher.service','tmpfiles'} & set(actual): raise SystemExit('bootstrap-only assets installed in runtime manifest')
 PY
 [ "$(stat -c %a "$root/usr/local/lib/outpost/assets.json")" = 640 ]
 [ "$(head -n 2 "$work/order" | tr '\n' ' ')" = 'hardlink identities ' ]
@@ -100,6 +101,10 @@ rm "$probe"
 [ "$(stat -c %a:%U:%G "$root/usr/local/lib/outpost/launcher/vmlinux")" = "640:$(id -un):$(id -gn)" ]
 [ "$(stat -c %a:%U:%G "$root/etc/outpostd/launcher.env")" = "600:$(id -un):$(id -gn)" ]
 [ "$(stat -c %a:%U:%G "$root/etc/outpostd/containers.conf")" = "640:$(id -un):$(id -gn)" ]
+[ "$(stat -c %a "$root/usr/lib/tmpfiles.d/outpost.conf")" = 644 ]
+cmp -s "$repo/deploy/tmpfiles.d/outpost.conf" "$root/usr/lib/tmpfiles.d/outpost.conf"
+grep -Fqx 'd /run/outpost 0750 root outpostd -' "$root/usr/lib/tmpfiles.d/outpost.conf"
+grep -Fqx 'd /run/outpost/podman 0750 outpostd outpostd -' "$root/usr/lib/tmpfiles.d/outpost.conf"
 grep -Fqx 'CONTAINERS_CONF=/etc/outpostd/containers.conf' "$root/etc/outpostd/outpostd.env"
 grep -Fqx 'cgroup_manager = "cgroupfs"' "$root/etc/outpostd/containers.conf"
 grep -Fqx 'events_logger = "file"' "$root/etc/outpostd/containers.conf"
@@ -112,6 +117,8 @@ grep -q '^ExecStart=/usr/local/lib/outpost/outpostd ' "$root/etc/systemd/system/
 grep -q '^ExecStart=/usr/local/lib/outpost/launcher/outpost-vm-launcher ' "$root/etc/systemd/system/outpost-vm-launcher.service"
 grep -q -- '--state-dir=/srv/outpost/state' "$root/etc/systemd/system/outpost-vm-launcher.service"
 grep -Fqx 'RequiresMountsFor=/var/lib/outpostd /srv/outpost' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'After=network-online.target local-fs.target systemd-tmpfiles-setup.service' "$root/etc/systemd/system/outpost-vm-launcher.service"
+grep -Fqx 'Wants=network-online.target systemd-tmpfiles-setup.service' "$root/etc/systemd/system/outpost-vm-launcher.service"
 grep -Fqx 'ReadWritePaths=/srv/outpost /run/outpost /sys/fs/cgroup' "$root/etc/systemd/system/outpost-vm-launcher.service"
 grep -Fqx 'ReadOnlyPaths=/usr/local/lib/outpost/launcher /var/lib/outpostd/images/default' "$root/etc/systemd/system/outpost-vm-launcher.service"
 if grep -Fq 'ReadWritePaths=/srv/outpost/' "$root/etc/systemd/system/outpost-vm-launcher.service"; then exit 1; fi
@@ -140,18 +147,20 @@ OUTPOST_VERSION=0.1.0 OUTPOST_OUTPUT_DIR="$work/output" OUTPOST_FIRECRACKER="$ar
 [ -f "$work/output/release/default.oci.tar.zst" ]
 [ -f "$work/output/release/outpostd.service" ]
 [ -f "$work/output/release/outpost-vm-launcher.service" ]
+[ -f "$work/output/release/outpost-tmpfiles.conf" ]
 python3 - "$work/output/release/assets.json" <<'PY'
 import hashlib,json,os,sys
 p=sys.argv[1]; m=json.load(open(p))
-want={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service'}
+want={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service','tmpfiles':'outpost-tmpfiles.conf'}
 actual={a['name']:a for a in m['assets']}
-if len(m['assets'])!=10 or set(actual)!=set(want) or any(a['file']!=want[n] for n,a in actual.items()): raise SystemExit('invalid bootstrap manifest')
+if len(m['assets'])!=11 or set(actual)!=set(want) or any(a['file']!=want[n] for n,a in actual.items()): raise SystemExit('invalid bootstrap manifest')
 for name,a in actual.items():
  with open(os.path.join(os.path.dirname(p),a['file']),'rb') as f: got=hashlib.sha256(f.read()).hexdigest()
  if a['sha256']!=got: raise SystemExit('bootstrap digest mismatch: '+name)
 PY
 grep -Fqx 'NoNewPrivileges=false' "$work/output/release/outpostd.service"
 grep -Fqx 'NoNewPrivileges=true' "$work/output/release/outpost-vm-launcher.service"
+cmp -s "$repo/deploy/tmpfiles.d/outpost.conf" "$work/output/release/outpost-tmpfiles.conf"
 [ -x "$work/output/release/install-server" ]
 ( cd "$work/output/release" && sha256sum -c checksums.txt )
 [ ! -e "$work/output/release/rootfs.ext4" ]
@@ -220,7 +229,7 @@ fail_preapply() {
 good=$artifacts
 cp -a "$good" "$work/bad"; printf x >> "$work/bad/outpost"; artifacts=$work/bad; fail_preapply
 cp -a "$good" "$work/missing"; rm "$work/missing/jailer"; artifacts=$work/missing; fail_preapply
-for name in outpostd.service outpost-vm-launcher.service; do
+for name in outpostd.service outpost-vm-launcher.service outpost-tmpfiles.conf; do
  cp -a "$good" "$work/missing-$name"; rm "$work/missing-$name/$name"; artifacts=$work/missing-$name; fail_preapply
  cp -a "$good" "$work/corrupt-$name"; printf x >> "$work/corrupt-$name/$name"; artifacts=$work/corrupt-$name; fail_preapply
 done
@@ -265,7 +274,7 @@ PY
 done
 artifacts=$work/symlink-manifest; cp -a "$good" "$artifacts"; mv "$artifacts/assets.json" "$artifacts/real.json"; ln -s real.json "$artifacts/assets.json"; fail_preapply
 rm -rf "$root"; mkdir "$root"; artifacts=$work/symlink; cp -a "$good" "$artifacts"; rm "$artifacts/jailer"; ln -s outpost "$artifacts/jailer"; fail_preapply
-for name in outpostd.service outpost-vm-launcher.service; do
+for name in outpostd.service outpost-vm-launcher.service outpost-tmpfiles.conf; do
  artifacts=$work/symlink-$name; cp -a "$good" "$artifacts"; rm "$artifacts/$name"; ln -s outpost "$artifacts/$name"; fail_preapply
 done
 artifacts=$good; rm -rf "$root"; mkdir "$root"; OUTPOST_INSTALL_TEST_FAIL_HARDLINK=1 run >/dev/null 2>&1 && { echo 'hardlink failure accepted' >&2; exit 1; }
@@ -288,6 +297,7 @@ PATH="$work/bin:$PATH" OUTPOST_UNINSTALL_ROOT="$root" OUTPOST_UNINSTALL_TEST=1 O
 grep -Fqx 'stop outpostd.service' "$work/uninstall-systemctl"
 grep -Fqx 'start outpost-vm-launcher.service' "$work/uninstall-systemctl"
 [ ! -e "$root/usr/local/lib/outpost" ]
+[ ! -e "$root/usr/lib/tmpfiles.d/outpost.conf" ]
 [ "$(cat "$root/unrelated/file")" = keep ]
 PATH="$work/bin:$PATH" OUTPOST_UNINSTALL_ROOT="$root" OUTPOST_UNINSTALL_TEST=1 OUTPOST_UNINSTALL_TEST_READY=1 OUTPOST_UNINSTALL_SYSTEMCTL_LOG="$work/uninstall-systemctl" "$repo/scripts/uninstall-server"
 invalid_input() { rm -rf "$root"; mkdir "$root"; if env PATH="$work/bin:$PATH" OUTPOST_INSTALL_ROOT="$root" OUTPOST_INSTALL_TEST=1 OUTPOST_INSTALL_UID="$(id -u)" OUTPOST_INSTALL_GID="$(id -g)" OUTPOST_INSTALL_HANDOFF_HOME=/client OUTPOST_INSTALL_HANDOFF_UID="$(id -u)" OUTPOST_INSTALL_HANDOFF_GID="$(id -g)" SUDO_UID="$(id -u)" SUDO_GID="$(id -g)" OUTPOST_VERSION=0.1.0 OUTPOST_UPLINK=eth0 OUTPOST_ARTIFACT_DIR="$good" "$@" "$installer" >/dev/null 2>&1; then echo 'invalid input accepted' >&2; exit 1; fi; [ ! -e "$root/usr" ]; }
