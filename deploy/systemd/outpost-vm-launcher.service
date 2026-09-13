@@ -1,7 +1,7 @@
 [Unit]
 Description=Outpost privileged VM launcher
-After=network-online.target local-fs.target
-Wants=network-online.target
+After=network-online.target local-fs.target systemd-tmpfiles-setup.service
+Wants=network-online.target systemd-tmpfiles-setup.service
 RequiresMountsFor=@STATE@ /srv/outpost
 
 [Service]

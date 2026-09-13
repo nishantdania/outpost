@@ -14,6 +14,7 @@ copy "$out/outpostd" outpostd
 copy "$out/outpost-vm-launcher" outpost-vm-launcher
 copy deploy/systemd/outpostd.service outpostd.service
 copy deploy/systemd/outpost-vm-launcher.service outpost-vm-launcher.service
+copy deploy/tmpfiles.d/outpost.conf outpost-tmpfiles.conf
 copy scripts/install-server install-server
 chmod 0755 "$release/install-server"
 copy "${OUTPOST_FIRECRACKER:?OUTPOST_FIRECRACKER is required}" firecracker
@@ -26,7 +27,7 @@ zstd -q --no-progress -19 -c "$out/outpost-default-$version-$arch.oci.tar" > "$r
 python3 - "$release" "$version" "$arch" <<'PY'
 import hashlib,json,os,sys
 root,version,arch=sys.argv[1:]
-files={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service'}
+files={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service','tmpfiles':'outpost-tmpfiles.conf'}
 assets=[]
 for name,file in files.items():
  published=file
@@ -36,4 +37,4 @@ for name,file in files.items():
  assets.append({'name':name,'file':file,'sha256':h.hexdigest(),'url':'https://github.com/nishantdania/outpost/releases/download/v'+version+'/'+published})
 with open(os.path.join(root,'assets.json'),'w') as f: json.dump({'version':version,'architecture':arch,'assets':assets},f,sort_keys=True,separators=(',',':'))
 PY
-( cd "$release" && sha256sum outpost outpostd outpost-vm-launcher firecracker jailer vmlinux rootfs.ext4.zst default.oci.tar.zst outpostd.service outpost-vm-launcher.service install-server assets.json > checksums.txt )
+( cd "$release" && sha256sum outpost outpostd outpost-vm-launcher firecracker jailer vmlinux rootfs.ext4.zst default.oci.tar.zst outpostd.service outpost-vm-launcher.service outpost-tmpfiles.conf install-server assets.json > checksums.txt )
