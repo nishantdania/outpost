@@ -33,3 +33,7 @@ outpost image build -t coding:latest ./images/coding
 outpost create coding --image coding:latest --cpus 4 --memory 8G --disk 32G
 outpost uninstall
 ```
+
+## Agent skill
+
+A skill for agents to use Outpost with tmux is available at [outpost-work](https://github.com/nishantdania/dotfiles/tree/fc641d49c64a38de0fdddc76ba24d86262693875/.pi/skills/outpost-work).
