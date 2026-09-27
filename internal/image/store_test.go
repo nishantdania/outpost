@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -333,6 +334,62 @@ func TestImportDefaultTagsCanonicalReference(t *testing.T) {
 	}
 }
 
+func TestImageInputStreamsWithoutByteCap(t *testing.T) {
+	// Former context cap; stream without buffering the input in RAM.
+	const size = int64(64<<20) + 1
+	n, err := copyContext(context.Background(), io.Discard, io.LimitReader(zeroReader{}, size))
+	if err != nil || n != size {
+		t.Fatalf("streamed %d bytes: %v, want %d", n, err, size)
+	}
+	s := &Store{root: t.TempDir()}
+	archive, err := s.copyInput(context.Background(), strings.NewReader("archive"), ".oci-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(archive)
+	if err != nil || info.Size() != int64(len("archive")) {
+		t.Fatalf("disk-backed input = %v, %v", info, err)
+	}
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	clear(p)
+	return len(p), nil
+}
+
+func TestArchiveEntryLimits(t *testing.T) {
+	makeArchive := func(n int) string {
+		t.Helper()
+		file, err := os.CreateTemp(t.TempDir(), "entries-*.tar")
+		if err != nil {
+			t.Fatal(err)
+		}
+		tw := tar.NewWriter(file)
+		for i := range n {
+			if err := tw.WriteHeader(&tar.Header{Name: "dir-" + strconv.Itoa(i), Typeflag: tar.TypeDir, Mode: 0755}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := tw.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return file.Name()
+	}
+	// Exceeds the former 100,000 rootfs and 10,000 context entry caps.
+	archive := makeArchive(100001)
+	if err := validateArchive(archive); err != nil {
+		t.Fatalf("flattened archive rejected: %v", err)
+	}
+	if err := validateContextArchive(archive); err != nil {
+		t.Fatalf("build context rejected: %v", err)
+	}
+}
+
 func TestArchiveAllowsGuestLinksAndRejectsEscapes(t *testing.T) {
 	makeArchive := func(headers ...*tar.Header) string {
 		var data bytes.Buffer
@@ -351,15 +408,15 @@ func TestArchiveAllowsGuestLinksAndRejectsEscapes(t *testing.T) {
 		return file
 	}
 	valid := makeArchive(&tar.Header{Name: "usr/bin/tool", Typeflag: tar.TypeReg, Mode: 0755, Size: 1}, &tar.Header{Name: "bin", Typeflag: tar.TypeSymlink, Linkname: "usr/bin"}, &tar.Header{Name: "etc/mtab", Typeflag: tar.TypeSymlink, Linkname: "/proc/mounts"}, &tar.Header{Name: "usr/bin/tool-copy", Typeflag: tar.TypeLink, Linkname: "usr/bin/tool"})
-	if err := validateArchive(valid, maxArchiveBytes); err != nil {
+	if err := validateArchive(valid); err != nil {
 		t.Fatalf("valid links rejected: %v", err)
 	}
 	escape := makeArchive(&tar.Header{Name: "bin", Typeflag: tar.TypeSymlink, Linkname: "../../outside"})
-	if err := validateArchive(escape, maxArchiveBytes); err == nil {
+	if err := validateArchive(escape); err == nil {
 		t.Fatal("escape symlink accepted")
 	}
 	through := makeArchive(&tar.Header{Name: "bin", Typeflag: tar.TypeSymlink, Linkname: "usr/bin"}, &tar.Header{Name: "bin/tool", Typeflag: tar.TypeReg, Size: 1})
-	if err := validateArchive(through, maxArchiveBytes); err == nil {
+	if err := validateArchive(through); err == nil {
 		t.Fatal("write through symlink accepted")
 	}
 }

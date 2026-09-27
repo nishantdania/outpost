@@ -44,13 +44,7 @@ func tarDirectory(w io.Writer, dir string) error {
 	}
 	tw := tar.NewWriter(w)
 	defer tw.Close()
-	var entries int
-	var total int64
 	return filepath.WalkDir(base, func(path string, d os.DirEntry, err error) error {
-		entries++
-		if entries > 10000 {
-			return fmt.Errorf("build context has too many entries")
-		}
 		if err != nil {
 			return err
 		}
@@ -73,14 +67,8 @@ func tarDirectory(w io.Writer, dir string) error {
 			return err
 		}
 		h.Name = filepath.ToSlash(name)
-		if len(h.Name) > 1024 || (info.Mode().IsRegular() && info.Size() > 32<<20) {
-			return fmt.Errorf("build context entry exceeds limit")
-		}
-		if info.Mode().IsRegular() {
-			total += info.Size()
-			if total > 64<<20 {
-				return fmt.Errorf("build context exceeds limit")
-			}
+		if len(h.Name) > 1024 {
+			return fmt.Errorf("build context path exceeds limit")
 		}
 		if err = tw.WriteHeader(h); err != nil {
 			return err

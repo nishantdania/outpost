@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/nishantdania/outpost/internal/api"
 	"github.com/nishantdania/outpost/internal/outpost"
@@ -102,31 +101,24 @@ func (h handler) ImportImage(w http.ResponseWriter, r *http.Request, p api.Impor
 }
 func (h handler) uploadImage(w http.ResponseWriter, r *http.Request, tag string, build bool) {
 	want := "application/octet-stream"
-	limit := int64(256 << 20)
 	if build {
-		want, limit = "application/x-tar", 64<<20
+		want = "application/x-tar"
 	}
 	if r.Header.Get("Content-Type") != want {
 		writeJSON(w, http.StatusUnsupportedMediaType, api.Error{Error: "invalid image content type"})
 		return
 	}
 	defer r.Body.Close()
-	body := http.MaxBytesReader(w, r.Body, limit+1)
 	var image outpost.Image
 	var err error
 	if build {
-		image, err = h.service.BuildImage(r.Context(), body, tag)
+		image, err = h.service.BuildImage(r.Context(), r.Body, tag)
 	} else {
-		image, err = h.service.ImportImage(r.Context(), body, tag)
+		image, err = h.service.ImportImage(r.Context(), r.Body, tag)
 	}
 	if err != nil {
 		if errors.Is(err, service.ErrImagesUnavailable) {
 			writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
-			return
-		}
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) || strings.Contains(err.Error(), "exceeds limit") {
-			writeJSON(w, http.StatusRequestEntityTooLarge, api.Error{Error: "image input exceeds limit"})
 			return
 		}
 		if errors.Is(err, outpost.ErrInvalidImage) {
