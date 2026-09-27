@@ -23,13 +23,9 @@ import (
 )
 
 const (
-	maxArchiveBytes = int64(256 << 20)
-	maxContextBytes = int64(64 << 20)
-	maxEntries      = 10000
-	maxPathBytes    = 1024
-	maxFileBytes    = int64(1 << 30)
-	minRootFSBytes  = int64(1 << 30)
-	maxRootFSBytes  = int64(8 << 30)
+	maxPathBytes   = 1024
+	minRootFSBytes = int64(1 << 30)
+	maxRootFSBytes = int64(8 << 30)
 )
 
 type Runner interface {
@@ -150,7 +146,7 @@ func (s *Store) Import(ctx context.Context, input io.Reader, tag string) (outpos
 	if !outpost.ValidImageTag(tag) {
 		return outpost.Image{}, outpost.ErrInvalidImage
 	}
-	archive, err := s.copyInput(ctx, input, maxArchiveBytes, ".oci-")
+	archive, err := s.copyInput(ctx, input, ".oci-")
 	if err != nil {
 		return outpost.Image{}, err
 	}
@@ -250,12 +246,12 @@ func (s *Store) export(ctx context.Context, source, tag string) (outpost.Image, 
 }
 
 func (s *Store) convert(ctx context.Context, input io.Reader) (string, error) {
-	archive, err := s.copyInput(ctx, input, maxArchiveBytes, ".flattened-")
+	archive, err := s.copyInput(ctx, input, ".flattened-")
 	if err != nil {
 		return "", err
 	}
 	defer os.Remove(archive)
-	if err := validateArchive(archive, maxArchiveBytes); err != nil {
+	if err := validateArchive(archive); err != nil {
 		return "", err
 	}
 	root, err := os.MkdirTemp(s.root, ".rootfs-")
@@ -425,7 +421,7 @@ func (s *Store) debugfsContract(ctx context.Context, image string) error {
 	return nil
 }
 
-func (s *Store) copyInput(ctx context.Context, input io.Reader, limit int64, pattern string) (string, error) {
+func (s *Store) copyInput(ctx context.Context, input io.Reader, pattern string) (string, error) {
 	file, err := os.CreateTemp(s.root, pattern)
 	if err != nil {
 		return "", err
@@ -436,10 +432,7 @@ func (s *Store) copyInput(ctx context.Context, input io.Reader, limit int64, pat
 			os.Remove(name)
 		}
 	}()
-	n, err := copyContext(ctx, file, input, limit+1)
-	if err == nil && n > limit {
-		err = errors.New("image input exceeds limit")
-	}
+	_, err = copyContext(ctx, file, input)
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
 	}
@@ -448,7 +441,7 @@ func (s *Store) copyInput(ctx context.Context, input io.Reader, limit int64, pat
 	}
 	return name, nil
 }
-func copyContext(ctx context.Context, dst io.Writer, src io.Reader, limit int64) (int64, error) {
+func copyContext(ctx context.Context, dst io.Writer, src io.Reader) (int64, error) {
 	buf := make([]byte, 128<<10)
 	var total int64
 	for {
@@ -457,9 +450,6 @@ func copyContext(ctx context.Context, dst io.Writer, src io.Reader, limit int64)
 		}
 		n, err := src.Read(buf)
 		if n > 0 {
-			if total+int64(n) > limit {
-				return total + int64(n), nil
-			}
 			wrote, writeErr := dst.Write(buf[:n])
 			total += int64(wrote)
 			if writeErr != nil {
@@ -478,7 +468,7 @@ func copyContext(ctx context.Context, dst io.Writer, src io.Reader, limit int64)
 	}
 }
 
-func validateArchive(path string, limit int64) error {
+func validateArchive(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -486,8 +476,7 @@ func validateArchive(path string, limit int64) error {
 	defer file.Close()
 	tr := tar.NewReader(file)
 	types := map[string]byte{}
-	var total int64
-	entries := 0
+	hasEntries := false
 	for {
 		h, err := tr.Next()
 		if err == io.EOF {
@@ -496,9 +485,9 @@ func validateArchive(path string, limit int64) error {
 		if err != nil {
 			return err
 		}
-		entries++
+		hasEntries = true
 		name, ok := archiveName(h.Name)
-		if !ok || entries > maxEntries || h.Size < 0 || h.Size > maxFileBytes || types[name] != 0 || symlinkParent(types, name) {
+		if !ok || h.Size < 0 || types[name] != 0 || symlinkParent(types, name) {
 			return errors.New("unsafe rootfs archive")
 		}
 		if h.Typeflag != tar.TypeReg && h.Typeflag != tar.TypeDir && h.Typeflag != tar.TypeSymlink && h.Typeflag != tar.TypeLink {
@@ -515,16 +504,12 @@ func validateArchive(path string, limit int64) error {
 		}
 		types[name] = h.Typeflag
 		if h.Typeflag == tar.TypeReg {
-			total += h.Size
-			if total > limit {
-				return errors.New("rootfs archive exceeds limit")
-			}
 			if _, err := io.Copy(io.Discard, tr); err != nil {
 				return err
 			}
 		}
 	}
-	if entries == 0 {
+	if !hasEntries {
 		return errors.New("rootfs archive is empty")
 	}
 	return nil
@@ -563,8 +548,6 @@ func validateContextArchive(archive string) error {
 	defer file.Close()
 	tr := tar.NewReader(file)
 	seen := map[string]bool{}
-	entries := 0
-	var total int64
 	for {
 		h, err := tr.Next()
 		if err == io.EOF {
@@ -573,17 +556,12 @@ func validateContextArchive(archive string) error {
 		if err != nil {
 			return err
 		}
-		entries++
 		name, ok := archiveName(h.Name)
-		if !ok || seen[name] || entries > maxEntries || h.Typeflag != tar.TypeReg && h.Typeflag != tar.TypeDir || h.Size < 0 || h.Size > maxFileBytes {
+		if !ok || seen[name] || h.Typeflag != tar.TypeReg && h.Typeflag != tar.TypeDir || h.Size < 0 {
 			return errors.New("unsafe build context")
 		}
 		seen[name] = true
 		if h.Typeflag == tar.TypeReg {
-			total += h.Size
-			if total > maxContextBytes {
-				return errors.New("build context exceeds limit")
-			}
 			if _, err := io.Copy(io.Discard, tr); err != nil {
 				return err
 			}
@@ -593,7 +571,7 @@ func validateContextArchive(archive string) error {
 }
 
 func (s *Store) context(ctx context.Context, input io.Reader) (string, error) {
-	archive, err := s.copyInput(ctx, input, maxContextBytes, ".context-")
+	archive, err := s.copyInput(ctx, input, ".context-")
 	if err != nil {
 		return "", err
 	}
