@@ -260,7 +260,7 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 		config.SSHTimeout = 2 * time.Minute
 	}
 	if config.MaxImageBytes == 0 {
-		config.MaxImageBytes = 8 << 30
+		config.MaxImageBytes = 1024 << 30
 	}
 	if config.OutpostdUID == 0 && config.OutpostdGID == 0 {
 		config.OutpostdUID, config.OutpostdGID = -1, -1
@@ -404,6 +404,22 @@ func (r *FirecrackerRuntime) failCreate(paths vmPaths, cause error) error {
 }
 
 func (r *FirecrackerRuntime) installGuestFiles(ctx context.Context, paths vmPaths, spec vmapi.VMSpec) error {
+	// Disk snapshots contain the baseline's machine identity. Clear it so each
+	// fork generates its own identity and random seed at boot.
+	empty := filepath.Join(paths.stateDir, "machine-id")
+	if err := os.WriteFile(empty, nil, 0600); err != nil {
+		return err
+	}
+	defer os.Remove(empty)
+	for _, path := range []string{"/etc/machine-id", "/var/lib/dbus/machine-id", "/var/lib/systemd/random-seed", "/root/.ssh/authorized_keys"} {
+		_, _ = r.run(ctx, "debugfs", "-w", "-R", "rm "+path, paths.stateDisk)
+	}
+	if _, err := r.run(ctx, "debugfs", "-w", "-R", "write "+empty+" /etc/machine-id", paths.stateDisk); err != nil {
+		return err
+	}
+	if err := r.inode(ctx, paths.stateDisk, "/etc/machine-id", "0100644"); err != nil {
+		return err
+	}
 	resolvPath := filepath.Join(paths.stateDir, "resolv.conf")
 	if err := os.WriteFile(resolvPath, []byte("nameserver "+r.config.DNS+"\n"), 0644); err != nil {
 		return err
@@ -455,7 +471,6 @@ func (r *FirecrackerRuntime) installGuestFiles(ctx context.Context, paths vmPath
 	if err := os.WriteFile(keyPath, []byte(spec.SSHPublicKey+"\n"), 0600); err != nil {
 		return err
 	}
-	_, _ = r.run(ctx, "debugfs", "-w", "-R", "rm /root/.ssh/authorized_keys", paths.stateDisk)
 	if _, err := r.run(ctx, "debugfs", "-w", "-R", "write "+keyPath+" /root/.ssh/authorized_keys", paths.stateDisk); err != nil {
 		return err
 	}
