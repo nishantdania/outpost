@@ -34,6 +34,13 @@ outpost create coding --image coding:latest --cpus 4 --memory 8G --disk 32G
 outpost uninstall
 ```
 
+## Credentialed network egress prototype
+
+An optional [OpenAI egress prototype](prototype/credential_egress/README.md) combines
+per-VM host firewall rules with TLS interception and host-only credential injection.
+It targets existing VMs; application provisioning and smoke harnesses are not included.
+Host-enforced networking remains experimental and requires privileged verification.
+
 ## Agent skill
 
 A skill for agents to use Outpost with tmux is available at [outpost-work](https://github.com/nishantdania/dotfiles/tree/fc641d49c64a38de0fdddc76ba24d86262693875/.pi/skills/outpost-work).
