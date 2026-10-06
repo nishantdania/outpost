@@ -74,11 +74,12 @@ func (ExecRunner) RunIO(ctx context.Context, in io.Reader, name string, args ...
 }
 
 type Store struct {
-	root   string
-	db     *outpost.Store
-	runner Runner
-	podman string
-	mu     sync.Mutex
+	root       string
+	db         *outpost.Store
+	runner     Runner
+	podman     string
+	mu         sync.Mutex
+	operations sync.Mutex // Serialize publication+registration against removal/GC.
 }
 
 func New(root string, db *outpost.Store, runner Runner) (*Store, error) {
@@ -192,6 +193,8 @@ func (s *Store) Build(ctx context.Context, input io.Reader, tag string) (outpost
 }
 
 func (s *Store) export(ctx context.Context, source, tag string) (outpost.Image, error) {
+	s.operations.Lock()
+	defer s.operations.Unlock()
 	containerOut, err := s.run(ctx, s.podman, "create", source)
 	if err != nil {
 		return outpost.Image{}, fmt.Errorf("podman create: %w", err)
@@ -743,6 +746,10 @@ func (s *Store) cleanupExtracted(path string) {
 }
 
 func (s *Store) publish(input io.Reader) (string, int64, error) {
+	return s.publishLimited(input, maxRootFSBytes)
+}
+
+func (s *Store) publishLimited(input io.Reader, limit int64) (string, int64, error) {
 	temp, err := os.CreateTemp(s.root, ".publish-")
 	if err != nil {
 		return "", 0, err
@@ -750,8 +757,11 @@ func (s *Store) publish(input io.Reader) (string, int64, error) {
 	name := temp.Name()
 	defer os.Remove(name)
 	hash := sha256.New()
-	size, err := io.Copy(io.MultiWriter(temp, hash), input)
-	if err == nil && (size == 0 || size > maxRootFSBytes) {
+	size, err := io.Copy(io.MultiWriter(sparseWriter{temp}, hash), io.LimitReader(input, limit+1))
+	if err == nil {
+		err = temp.Truncate(size)
+	}
+	if err == nil && (size == 0 || size > limit) {
 		err = errors.New("invalid ext4 artifact")
 	}
 	if err == nil {
@@ -839,6 +849,8 @@ func syncDir(path string) error {
 }
 
 func (s *Store) Remove(ctx context.Context, ref string) error {
+	s.operations.Lock()
+	defer s.operations.Unlock()
 	image, err := s.db.GetImage(ctx, ref)
 	if err != nil {
 		return err
@@ -852,6 +864,8 @@ func (s *Store) Remove(ctx context.Context, ref string) error {
 	return nil
 }
 func (s *Store) GC(ctx context.Context) ([]string, error) {
+	s.operations.Lock()
+	defer s.operations.Unlock()
 	ids, err := s.db.GarbageCollectImages(ctx)
 	if err != nil {
 		return nil, err

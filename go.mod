@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/diskfs/go-diskfs v1.9.4
 	github.com/google/uuid v1.6.0
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/spf13/cobra v1.10.2

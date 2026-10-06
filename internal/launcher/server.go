@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -90,6 +92,7 @@ type peerKey struct{}
 func (s *Server) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/create", s.create)
+	mux.HandleFunc("POST /v1/snapshot", s.snapshot)
 	mux.HandleFunc("POST /v1/start", s.start)
 	mux.HandleFunc("POST /v1/stop", s.stop)
 	mux.HandleFunc("POST /v1/delete", s.delete)
@@ -103,6 +106,47 @@ func (s *Server) handler() http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) snapshot(w http.ResponseWriter, r *http.Request) {
+	var request vmapi.IDRequest
+	if !decode(w, r, &request) || vmapi.ValidateID(request) != nil {
+		writeError(w, http.StatusBadRequest, "invalid snapshot request")
+		return
+	}
+	runtime, ok := s.runtime.(interface {
+		OpenSnapshot(context.Context, string) (io.ReadCloser, error)
+	})
+	if !ok {
+		writeError(w, http.StatusNotImplemented, "snapshots unavailable")
+		return
+	}
+	disk, err := runtime.OpenSnapshot(r.Context(), request.ID)
+	if err != nil {
+		writeRuntimeError(w, err)
+		return
+	}
+	defer func() {
+		if err := disk.Close(); err != nil {
+			// The response may already be streamed, so an HTTP error cannot
+			// reliably reach the caller. Surface reclamation failures in the
+			// launcher's journal, including the affected VM for operators.
+			log.Printf("snapshot export cleanup for VM %s failed: %v", request.ID, err)
+		}
+	}()
+	// A declared length lets the receiving image store detect interrupted exports.
+	if file, ok := disk.(interface{ Stat() (os.FileInfo, error) }); ok {
+		info, err := file.Stat()
+		if err != nil {
+			writeRuntimeError(w, err)
+			return
+		}
+		w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if _, err := io.Copy(w, disk); err != nil {
+		panic(http.ErrAbortHandler)
+	}
 }
 
 func (s *Server) create(w http.ResponseWriter, r *http.Request) {

@@ -12,7 +12,7 @@ import (
 
 const lifecycleRequestTimeout = 5 * time.Minute
 
-type Client struct{ api *api.ClientWithResponses }
+type Client struct{ api, snapshotAPI *api.ClientWithResponses }
 
 func New(baseURL string, tokens ...string) (*Client, error) {
 	parsedURL, err := url.Parse(baseURL)
@@ -26,14 +26,20 @@ func New(baseURL string, tokens ...string) (*Client, error) {
 	if len(tokens) > 0 {
 		token = tokens[0]
 	}
-	apiClient, err := api.NewClientWithResponses(parsedURL.String(), api.WithHTTPClient(&http.Client{Timeout: lifecycleRequestTimeout}), api.WithRequestEditorFn(func(_ context.Context, request *http.Request) error {
+	authenticate := api.WithRequestEditorFn(func(_ context.Context, request *http.Request) error {
 		if token != "" {
 			request.Header.Set("Authorization", "Bearer "+token)
 		}
 		return nil
-	}))
+	})
+	apiClient, err := api.NewClientWithResponses(parsedURL.String(), api.WithHTTPClient(&http.Client{Timeout: lifecycleRequestTimeout}), authenticate)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{api: apiClient}, nil
+	// Disk exports can take arbitrarily long; the caller's context controls cancellation.
+	snapshotAPI, err := api.NewClientWithResponses(parsedURL.String(), api.WithHTTPClient(&http.Client{}), authenticate)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{api: apiClient, snapshotAPI: snapshotAPI}, nil
 }
