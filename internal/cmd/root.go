@@ -74,6 +74,10 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newUninstallCmd())
 	root.AddCommand(newDoctorCmd(options))
 	root.AddCommand(newImageCmd(options))
+	root.AddCommand(newSnapshotCmd(options))
+	root.AddCommand(newForkCmd(options))
+	root.AddCommand(newCheckoutCmd(options))
+	root.AddCommand(newForwardCmd(options))
 
 	return root
 }
