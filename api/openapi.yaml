@@ -100,6 +100,21 @@ paths:
         "404": {$ref: "#/components/responses/NotFound"}
         "409": {$ref: "#/components/responses/Conflict"}
         "500": {$ref: "#/components/responses/ServerError"}
+  /v1/outposts/{name}/snapshot:
+    post:
+      operationId: snapshotOutpost
+      summary: Save a stopped VM disk as a reusable image
+      parameters:
+        - $ref: "#/components/parameters/OutpostName"
+        - {name: tag, in: query, required: true, schema: {type: string}}
+      responses:
+        "201": {description: Snapshot image, content: {application/json: {schema: {$ref: "#/components/schemas/Image"}}}}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "500": {$ref: "#/components/responses/ServerError"}
+        "503": {$ref: "#/components/responses/Unavailable"}
   /v1/images:
     get:
       operationId: listImages

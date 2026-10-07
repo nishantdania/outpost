@@ -349,6 +349,7 @@ func TestCreateAcceptsE2fsckExitOneAndNeverCreatesJail(t *testing.T) {
 	r := testRuntime(t, func(config *FirecrackerConfig) {
 		config.Runner = createRunner(t, &calls, 1, "")
 	})
+	r.guestStat = fakeGuestStat(t, &calls)
 	spec := testSpec()
 	if err := r.Create(t.Context(), spec); err != nil {
 		t.Fatal(err)
@@ -373,6 +374,7 @@ func TestCreateCommandSequenceInodeMetadataAndRollback(t *testing.T) {
 		r := testRuntime(t, func(config *FirecrackerConfig) {
 			config.Runner = createRunner(t, &calls, 0, "")
 		})
+		r.guestStat = fakeGuestStat(t, &calls)
 		spec := testSpec()
 		if err := r.Create(t.Context(), spec); err != nil {
 			t.Fatal(err)

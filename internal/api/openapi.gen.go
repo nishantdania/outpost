@@ -174,6 +174,11 @@ type BuildImageParams struct {
 	Tag string `form:"tag" json:"tag"`
 }
 
+// SnapshotOutpostParams defines parameters for SnapshotOutpost.
+type SnapshotOutpostParams struct {
+	Tag string `form:"tag" json:"tag"`
+}
+
 // CreateOutpostJSONRequestBody defines body for CreateOutpost for application/json ContentType.
 type CreateOutpostJSONRequestBody = CreateOutpostRequest
 
@@ -299,6 +304,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/outposts/{name} (the `GetOutpost` operationId).
 	GetOutpost(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SnapshotOutpost Save a stopped VM disk as a reusable image
+	//
+	// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
+	SnapshotOutpost(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// StartOutpost Start an Outpost
 	//
@@ -460,6 +470,21 @@ func (c *Client) DeleteOutpost(ctx context.Context, name string, reqEditors ...R
 // Corresponds with GET /v1/outposts/{name} (the `GetOutpost` operationId).
 func (c *Client) GetOutpost(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOutpostRequest(c.Server, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SnapshotOutpost Save a stopped VM disk as a reusable image
+//
+// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
+func (c *Client) SnapshotOutpost(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSnapshotOutpostRequest(c.Server, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -861,6 +886,63 @@ func NewGetOutpostRequest(server string, name string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewSnapshotOutpostRequest constructs an http.Request for the SnapshotOutpost method
+func NewSnapshotOutpostRequest(server string, name OutpostName, params *SnapshotOutpostParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/outposts/%s/snapshot", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tag", params.Tag, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewStartOutpostRequest constructs an http.Request for the StartOutpost method
 func NewStartOutpostRequest(server string, name OutpostName) (*http.Request, error) {
 	var err error
@@ -1039,6 +1121,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/outposts/{name} (the `GetOutpost` operationId).
 	GetOutpostWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetOutpostResponse, error)
+
+	// SnapshotOutpostWithResponse Save a stopped VM disk as a reusable image
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
+	SnapshotOutpostWithResponse(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, reqEditors ...RequestEditorFn) (*SnapshotOutpostResponse, error)
 
 	// StartOutpostWithResponse Start an Outpost
 	//
@@ -1752,6 +1841,89 @@ func (r GetOutpostResponse) ContentType() string {
 	return ""
 }
 
+type SnapshotOutpostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Image
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r SnapshotOutpostResponse) GetJSON201() *Image {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r SnapshotOutpostResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r SnapshotOutpostResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r SnapshotOutpostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r SnapshotOutpostResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r SnapshotOutpostResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r SnapshotOutpostResponse) GetJSON503() *Unavailable {
+	return r.JSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r SnapshotOutpostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SnapshotOutpostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SnapshotOutpostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SnapshotOutpostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type StartOutpostResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2021,6 +2193,19 @@ func (c *ClientWithResponses) GetOutpostWithResponse(ctx context.Context, name s
 		return nil, err
 	}
 	return ParseGetOutpostResponse(rsp)
+}
+
+// SnapshotOutpostWithResponse Save a stopped VM disk as a reusable image
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
+func (c *ClientWithResponses) SnapshotOutpostWithResponse(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, reqEditors ...RequestEditorFn) (*SnapshotOutpostResponse, error) {
+	rsp, err := c.SnapshotOutpost(ctx, name, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSnapshotOutpostResponse(rsp)
 }
 
 // StartOutpostWithResponse Start an Outpost
@@ -2599,6 +2784,74 @@ func ParseGetOutpostResponse(rsp *http.Response) (*GetOutpostResponse, error) {
 	return response, nil
 }
 
+// ParseSnapshotOutpostResponse parses an HTTP response from a SnapshotOutpostWithResponse call
+func ParseSnapshotOutpostResponse(rsp *http.Response) (*SnapshotOutpostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SnapshotOutpostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Image
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseStartOutpostResponse parses an HTTP response from a StartOutpostWithResponse call
 func ParseStartOutpostResponse(rsp *http.Response) (*StartOutpostResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2739,6 +2992,9 @@ type ServerInterface interface {
 	// GetOutpost Get an Outpost
 	// (GET /v1/outposts/{name})
 	GetOutpost(w http.ResponseWriter, r *http.Request, name string)
+	// SnapshotOutpost Save a stopped VM disk as a reusable image
+	// (POST /v1/outposts/{name}/snapshot)
+	SnapshotOutpost(w http.ResponseWriter, r *http.Request, name OutpostName, params SnapshotOutpostParams)
 	// StartOutpost Start an Outpost
 	// (POST /v1/outposts/{name}/start)
 	StartOutpost(w http.ResponseWriter, r *http.Request, name OutpostName)
@@ -2982,6 +3238,48 @@ func (siw *ServerInterfaceWrapper) GetOutpost(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// SnapshotOutpost operation middleware
+func (siw *ServerInterfaceWrapper) SnapshotOutpost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "name" -------------
+	var name OutpostName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SnapshotOutpostParams
+
+	// ------------- Required query parameter "tag" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "tag", r.URL.Query(), &params.Tag, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tag"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tag", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SnapshotOutpost(w, r, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StartOutpost operation middleware
 func (siw *ServerInterfaceWrapper) StartOutpost(w http.ResponseWriter, r *http.Request) {
 
@@ -3160,6 +3458,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/outposts/{name}", wrapper.GetOutpost)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/outposts/{name}/start", wrapper.StartOutpost)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/outposts/{name}/stop", wrapper.StopOutpost)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/outposts/{name}/snapshot", wrapper.SnapshotOutpost)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/images", wrapper.ListImages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/images", wrapper.ImportImage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/images/build", wrapper.BuildImage)

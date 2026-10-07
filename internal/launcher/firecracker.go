@@ -181,8 +181,10 @@ type manifest struct {
 }
 
 type FirecrackerRuntime struct {
-	config FirecrackerConfig
-	mu     sync.Mutex
+	config           FirecrackerConfig
+	mu               sync.Mutex
+	snapshotCapacity chan struct{}
+	guestStat        func(context.Context, string, string) (os.FileInfo, error)
 }
 
 type vmPaths struct {
@@ -260,7 +262,7 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 		config.SSHTimeout = 2 * time.Minute
 	}
 	if config.MaxImageBytes == 0 {
-		config.MaxImageBytes = 8 << 30
+		config.MaxImageBytes = 1024 << 30
 	}
 	if config.OutpostdUID == 0 && config.OutpostdGID == 0 {
 		config.OutpostdUID, config.OutpostdGID = -1, -1
@@ -292,7 +294,21 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 	if executable == "." || executable == string(filepath.Separator) || !executableName.MatchString(executable) {
 		return nil, fmt.Errorf("firecracker executable: %w", vmapi.ErrInvalid)
 	}
-	return &FirecrackerRuntime{config: config}, nil
+	// No exports can be active before this runtime is published. Remove copies
+	// abandoned by a previous launcher; ordinary reconciliation must not touch
+	// exports that are recovering or being streamed by this runtime.
+	entries, err := os.ReadDir(config.StateDir)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("read snapshot exports: %w", err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".snapshot-") {
+			if err := os.RemoveAll(filepath.Join(config.StateDir, entry.Name())); err != nil {
+				return nil, fmt.Errorf("remove abandoned snapshot: %w", err)
+			}
+		}
+	}
+	return &FirecrackerRuntime{config: config, snapshotCapacity: make(chan struct{}, 1), guestStat: statGuestFile}, nil
 }
 
 func (r *FirecrackerRuntime) rootfs(id string) (*os.File, error) {
@@ -404,6 +420,31 @@ func (r *FirecrackerRuntime) failCreate(paths vmPaths, cause error) error {
 }
 
 func (r *FirecrackerRuntime) installGuestFiles(ctx context.Context, paths vmPaths, spec vmapi.VMSpec) error {
+	// Disk snapshots contain the baseline's machine identity. Clear it so each
+	// fork generates its own identity and random seed at boot.
+	empty := filepath.Join(paths.stateDir, "machine-id")
+	if err := os.WriteFile(empty, nil, 0600); err != nil {
+		return err
+	}
+	defer os.Remove(empty)
+	for _, path := range []string{"/etc/machine-id", "/var/lib/dbus/machine-id", "/var/lib/systemd/random-seed", "/root/.ssh/authorized_keys"} {
+		if err := r.removeGuestIdentity(ctx, paths.stateDisk, path); err != nil {
+			return err
+		}
+	}
+	if _, err := r.run(ctx, "debugfs", "-w", "-R", "write "+empty+" /etc/machine-id", paths.stateDisk); err != nil {
+		return err
+	}
+	if err := r.inode(ctx, paths.stateDisk, "/etc/machine-id", "0100644"); err != nil {
+		return err
+	}
+	info, err := r.guestStat(ctx, paths.stateDisk, "/etc/machine-id")
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() != 0 {
+		return fmt.Errorf("machine-id is not an empty regular file")
+	}
 	resolvPath := filepath.Join(paths.stateDir, "resolv.conf")
 	if err := os.WriteFile(resolvPath, []byte("nameserver "+r.config.DNS+"\n"), 0644); err != nil {
 		return err
@@ -455,7 +496,6 @@ func (r *FirecrackerRuntime) installGuestFiles(ctx context.Context, paths vmPath
 	if err := os.WriteFile(keyPath, []byte(spec.SSHPublicKey+"\n"), 0600); err != nil {
 		return err
 	}
-	_, _ = r.run(ctx, "debugfs", "-w", "-R", "rm /root/.ssh/authorized_keys", paths.stateDisk)
 	if _, err := r.run(ctx, "debugfs", "-w", "-R", "write "+keyPath+" /root/.ssh/authorized_keys", paths.stateDisk); err != nil {
 		return err
 	}
