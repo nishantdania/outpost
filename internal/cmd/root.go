@@ -53,7 +53,9 @@ func newRootCmd() *cobra.Command {
 	}
 
 	root.PersistentFlags().StringVar(&options.serverURL, "server", envString("OUTPOST_SERVER", "http://127.0.0.1:17890"), "outpostd server URL")
-	root.PersistentFlags().StringVar(&options.token, "token", os.Getenv("OUTPOST_TOKEN"), "outpostd bearer token")
+	root.PersistentFlags().StringVar(&options.token, "token", os.Getenv("OUTPOST_TOKEN"), "outpostd bearer token (or OUTPOST_TOKEN)")
+	// Keep the environment value in options, but never expose it in help/usage.
+	root.PersistentFlags().Lookup("token").DefValue = ""
 	root.PersistentFlags().StringVarP(&options.output, "output", "o", "table", "Output format: table or json")
 	root.PersistentFlags().BoolVar(&options.noColor, "no-color", false, "Disable color output")
 	root.PersistentFlags().StringVar(&options.ssh.User, "ssh-user", options.ssh.User, "guest SSH user")

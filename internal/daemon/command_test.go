@@ -1,6 +1,58 @@
 package daemon
 
-import "testing"
+import (
+	"errors"
+	"flag"
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestParseConfigToken(t *testing.T) {
+	const secret = "secret-token-from-environment"
+	t.Setenv("OUTPOSTD_TOKEN", secret)
+	config, err := parseConfig(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Token != secret {
+		t.Fatal("token environment default was not preserved")
+	}
+	config, err = parseConfig([]string{"--token", "override-token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Token != "override-token" {
+		t.Fatal("explicit token override was not preserved")
+	}
+
+	for _, arg := range []string{"--help", "--unknown"} {
+		t.Run(arg, func(t *testing.T) {
+			output, err := os.CreateTemp(t.TempDir(), "usage")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer output.Close()
+			stderr := os.Stderr
+			os.Stderr = output
+			defer func() { os.Stderr = stderr }()
+			_, err = parseConfig([]string{arg})
+			if err == nil || (arg == "--help" && !errors.Is(err, flag.ErrHelp)) {
+				t.Fatalf("unexpected parse error: %v", err)
+			}
+			data, err := os.ReadFile(output.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(data), secret) {
+				t.Fatal("help/usage exposed the token")
+			}
+			if !strings.Contains(string(data), "-token") || !strings.Contains(string(data), "OUTPOSTD_TOKEN") {
+				t.Fatal("help must still document the token flag and environment variable")
+			}
+		})
+	}
+}
 
 func TestParseConfig(t *testing.T) {
 	tests := []struct {
