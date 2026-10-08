@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/nishantdania/outpost/internal/api"
+	"github.com/nishantdania/outpost/internal/credentials"
 	"github.com/nishantdania/outpost/internal/outpost"
 	"github.com/nishantdania/outpost/internal/service"
 )
@@ -53,6 +54,10 @@ func (h handler) CreateOutpost(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, outpost.ErrInvalidImage) || errors.Is(err, outpost.ErrImageNotFound) {
 		writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
+		return
+	}
+	if errors.Is(err, service.ErrCredentialsUnavailable) || errors.Is(err, credentials.ErrUnavailable) {
+		writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
 		return
 	}
 	if err != nil {
@@ -162,7 +167,7 @@ func (h handler) GcImages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, ids)
 }
 func apiImage(v outpost.Image) api.Image {
-	return api.Image{Digest: v.Digest, SizeBytes: int(v.Size), Tags: v.Tags, CreatedAt: v.CreatedAt}
+	return api.Image{Digest: v.Digest, SizeBytes: int(v.Size), Tags: v.Tags, CreatedAt: v.CreatedAt, CredentialProfile: v.CredentialProfile}
 }
 
 func (h handler) StartOutpost(w http.ResponseWriter, r *http.Request, name api.OutpostName) {
@@ -182,6 +187,10 @@ func (h handler) lifecycle(w http.ResponseWriter, action func() (outpost.Outpost
 	}
 	if errors.Is(err, service.ErrInvalidState) {
 		writeJSON(w, http.StatusConflict, api.Error{Error: err.Error()})
+		return
+	}
+	if errors.Is(err, service.ErrCredentialsUnavailable) || errors.Is(err, credentials.ErrUnavailable) {
+		writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
 		return
 	}
 	if err != nil {

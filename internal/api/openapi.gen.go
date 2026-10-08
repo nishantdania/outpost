@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nishantdania/outpost/internal/credentials"
 	"github.com/oapi-codegen/runtime"
 )
 
@@ -90,6 +91,9 @@ type CreateOutpostRequest struct {
 	Vcpus int `json:"vcpus"`
 }
 
+// CredentialProfile defines model for CredentialProfile.
+type CredentialProfile = credentials.Profile
+
 // Error defines model for Error.
 type Error struct {
 	Error string `json:"error"`
@@ -97,10 +101,11 @@ type Error struct {
 
 // Image defines model for Image.
 type Image struct {
-	CreatedAt time.Time `json:"created_at"`
-	Digest    string    `json:"digest"`
-	SizeBytes int       `json:"size_bytes"`
-	Tags      []string  `json:"tags"`
+	CreatedAt         time.Time          `json:"created_at"`
+	CredentialProfile *CredentialProfile `json:"credential_profile,omitempty"`
+	Digest            string             `json:"digest"`
+	SizeBytes         int                `json:"size_bytes"`
+	Tags              []string           `json:"tags"`
 }
 
 // Outpost defines model for Outpost.
@@ -181,6 +186,9 @@ type SnapshotOutpostParams struct {
 
 // CreateOutpostJSONRequestBody defines body for CreateOutpost for application/json ContentType.
 type CreateOutpostJSONRequestBody = CreateOutpostRequest
+
+// SnapshotOutpostJSONRequestBody defines body for SnapshotOutpost for application/json ContentType.
+type SnapshotOutpostJSONRequestBody = CredentialProfile
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -305,10 +313,19 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/outposts/{name} (the `GetOutpost` operationId).
 	GetOutpost(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SnapshotOutpost Save a stopped VM disk as a reusable image
+	// SnapshotOutpostWithBody Save a stopped VM disk and optional host credential bindings as a reusable image
+	//
+	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
-	SnapshotOutpost(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	SnapshotOutpostWithBody(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SnapshotOutpost Save a stopped VM disk and optional host credential bindings as a reusable image
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
+	SnapshotOutpost(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, body SnapshotOutpostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// StartOutpost Start an Outpost
 	//
@@ -480,11 +497,30 @@ func (c *Client) GetOutpost(ctx context.Context, name string, reqEditors ...Requ
 	return c.Client.Do(req)
 }
 
-// SnapshotOutpost Save a stopped VM disk as a reusable image
+// SnapshotOutpostWithBody Save a stopped VM disk and optional host credential bindings as a reusable image
+//
+// Takes any type of body and a specified content type.
 //
 // Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
-func (c *Client) SnapshotOutpost(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSnapshotOutpostRequest(c.Server, name, params)
+func (c *Client) SnapshotOutpostWithBody(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSnapshotOutpostRequestWithBody(c.Server, name, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SnapshotOutpost Save a stopped VM disk and optional host credential bindings as a reusable image
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
+func (c *Client) SnapshotOutpost(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, body SnapshotOutpostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSnapshotOutpostRequest(c.Server, name, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -886,8 +922,19 @@ func NewGetOutpostRequest(server string, name string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewSnapshotOutpostRequest constructs an http.Request for the SnapshotOutpost method
-func NewSnapshotOutpostRequest(server string, name OutpostName, params *SnapshotOutpostParams) (*http.Request, error) {
+// NewSnapshotOutpostRequest calls the generic SnapshotOutpost builder with application/json body
+func NewSnapshotOutpostRequest(server string, name OutpostName, params *SnapshotOutpostParams, body SnapshotOutpostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSnapshotOutpostRequestWithBody(server, name, params, "application/json", bodyReader)
+}
+
+// NewSnapshotOutpostRequestWithBody constructs an http.Request for the SnapshotOutpost method, with any body, and a specified content type
+func NewSnapshotOutpostRequestWithBody(server string, name OutpostName, params *SnapshotOutpostParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -935,10 +982,12 @@ func NewSnapshotOutpostRequest(server string, name OutpostName, params *Snapshot
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -1122,12 +1171,19 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/outposts/{name} (the `GetOutpost` operationId).
 	GetOutpostWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetOutpostResponse, error)
 
-	// SnapshotOutpostWithResponse Save a stopped VM disk as a reusable image
+	// SnapshotOutpostWithBodyWithResponse Save a stopped VM disk and optional host credential bindings as a reusable image
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
-	SnapshotOutpostWithResponse(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, reqEditors ...RequestEditorFn) (*SnapshotOutpostResponse, error)
+	SnapshotOutpostWithBodyWithResponse(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SnapshotOutpostResponse, error)
+
+	// SnapshotOutpostWithResponse Save a stopped VM disk and optional host credential bindings as a reusable image
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
+	SnapshotOutpostWithResponse(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, body SnapshotOutpostJSONRequestBody, reqEditors ...RequestEditorFn) (*SnapshotOutpostResponse, error)
 
 	// StartOutpostWithResponse Start an Outpost
 	//
@@ -1654,6 +1710,8 @@ type CreateOutpostResponse struct {
 	JSON409 *Conflict
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *ServerError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -1679,6 +1737,11 @@ func (r CreateOutpostResponse) GetJSON409() *Conflict {
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
 func (r CreateOutpostResponse) GetJSON500() *ServerError {
 	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r CreateOutpostResponse) GetJSON503() *Unavailable {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -1854,6 +1917,8 @@ type SnapshotOutpostResponse struct {
 	JSON404 *NotFound
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *Conflict
+	// JSON415 the response for an HTTP 415 `application/json` response
+	JSON415 *UnsupportedMediaType
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *ServerError
 	// JSON503 the response for an HTTP 503 `application/json` response
@@ -1883,6 +1948,11 @@ func (r SnapshotOutpostResponse) GetJSON404() *NotFound {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r SnapshotOutpostResponse) GetJSON409() *Conflict {
 	return r.JSON409
+}
+
+// GetJSON415 returns the response for an HTTP 415 `application/json` response
+func (r SnapshotOutpostResponse) GetJSON415() *UnsupportedMediaType {
+	return r.JSON415
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -1937,6 +2007,8 @@ type StartOutpostResponse struct {
 	JSON409 *Conflict
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *ServerError
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *Unavailable
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -1962,6 +2034,11 @@ func (r StartOutpostResponse) GetJSON409() *Conflict {
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
 func (r StartOutpostResponse) GetJSON500() *ServerError {
 	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r StartOutpostResponse) GetJSON503() *Unavailable {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -2195,13 +2272,26 @@ func (c *ClientWithResponses) GetOutpostWithResponse(ctx context.Context, name s
 	return ParseGetOutpostResponse(rsp)
 }
 
-// SnapshotOutpostWithResponse Save a stopped VM disk as a reusable image
+// SnapshotOutpostWithBodyWithResponse Save a stopped VM disk and optional host credential bindings as a reusable image
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
-func (c *ClientWithResponses) SnapshotOutpostWithResponse(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, reqEditors ...RequestEditorFn) (*SnapshotOutpostResponse, error) {
-	rsp, err := c.SnapshotOutpost(ctx, name, params, reqEditors...)
+func (c *ClientWithResponses) SnapshotOutpostWithBodyWithResponse(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SnapshotOutpostResponse, error) {
+	rsp, err := c.SnapshotOutpostWithBody(ctx, name, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSnapshotOutpostResponse(rsp)
+}
+
+// SnapshotOutpostWithResponse Save a stopped VM disk and optional host credential bindings as a reusable image
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/outposts/{name}/snapshot (the `SnapshotOutpost` operationId).
+func (c *ClientWithResponses) SnapshotOutpostWithResponse(ctx context.Context, name OutpostName, params *SnapshotOutpostParams, body SnapshotOutpostJSONRequestBody, reqEditors ...RequestEditorFn) (*SnapshotOutpostResponse, error) {
+	rsp, err := c.SnapshotOutpost(ctx, name, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -2678,6 +2768,13 @@ func ParseCreateOutpostResponse(rsp *http.Response) (*CreateOutpostResponse, err
 		}
 		response.JSON500 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -2833,6 +2930,13 @@ func ParseSnapshotOutpostResponse(rsp *http.Response) (*SnapshotOutpostResponse,
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest ServerError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -2900,6 +3004,13 @@ func ParseStartOutpostResponse(rsp *http.Response) (*StartOutpostResponse, error
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -2992,7 +3103,7 @@ type ServerInterface interface {
 	// GetOutpost Get an Outpost
 	// (GET /v1/outposts/{name})
 	GetOutpost(w http.ResponseWriter, r *http.Request, name string)
-	// SnapshotOutpost Save a stopped VM disk as a reusable image
+	// SnapshotOutpost Save a stopped VM disk and optional host credential bindings as a reusable image
 	// (POST /v1/outposts/{name}/snapshot)
 	SnapshotOutpost(w http.ResponseWriter, r *http.Request, name OutpostName, params SnapshotOutpostParams)
 	// StartOutpost Start an Outpost

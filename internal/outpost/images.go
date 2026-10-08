@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/nishantdania/outpost/internal/credentials"
 )
 
 var (
@@ -19,10 +21,11 @@ var digestID = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 var imageTag = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]{0,127}(:[a-z0-9][a-z0-9._-]{0,127})?$`)
 
 type Image struct {
-	Digest    string    `json:"digest"`
-	Size      int64     `json:"size_bytes"`
-	Tags      []string  `json:"tags"`
-	CreatedAt time.Time `json:"created_at"`
+	CredentialProfile *credentials.Profile `json:"credential_profile,omitempty"`
+	Digest            string               `json:"digest"`
+	Size              int64                `json:"size_bytes"`
+	Tags              []string             `json:"tags"`
+	CreatedAt         time.Time            `json:"created_at"`
 }
 
 func ValidDigest(v string) bool   { return digestID.MatchString(v) }
@@ -79,7 +82,7 @@ func (s *Store) PutImage(ctx context.Context, digest string, size int64, tag str
 }
 
 func (s *Store) ListImages(ctx context.Context) ([]Image, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT i.digest,i.size_bytes,i.created_at,COALESCE(group_concat(t.tag, char(31)), '') FROM images i LEFT JOIN image_tags t ON t.digest=i.digest GROUP BY i.digest ORDER BY i.created_at DESC`)
+	rows, err := s.db.QueryContext(ctx, `SELECT i.digest,i.size_bytes,i.created_at,i.credential_config,COALESCE(group_concat(t.tag, char(31)), '') FROM images i LEFT JOIN image_tags t ON t.digest=i.digest GROUP BY i.digest ORDER BY i.created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +90,16 @@ func (s *Store) ListImages(ctx context.Context) ([]Image, error) {
 	result := []Image{{Digest: DefaultImageID, Tags: []string{DefaultImageID}}}
 	for rows.Next() {
 		var image Image
-		var created, tags string
-		if err := rows.Scan(&image.Digest, &image.Size, &created, &tags); err != nil {
+		var created, tags, config string
+		if err := rows.Scan(&image.Digest, &image.Size, &created, &config, &tags); err != nil {
 			return nil, err
+		}
+		if config != "" {
+			p, parseErr := credentials.Parse([]byte(config))
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			image.CredentialProfile = &p
 		}
 		image.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
 		if err != nil {

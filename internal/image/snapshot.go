@@ -12,6 +12,10 @@ import (
 // ImportSnapshot accepts only an internal launcher export, not an arbitrary
 // public upload. Unlike container conversion, it preserves installed app data.
 func (s *Store) ImportSnapshot(ctx context.Context, input io.Reader, tag string) (outpost.Image, error) {
+	return s.ImportSnapshotWithCredentials(ctx, input, tag, "")
+}
+
+func (s *Store) ImportSnapshotWithCredentials(ctx context.Context, input io.Reader, tag, profile string) (outpost.Image, error) {
 	s.operations.Lock()
 	defer s.operations.Unlock()
 	if !outpost.ValidImageTag(tag) || tag == outpost.DefaultImageID {
@@ -21,7 +25,7 @@ func (s *Store) ImportSnapshot(ctx context.Context, input io.Reader, tag string)
 	if err != nil {
 		return outpost.Image{}, err
 	}
-	if err := s.db.PutImage(ctx, digest, size, tag); err != nil {
+	if err := s.db.PutSnapshotImage(ctx, digest, size, tag, profile); err != nil {
 		return outpost.Image{}, err
 	}
 	return s.db.GetImage(ctx, digest)

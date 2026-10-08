@@ -69,9 +69,13 @@ func (s *Store) CreateWith(ctx context.Context, input CreateInput) (Outpost, err
 		return Outpost{}, err
 	}
 	input.ImageID = resolved
+	profile, err := s.ImageCredentials(ctx, resolved)
+	if err != nil {
+		return Outpost{}, err
+	}
 	now := time.Now().UTC()
-	a := Outpost{ID: uuid.NewString(), Name: input.Name, ImageID: input.ImageID, VCPUs: input.VCPUs, MemoryMiB: input.MemoryMiB, DiskGiB: input.DiskGiB, SSHPublicKey: input.SSHPublicKey, DesiredState: DesiredRunning, Status: StatusProvisioning, CreatedAt: now, UpdatedAt: now}
-	result, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO outposts (id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, ssh_public_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.ID, a.Name, a.ImageID, a.VCPUs, a.MemoryMiB, a.DiskGiB, a.DesiredState, a.Status, a.GuestIP, a.Failure, a.SSHPublicKey, timestamp(a.CreatedAt), timestamp(a.UpdatedAt))
+	a := Outpost{CredentialConfig: profile, ID: uuid.NewString(), Name: input.Name, ImageID: input.ImageID, VCPUs: input.VCPUs, MemoryMiB: input.MemoryMiB, DiskGiB: input.DiskGiB, SSHPublicKey: input.SSHPublicKey, DesiredState: DesiredRunning, Status: StatusProvisioning, CreatedAt: now, UpdatedAt: now}
+	result, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO outposts (id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, ssh_public_key, created_at, updated_at, credential_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.ID, a.Name, a.ImageID, a.VCPUs, a.MemoryMiB, a.DiskGiB, a.DesiredState, a.Status, a.GuestIP, a.Failure, a.SSHPublicKey, timestamp(a.CreatedAt), timestamp(a.UpdatedAt), profile)
 	if err != nil {
 		return Outpost{}, fmt.Errorf("insert outpost: %w", err)
 	}
@@ -164,7 +168,7 @@ func (s *Store) delete(ctx context.Context, query, value string) (Outpost, error
 	return a, nil
 }
 
-const outpostColumns = `id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, ssh_public_key, created_at, updated_at`
+const outpostColumns = `id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, ssh_public_key, created_at, updated_at, credential_config`
 const outpostSelect = `SELECT ` + outpostColumns + ` FROM outposts`
 
 type rowScanner interface{ Scan(...any) error }
@@ -172,7 +176,7 @@ type rowScanner interface{ Scan(...any) error }
 func scanOutpost(row rowScanner) (Outpost, error) {
 	var a Outpost
 	var createdAt, updatedAt string
-	err := row.Scan(&a.ID, &a.Name, &a.ImageID, &a.VCPUs, &a.MemoryMiB, &a.DiskGiB, &a.DesiredState, &a.Status, &a.GuestIP, &a.Failure, &a.SSHPublicKey, &createdAt, &updatedAt)
+	err := row.Scan(&a.ID, &a.Name, &a.ImageID, &a.VCPUs, &a.MemoryMiB, &a.DiskGiB, &a.DesiredState, &a.Status, &a.GuestIP, &a.Failure, &a.SSHPublicKey, &createdAt, &updatedAt, &a.CredentialConfig)
 	if err != nil {
 		return Outpost{}, err
 	}

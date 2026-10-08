@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/nishantdania/outpost/internal/credentials"
 	"github.com/nishantdania/outpost/internal/image"
 	"github.com/nishantdania/outpost/internal/outpost"
 	"github.com/nishantdania/outpost/internal/vmapi"
@@ -15,9 +16,10 @@ var ErrInvalidState = errors.New("outpost is not in a state that allows this ope
 var ErrImagesUnavailable = errors.New("image operations are unavailable")
 
 type Service struct {
-	store   *outpost.Store
-	manager vmapi.Manager
-	images  *image.Store
+	store       *outpost.Store
+	manager     vmapi.Manager
+	images      *image.Store
+	credentials *credentials.Host
 }
 
 func New(store *outpost.Store, manager vmapi.Manager) *Service {
@@ -70,9 +72,19 @@ func (s *Service) Create(ctx context.Context, input outpost.CreateInput) (a outp
 	if err != nil {
 		return a, err
 	}
+	profile, err := s.store.ImageCredentials(ctx, input.ImageID)
+	if err != nil {
+		return a, err
+	}
+	if err = s.checkCredentials(profile); err != nil {
+		return a, err
+	}
 	a, err = s.store.CreateWith(ctx, input)
 	if err != nil {
 		return a, err
+	}
+	if err = s.guestCredentials(&a); err != nil {
+		return s.fail(ctx, a, err)
 	}
 	if err = s.manager.Create(ctx, a); err != nil {
 		return s.fail(ctx, a, err)
@@ -90,6 +102,9 @@ func (s *Service) Start(ctx context.Context, name string) (a outpost.Outpost, er
 	}
 	if a.Status != outpost.StatusStopped {
 		return outpost.Outpost{}, ErrInvalidState
+	}
+	if err = s.checkCredentials(a.CredentialConfig); err != nil {
+		return a, err
 	}
 	a, err = s.transition(ctx, a.ID, outpost.StatusStopped, outpost.DesiredRunning, outpost.StatusProvisioning, a.GuestIP, "")
 	if err != nil {

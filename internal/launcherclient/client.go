@@ -33,7 +33,7 @@ func New(socketPath string) *Client {
 
 func (c *Client) Close() { c.http.CloseIdleConnections() }
 func (c *Client) Create(ctx context.Context, a outpost.Outpost) error {
-	return c.call(ctx, "/v1/create", vmapi.CreateRequest{Version: vmapi.Version, Spec: vmapi.VMSpec{ID: a.ID, ImageID: a.ImageID, VCPUs: a.VCPUs, MemoryMiB: a.MemoryMiB, DiskGiB: a.DiskGiB, SSHPublicKey: a.SSHPublicKey}}, nil)
+	return c.call(ctx, "/v1/create", vmapi.CreateRequest{Version: vmapi.Version, Spec: vmapi.VMSpec{ID: a.ID, ImageID: a.ImageID, VCPUs: a.VCPUs, MemoryMiB: a.MemoryMiB, DiskGiB: a.DiskGiB, SSHPublicKey: a.SSHPublicKey, CredentialEnv: a.CredentialEnv, EgressCA: a.EgressCA}}, nil)
 }
 func (c *Client) Start(ctx context.Context, id string) (string, error) {
 	var response vmapi.StartResponse

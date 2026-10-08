@@ -23,6 +23,12 @@ func parseConfig(args []string) (Config, error) {
 	flags.StringVar(&config.LauncherSocket, "launcher-socket", "/run/outpost/vm-launcher.sock", "VM launcher Unix socket")
 	flags.StringVar(&config.ImageStore, "image-store", "/var/lib/outpostd/images", "custom image store")
 	flags.StringVar(&config.DefaultOCI, "default-oci", "/usr/local/lib/outpost/default.oci.tar", "default OCI archive")
+	flags.StringVar(&config.CredentialStore, "credential-store", os.Getenv("OUTPOST_CREDENTIAL_STORE"), "private host credential directory; enables managed HTTPS egress")
+	egressState := os.Getenv("OUTPOST_EGRESS_STATE")
+	if egressState == "" {
+		egressState = "/var/lib/outpostd/egress"
+	}
+	flags.StringVar(&config.EgressState, "egress-state", egressState, "private persistent egress CA directory")
 	if err := flags.Parse(args); err != nil {
 		return Config{}, err
 	}
