@@ -18,6 +18,8 @@ func parseConfig(args []string) (Config, error) {
 	flags.StringVar(&config.ListenAddr, "listen", "127.0.0.1:17890", "HTTP listen address")
 	flags.StringVar(&config.DatabasePath, "database", "./outpost.db", "SQLite database path")
 	flags.StringVar(&config.Token, "token", os.Getenv("OUTPOSTD_TOKEN"), "bearer token (or OUTPOSTD_TOKEN)")
+	// Keep the environment value in config, but never expose it in help/usage.
+	flags.Lookup("token").DefValue = ""
 	flags.StringVar(&config.LauncherSocket, "launcher-socket", "/run/outpost/vm-launcher.sock", "VM launcher Unix socket")
 	flags.StringVar(&config.ImageStore, "image-store", "/var/lib/outpostd/images", "custom image store")
 	flags.StringVar(&config.DefaultOCI, "default-oci", "/usr/local/lib/outpost/default.oci.tar", "default OCI archive")
