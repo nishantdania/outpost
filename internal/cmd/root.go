@@ -77,6 +77,10 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newDoctorCmd(options))
 	root.AddCommand(newImageCmd(options))
 	root.AddCommand(newSnapshotCmd(options))
+	root.AddCommand(newHostCmd(options))
+	root.AddCommand(newHostsCmd(options))
+	root.AddCommand(newUnhostCmd(options))
+	root.AddCommand(newGatewayCmd(options))
 
 	return root
 }

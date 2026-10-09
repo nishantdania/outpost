@@ -95,6 +95,25 @@ type Error struct {
 	Error string `json:"error"`
 }
 
+// Host defines model for Host.
+type Host struct {
+	DesiredState string `json:"desired_state"`
+
+	// GuestIp Current VM IP
+	GuestIp string `json:"guest_ip"`
+
+	// Hostname Example: main-dev.example.com
+	Hostname  string `json:"hostname"`
+	OutpostId string `json:"outpost_id"`
+
+	// OutpostName Example: dev
+	OutpostName string `json:"outpost_name"`
+
+	// Port Example: 3000
+	Port   int    `json:"port"`
+	Status string `json:"status"`
+}
+
 // Image defines model for Image.
 type Image struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -137,6 +156,12 @@ type OutpostDesiredState string
 // OutpostStatus defines model for Outpost.Status.
 type OutpostStatus string
 
+// SetHostRequest defines model for SetHostRequest.
+type SetHostRequest struct {
+	OutpostName string `json:"outpost_name"`
+	Port        int    `json:"port"`
+}
+
 // OutpostName defines model for OutpostName.
 type OutpostName = string
 
@@ -178,6 +203,9 @@ type BuildImageParams struct {
 type SnapshotOutpostParams struct {
 	Tag string `form:"tag" json:"tag"`
 }
+
+// SetHostJSONRequestBody defines body for SetHost for application/json ContentType.
+type SetHostJSONRequestBody = SetHostRequest
 
 // CreateOutpostJSONRequestBody defines body for CreateOutpost for application/json ContentType.
 type CreateOutpostJSONRequestBody = CreateOutpostRequest
@@ -256,6 +284,35 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
+	// ListHosts List registered hostname mappings and their current VM state
+	//
+	// Corresponds with GET /v1/hosts (the `ListHosts` operationId).
+	ListHosts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// Unhost Remove a hostname mapping without affecting the VM
+	//
+	// Corresponds with DELETE /v1/hosts/{hostname} (the `Unhost` operationId).
+	Unhost(ctx context.Context, hostname string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetHost Resolve a hostname to its registered VM and current address
+	//
+	// Corresponds with GET /v1/hosts/{hostname} (the `GetHost` operationId).
+	GetHost(ctx context.Context, hostname string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetHostWithBody Register an HTTP hostname against an immutable VM identity and port
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/hosts/{hostname} (the `SetHost` operationId).
+	SetHostWithBody(ctx context.Context, hostname string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetHost Register an HTTP hostname against an immutable VM identity and port
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/hosts/{hostname} (the `SetHost` operationId).
+	SetHost(ctx context.Context, hostname string, body SetHostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListImages performs a GET /v1/images (the `ListImages` operationId) request.
 	ListImages(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -319,6 +376,85 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/outposts/{name}/stop (the `StopOutpost` operationId).
 	StopOutpost(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// ListHosts List registered hostname mappings and their current VM state
+//
+// Corresponds with GET /v1/hosts (the `ListHosts` operationId).
+func (c *Client) ListHosts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListHostsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// Unhost Remove a hostname mapping without affecting the VM
+//
+// Corresponds with DELETE /v1/hosts/{hostname} (the `Unhost` operationId).
+func (c *Client) Unhost(ctx context.Context, hostname string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUnhostRequest(c.Server, hostname)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetHost Resolve a hostname to its registered VM and current address
+//
+// Corresponds with GET /v1/hosts/{hostname} (the `GetHost` operationId).
+func (c *Client) GetHost(ctx context.Context, hostname string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHostRequest(c.Server, hostname)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetHostWithBody Register an HTTP hostname against an immutable VM identity and port
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/hosts/{hostname} (the `SetHost` operationId).
+func (c *Client) SetHostWithBody(ctx context.Context, hostname string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetHostRequestWithBody(c.Server, hostname, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetHost Register an HTTP hostname against an immutable VM identity and port
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/hosts/{hostname} (the `SetHost` operationId).
+func (c *Client) SetHost(ctx context.Context, hostname string, body SetHostJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetHostRequest(c.Server, hostname, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // ListImages performs a GET /v1/images (the `ListImages` operationId) request.
@@ -523,6 +659,148 @@ func (c *Client) StopOutpost(ctx context.Context, name OutpostName, reqEditors .
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewListHostsRequest constructs an http.Request for the ListHosts method
+func NewListHostsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUnhostRequest constructs an http.Request for the Unhost method
+func NewUnhostRequest(server string, hostname string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "hostname", hostname, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetHostRequest constructs an http.Request for the GetHost method
+func NewGetHostRequest(server string, hostname string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "hostname", hostname, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetHostRequest calls the generic SetHost builder with application/json body
+func NewSetHostRequest(server string, hostname string, body SetHostJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetHostRequestWithBody(server, hostname, "application/json", bodyReader)
+}
+
+// NewSetHostRequestWithBody constructs an http.Request for the SetHost method, with any body, and a specified content type
+func NewSetHostRequestWithBody(server string, hostname string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "hostname", hostname, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/hosts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewListImagesRequest constructs an http.Request for the ListImages method
@@ -1055,6 +1333,41 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// ListHostsWithResponse List registered hostname mappings and their current VM state
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/hosts (the `ListHosts` operationId).
+	ListHostsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHostsResponse, error)
+
+	// UnhostWithResponse Remove a hostname mapping without affecting the VM
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/hosts/{hostname} (the `Unhost` operationId).
+	UnhostWithResponse(ctx context.Context, hostname string, reqEditors ...RequestEditorFn) (*UnhostResponse, error)
+
+	// GetHostWithResponse Resolve a hostname to its registered VM and current address
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/hosts/{hostname} (the `GetHost` operationId).
+	GetHostWithResponse(ctx context.Context, hostname string, reqEditors ...RequestEditorFn) (*GetHostResponse, error)
+
+	// SetHostWithBodyWithResponse Register an HTTP hostname against an immutable VM identity and port
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/hosts/{hostname} (the `SetHost` operationId).
+	SetHostWithBodyWithResponse(ctx context.Context, hostname string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetHostResponse, error)
+
+	// SetHostWithResponse Register an HTTP hostname against an immutable VM identity and port
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/hosts/{hostname} (the `SetHost` operationId).
+	SetHostWithResponse(ctx context.Context, hostname string, body SetHostJSONRequestBody, reqEditors ...RequestEditorFn) (*SetHostResponse, error)
+
 	// ListImagesWithResponse performs a GET /v1/images (the `ListImages` operationId) request.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -1142,6 +1455,268 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/outposts/{name}/stop (the `StopOutpost` operationId).
 	StopOutpostWithResponse(ctx context.Context, name OutpostName, reqEditors ...RequestEditorFn) (*StopOutpostResponse, error)
+}
+
+type ListHostsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]Host
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListHostsResponse) GetJSON200() *[]Host {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListHostsResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ListHostsResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListHostsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListHostsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListHostsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListHostsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UnhostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r UnhostResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r UnhostResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r UnhostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r UnhostResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r UnhostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UnhostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UnhostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UnhostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetHostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Host
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetHostResponse) GetJSON200() *Host {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetHostResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetHostResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetHostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetHostResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetHostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetHostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetHostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetHostResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Host
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *InvalidRequest
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Unauthorized
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *NotFound
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Conflict
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *ServerError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetHostResponse) GetJSON200() *Host {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r SetHostResponse) GetJSON400() *InvalidRequest {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r SetHostResponse) GetJSON401() *Unauthorized {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r SetHostResponse) GetJSON404() *NotFound {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r SetHostResponse) GetJSON409() *Conflict {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r SetHostResponse) GetJSON500() *ServerError {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r SetHostResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetHostResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetHostResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetHostResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type ListImagesResponse struct {
@@ -2062,6 +2637,71 @@ func (r StopOutpostResponse) ContentType() string {
 	return ""
 }
 
+// ListHostsWithResponse List registered hostname mappings and their current VM state
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/hosts (the `ListHosts` operationId).
+func (c *ClientWithResponses) ListHostsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHostsResponse, error) {
+	rsp, err := c.ListHosts(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListHostsResponse(rsp)
+}
+
+// UnhostWithResponse Remove a hostname mapping without affecting the VM
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/hosts/{hostname} (the `Unhost` operationId).
+func (c *ClientWithResponses) UnhostWithResponse(ctx context.Context, hostname string, reqEditors ...RequestEditorFn) (*UnhostResponse, error) {
+	rsp, err := c.Unhost(ctx, hostname, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUnhostResponse(rsp)
+}
+
+// GetHostWithResponse Resolve a hostname to its registered VM and current address
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/hosts/{hostname} (the `GetHost` operationId).
+func (c *ClientWithResponses) GetHostWithResponse(ctx context.Context, hostname string, reqEditors ...RequestEditorFn) (*GetHostResponse, error) {
+	rsp, err := c.GetHost(ctx, hostname, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetHostResponse(rsp)
+}
+
+// SetHostWithBodyWithResponse Register an HTTP hostname against an immutable VM identity and port
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/hosts/{hostname} (the `SetHost` operationId).
+func (c *ClientWithResponses) SetHostWithBodyWithResponse(ctx context.Context, hostname string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetHostResponse, error) {
+	rsp, err := c.SetHostWithBody(ctx, hostname, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetHostResponse(rsp)
+}
+
+// SetHostWithResponse Register an HTTP hostname against an immutable VM identity and port
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/hosts/{hostname} (the `SetHost` operationId).
+func (c *ClientWithResponses) SetHostWithResponse(ctx context.Context, hostname string, body SetHostJSONRequestBody, reqEditors ...RequestEditorFn) (*SetHostResponse, error) {
+	rsp, err := c.SetHost(ctx, hostname, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetHostResponse(rsp)
+}
+
 // ListImagesWithResponse performs a GET /v1/images (the `ListImages` operationId) request.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -2232,6 +2872,211 @@ func (c *ClientWithResponses) StopOutpostWithResponse(ctx context.Context, name 
 		return nil, err
 	}
 	return ParseStopOutpostResponse(rsp)
+}
+
+// ParseListHostsResponse parses an HTTP response from a ListHostsWithResponse call
+func ParseListHostsResponse(rsp *http.Response) (*ListHostsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListHostsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []Host
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUnhostResponse parses an HTTP response from a UnhostWithResponse call
+func ParseUnhostResponse(rsp *http.Response) (*UnhostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UnhostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetHostResponse parses an HTTP response from a GetHostWithResponse call
+func ParseGetHostResponse(rsp *http.Response) (*GetHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Host
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetHostResponse parses an HTTP response from a SetHostWithResponse call
+func ParseSetHostResponse(rsp *http.Response) (*SetHostResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetHostResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Host
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListImagesResponse parses an HTTP response from a ListImagesWithResponse call
@@ -2962,6 +3807,18 @@ func ParseStopOutpostResponse(rsp *http.Response) (*StopOutpostResponse, error) 
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListHosts List registered hostname mappings and their current VM state
+	// (GET /v1/hosts)
+	ListHosts(w http.ResponseWriter, r *http.Request)
+	// Unhost Remove a hostname mapping without affecting the VM
+	// (DELETE /v1/hosts/{hostname})
+	Unhost(w http.ResponseWriter, r *http.Request, hostname string)
+	// GetHost Resolve a hostname to its registered VM and current address
+	// (GET /v1/hosts/{hostname})
+	GetHost(w http.ResponseWriter, r *http.Request, hostname string)
+	// SetHost Register an HTTP hostname against an immutable VM identity and port
+	// (PUT /v1/hosts/{hostname})
+	SetHost(w http.ResponseWriter, r *http.Request, hostname string)
 
 	// (GET /v1/images)
 	ListImages(w http.ResponseWriter, r *http.Request)
@@ -3011,6 +3868,98 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListHosts operation middleware
+func (siw *ServerInterfaceWrapper) ListHosts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHosts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Unhost operation middleware
+func (siw *ServerInterfaceWrapper) Unhost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "hostname" -------------
+	var hostname string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hostname", r.PathValue("hostname"), &hostname, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hostname", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Unhost(w, r, hostname)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHost operation middleware
+func (siw *ServerInterfaceWrapper) GetHost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "hostname" -------------
+	var hostname string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hostname", r.PathValue("hostname"), &hostname, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hostname", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHost(w, r, hostname)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetHost operation middleware
+func (siw *ServerInterfaceWrapper) SetHost(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "hostname" -------------
+	var hostname string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "hostname", r.PathValue("hostname"), &hostname, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "hostname", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetHost(w, r, hostname)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListImages operation middleware
 func (siw *ServerInterfaceWrapper) ListImages(w http.ResponseWriter, r *http.Request) {
@@ -3452,6 +4401,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/hosts", wrapper.ListHosts)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/hosts/{hostname}", wrapper.Unhost)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/hosts/{hostname}", wrapper.GetHost)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/hosts/{hostname}", wrapper.SetHost)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/outposts", wrapper.ListOutposts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/outposts", wrapper.CreateOutpost)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/outposts/{name}", wrapper.DeleteOutpost)

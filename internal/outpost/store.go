@@ -28,7 +28,13 @@ func Open(ctx context.Context, databasePath string) (*Store, error) {
 	if err := createDatabaseDirectory(databasePath); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", databasePath)
+	separator := "?"
+	if strings.Contains(databasePath, "?") {
+		separator = "&"
+	}
+	// DSN pragmas apply to every connection, including a connection reopened by
+	// database/sql. A one-time PRAGMA would lose VM/host cascade guarantees.
+	db, err := sql.Open("sqlite", databasePath+separator+"_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
