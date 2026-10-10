@@ -489,6 +489,9 @@ func (r *FirecrackerRuntime) installGuestFiles(ctx context.Context, paths vmPath
 			return err
 		}
 	}
+	if err := r.installCredentials(ctx, paths, spec); err != nil {
+		return err
+	}
 	if spec.SSHPublicKey == "" {
 		return nil
 	}
@@ -557,7 +560,7 @@ func (r *FirecrackerRuntime) Start(ctx context.Context, id string) (string, erro
 		return "", err
 	}
 	cancel()
-	m.UFWRoute = r.ufwActive(ctx)
+	m.UFWRoute = m.Spec.EgressCA == "" && r.ufwActive(ctx)
 	if err := r.save(id, m); err != nil {
 		return "", err
 	}
@@ -1083,6 +1086,21 @@ func (r *FirecrackerRuntime) networkUp(ctx context.Context, m manifest) error {
 		{name: "ip", args: []string{"tuntap", "add", "dev", m.Tap, "mode", "tap", "user", strconv.Itoa(r.config.OutpostVMUID)}},
 		{name: "ip", args: []string{"addr", "add", m.Gateway + "/30", "dev", m.Tap}},
 		{name: "ip", args: []string{"link", "set", "dev", m.Tap, "up"}},
+	}
+	if m.Spec.EgressCA != "" {
+		for _, command := range commands {
+			if _, err := r.run(ctx, command.name, command.args...); err != nil {
+				cleanup, cancel := r.cleanupContext()
+				defer cancel()
+				return errors.Join(err, r.networkDown(cleanup, m))
+			}
+		}
+		if err := r.managedNetworkUp(ctx, m); err != nil {
+			cleanup, cancel := r.cleanupContext()
+			defer cancel()
+			return errors.Join(err, r.networkDown(cleanup, m))
+		}
+		return nil
 	}
 	if m.UFWRoute {
 		commands = append(commands, struct {

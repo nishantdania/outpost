@@ -4,13 +4,16 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/nishantdania/outpost/internal/credentials"
 	"github.com/nishantdania/outpost/internal/httpapi"
 	"github.com/nishantdania/outpost/internal/image"
 	"github.com/nishantdania/outpost/internal/launcherclient"
@@ -41,7 +44,7 @@ func run(ctx context.Context, config Config) error {
 	defer store.Close()
 	manager := launcherclient.New(config.LauncherSocket)
 	defer manager.Close()
-	service := service.New(store, manager)
+	application := service.New(store, manager)
 	if _, lookupErr := exec.LookPath("podman"); lookupErr == nil {
 		images, imageErr := image.New(config.ImageStore, store, nil)
 		if imageErr != nil {
@@ -60,10 +63,42 @@ func run(ctx context.Context, config Config) error {
 			}
 		}
 		if available {
-			service.WithImages(images)
+			application.WithImages(images)
 		}
 	}
-	return runServer(ctx, httpapi.NewServer(config.ListenAddr, service, config.Token))
+	if config.CredentialStore == "" {
+		// Managed create/start is rejected by Service. Existing managed launcher
+		// rules still route to a closed proxy, never to unrestricted NAT. Keep the
+		// API available for inspection/stop/delete even when mediation is disabled.
+		return runServer(ctx, httpapi.NewServer(config.ListenAddr, application, config.Token))
+	}
+	host, err := credentials.NewHost(config.CredentialStore, config.EgressState)
+	if err != nil {
+		return err
+	}
+	application.WithCredentials(host)
+	proxy := credentials.NewProxy(host, service.CredentialAuthorizer(store)).Server()
+	listener, err := net.Listen("tcp4", "0.0.0.0:"+strconv.Itoa(credentials.Port))
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+	proxyErrors := make(chan error, 1)
+	go func() { proxyErrors <- proxy.ServeTLS(listener, "", "") }()
+	child, cancel := context.WithCancel(ctx)
+	defer cancel()
+	apiErrors := make(chan error, 1)
+	go func() { apiErrors <- runServer(child, httpapi.NewServer(config.ListenAddr, application, config.Token)) }()
+	select {
+	case err := <-proxyErrors:
+		cancel()
+		<-apiErrors
+		return err
+	case err := <-apiErrors:
+		_ = proxy.Close()
+		<-proxyErrors
+		return err
+	}
 }
 
 type server interface {

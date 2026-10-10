@@ -12,12 +12,14 @@ const Version = 1
 var imageID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 
 type VMSpec struct {
-	ID           string `json:"id"`
-	ImageID      string `json:"image_id"`
-	VCPUs        int    `json:"vcpus"`
-	MemoryMiB    int    `json:"memory_mib"`
-	DiskGiB      int    `json:"disk_gib"`
-	SSHPublicKey string `json:"ssh_public_key"`
+	ID            string `json:"id"`
+	ImageID       string `json:"image_id"`
+	VCPUs         int    `json:"vcpus"`
+	MemoryMiB     int    `json:"memory_mib"`
+	DiskGiB       int    `json:"disk_gib"`
+	SSHPublicKey  string `json:"ssh_public_key"`
+	CredentialEnv string `json:"credential_env,omitempty"`
+	EgressCA      string `json:"egress_ca,omitempty"`
 }
 
 type CreateRequest struct {
@@ -77,7 +79,7 @@ func ValidateID(request IDRequest) error {
 }
 
 func validSpec(spec VMSpec) bool {
-	return validID(spec.ID) && imageID.MatchString(spec.ImageID) && outpost.ValidateSSHPublicKey(spec.SSHPublicKey) == nil &&
+	return validID(spec.ID) && imageID.MatchString(spec.ImageID) && outpost.ValidateSSHPublicKey(spec.SSHPublicKey) == nil && validEgressMaterial(spec) &&
 		spec.VCPUs >= outpost.MinVCPUs && spec.VCPUs <= outpost.MaxVCPUs &&
 		spec.MemoryMiB >= outpost.MinMemoryMiB && spec.MemoryMiB <= outpost.MaxMemoryMiB &&
 		spec.DiskGiB >= outpost.MinDiskGiB && spec.DiskGiB <= outpost.MaxDiskGiB

@@ -32,19 +32,22 @@ const (
 )
 
 type Outpost struct {
-	ID           string
-	Name         string
-	ImageID      string
-	VCPUs        int
-	MemoryMiB    int
-	DiskGiB      int
-	DesiredState string
-	Status       string
-	GuestIP      string
-	Failure      string
-	SSHPublicKey string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	CredentialConfig string `json:"-"`
+	CredentialEnv    string `json:"-"` // Transient public guest material, set before Create.
+	EgressCA         string `json:"-"`
+	ID               string
+	Name             string
+	ImageID          string
+	VCPUs            int
+	MemoryMiB        int
+	DiskGiB          int
+	DesiredState     string
+	Status           string
+	GuestIP          string
+	Failure          string
+	SSHPublicKey     string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type CreateInput struct {

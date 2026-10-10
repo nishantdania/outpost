@@ -85,6 +85,7 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "409": {$ref: "#/components/responses/Conflict"}
         "500": {$ref: "#/components/responses/ServerError"}
+        "503": {$ref: "#/components/responses/Unavailable"}
   /v1/outposts/{name}:
     parameters:
       - name: name
@@ -132,6 +133,7 @@ paths:
         "404": {$ref: "#/components/responses/NotFound"}
         "409": {$ref: "#/components/responses/Conflict"}
         "500": {$ref: "#/components/responses/ServerError"}
+        "503": {$ref: "#/components/responses/Unavailable"}
   /v1/outposts/{name}/stop:
     post:
       operationId: stopOutpost
@@ -151,12 +153,18 @@ paths:
   /v1/outposts/{name}/snapshot:
     post:
       operationId: snapshotOutpost
-      summary: Save a stopped VM disk as a reusable image
+      summary: Save a stopped VM disk and optional host credential bindings as a reusable image
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CredentialProfile"}
       parameters:
         - $ref: "#/components/parameters/OutpostName"
         - {name: tag, in: query, required: true, schema: {type: string}}
       responses:
         "201": {description: Snapshot image, content: {application/json: {schema: {$ref: "#/components/schemas/Image"}}}}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
         "400": {$ref: "#/components/responses/InvalidRequest"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
@@ -221,7 +229,7 @@ components:
       description: Request content type is unsupported.
       content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
     Unavailable:
-      description: Image operations are unavailable.
+      description: Image operations or host credential egress are unavailable.
       content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
     ServerError:
       description: Server failed to process the request.
@@ -276,8 +284,43 @@ components:
       properties:
         digest: {type: string}
         size_bytes: {type: integer}
+        credential_profile: {$ref: "#/components/schemas/CredentialProfile"}
         tags: {type: array, items: {type: string}}
         created_at: {type: string, format: date-time}
+    CredentialProfile:
+      x-go-type: credentials.Profile
+      x-go-type-import:
+        path: github.com/nishantdania/outpost/internal/credentials
+      type: object
+      additionalProperties: false
+      required: [credentials]
+      properties:
+        allowed_hosts: {type: array, nullable: true, maxItems: 128, items: {type: string}, description: Omitted or null permits public HTTPS; an explicit list restricts additional egress beyond credential hosts}
+        credentials:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items:
+            type: object
+            additionalProperties: false
+            required: [env, secret, host, header, encoding]
+            properties:
+              env: {type: string}
+              secret: {type: string, description: Name of a private host credential file; never a key value or path}
+              host: {type: string, description: Exact lowercase HTTPS hostname}
+              header: {type: string}
+              encoding: {type: string, enum: [bearer, raw, basic]}
+              username: {type: string}
+              prefix: {type: string, description: Optional literal header prefix for raw encoding}
+              operations:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [method, path]
+                  properties:
+                    method: {type: string}
+                    path: {type: string}
     Error:
       type: object
       required: [error]

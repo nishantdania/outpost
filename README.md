@@ -166,6 +166,22 @@ shutdown or backups. No running VM is automatically stopped. Large disks can
 take time to copy and hash; this is not an instant copy-on-write snapshot.
 Deploy matching versions of the CLI, outpostd, and VM launcher to use snapshots.
 
+## Host-held credentials inherited from snapshots
+
+Save reusable credential bindings alongside a snapshot without copying real keys
+into its disk:
+
+```bash
+outpost snapshot create dev --name dev-ready --credentials profile.json
+outpost create feature --image dev-ready --disk 32G
+```
+
+The server holds the real keys. Forks inherit stable references and the public CA;
+a VM-scoped host HTTPS proxy substitutes authorized Bearer, custom-header, or
+Basic credentials at the networking boundary. The feature is opt-in and requires
+server configuration. See [snapshot credential egress](docs/credential-egress.md)
+for setup, profile format, guest environment, limits, and verification.
+
 ## Agent skill
 
 A skill for agents to use Outpost with tmux is available at [outpost-work](https://github.com/nishantdania/dotfiles/tree/fc641d49c64a38de0fdddc76ba24d86262693875/.pi/skills/outpost-work).

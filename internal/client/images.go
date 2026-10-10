@@ -140,5 +140,5 @@ func (c *Client) GCImages(ctx context.Context) ([]string, error) {
 	return *response.JSON200, nil
 }
 func image(v api.Image) outpost.Image {
-	return outpost.Image{Digest: v.Digest, Size: int64(v.SizeBytes), Tags: v.Tags, CreatedAt: v.CreatedAt}
+	return outpost.Image{Digest: v.Digest, Size: int64(v.SizeBytes), Tags: v.Tags, CreatedAt: v.CreatedAt, CredentialProfile: v.CredentialProfile}
 }
