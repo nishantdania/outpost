@@ -34,6 +34,89 @@ outpost create coding --image coding:latest --cpus 4 --memory 8G --disk 32G
 outpost uninstall
 ```
 
+## Hostnames and one shared gateway
+
+Register an HTTP hostname against a **VM name and port**, not its current IP:
+
+```bash
+outpost host main-dev.example.com dev:3000
+outpost host memory-main-dev.example.com dev:3101
+outpost hosts
+outpost hosts --output json
+outpost unhost main-dev.example.com
+```
+
+Mappings persist in outpostd's database and bind to the VM's immutable ID.
+Registering an identical mapping is idempotent. A conflicting VM or port is
+refused: explicitly `unhost` the existing mapping before replacing it. Names
+are case-insensitive fully qualified ASCII DNS names; use punycode for IDNs.
+Wildcard, URL, IP-address and hostname-with-port registrations are rejected.
+
+A stopped/starting/failed VM's mapping remains registered but serves **503**.
+When it starts, the current guest IP is resolved automatically for new requests.
+Deleting the VM removes its mappings; creating another VM with the same name
+never inherits them. Unknown or removed hostnames serve **404**. Existing
+connections, including WebSockets, continue until the application/network closes
+them; removing a mapping prevents new requests rather than forcibly killing
+in-flight requests. Only registered HTTP upstream ports are reachable through
+this gateway; it is not an arbitrary TCP proxy.
+
+Start **one gateway process** in tmux on the machine where your tunnel connector
+runs:
+
+```bash
+tmux new-session -d -s outpost-gateway 'outpost gateway'
+# Optional different loopback port:
+outpost gateway --listen 127.0.0.1:18080
+```
+
+It listens on **http://127.0.0.1:17891** by default. Bind addresses must be
+loopback IPs. The gateway uses the installed client's saved server/token settings
+(or normal `--server`/`OUTPOST_TOKEN` configuration) to resolve the authenticated
+host registry. The management API/token is never exposed or forwarded to guests.
+Deploy matching CLI and outpostd versions before using these commands; the server
+adds the `hosts` table automatically when opening its database.
+
+The gateway machine must be able to reach the VM guest IPs. This works directly
+on the VM host; a desktop client needs routing to the guest subnet (for example,
+Tailscale subnet routing). A Tailscale connection to the control server alone
+is not necessarily a route to its VM network. The gateway does not create that
+network route or use SSH forwarding implicitly.
+
+### Bring your own tunnel provider
+
+Point Cloudflare Tunnel, ngrok, or another trusted **local** reverse proxy at
+`http://127.0.0.1:17891`, preserving the original public **Host** header. TLS,
+DNS, wildcard-domain setup and provider credentials stay outside Outpost. Do not
+point a public tunnel at the management API on port 17890.
+
+For a Cloudflare named tunnel, an ingress rule can send all first-level
+hostnames for a domain to the gateway:
+
+```yaml
+ingress:
+  - hostname: "*.example.com"
+    service: http://127.0.0.1:17891
+  - service: http_status:404
+```
+
+Configure the corresponding wildcard DNS route using Cloudflare's tools. The
+wildcard delivers traffic to the gateway; **only explicitly registered hosts
+are forwarded to VMs**. Existing exact DNS records take precedence over wildcard
+DNS, so migrate only records you own. Single-level hostnames fit the provider's
+usual `*.example.com` certificate; nested names need appropriate TLS coverage.
+For ngrok, use endpoint/domain settings that deliver the registered public host
+names to the same gateway; custom/wildcard domains depend on your provider plan.
+
+The gateway uses Go's standard reverse proxy, preserves request paths, query
+strings and public Host headers, streams HTTP uploads/SSE, and supports protocol
+upgrades such as WebSockets. Forwarded HTTPS/client-IP metadata is accepted only
+from a loopback connector; incoming `X-Forwarded-Host` cannot select a route.
+The control server is consulted for each new request, so route changes require
+neither a gateway restart nor generated configuration reloads. If the registry
+is unavailable, requests fail closed with 503; unreachable guests return 502.
+Stopping the gateway affects all its routes, not the VMs themselves.
+
 ## Save a configured VM as an image
 
 A snapshot saves a **stopped VM's disk** as a reusable Outpost image. It does not

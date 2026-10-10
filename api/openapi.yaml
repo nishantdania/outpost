@@ -5,6 +5,54 @@ info:
 security:
   - bearerAuth: []
 paths:
+  /v1/hosts:
+    get:
+      operationId: listHosts
+      summary: List registered hostname mappings and their current VM state
+      responses:
+        "200":
+          description: Host mappings
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/Host"}}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "500": {$ref: "#/components/responses/ServerError"}
+  /v1/hosts/{hostname}:
+    parameters:
+      - {name: hostname, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getHost
+      summary: Resolve a hostname to its registered VM and current address
+      responses:
+        "200": {description: Host mapping, content: {application/json: {schema: {$ref: "#/components/schemas/Host"}}}}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "500": {$ref: "#/components/responses/ServerError"}
+    put:
+      operationId: setHost
+      summary: Register an HTTP hostname against an immutable VM identity and port
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/SetHostRequest"}
+      responses:
+        "200": {description: Mapping registered or already identical, content: {application/json: {schema: {$ref: "#/components/schemas/Host"}}}}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "500": {$ref: "#/components/responses/ServerError"}
+    delete:
+      operationId: unhost
+      summary: Remove a hostname mapping without affecting the VM
+      responses:
+        "204": {description: Mapping removed}
+        "400": {$ref: "#/components/responses/InvalidRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "500": {$ref: "#/components/responses/ServerError"}
   /v1/outposts:
     get:
       operationId: listOutposts
@@ -179,6 +227,23 @@ components:
       description: Server failed to process the request.
       content: {application/json: {schema: {$ref: "#/components/schemas/Error"}}}
   schemas:
+    Host:
+      type: object
+      required: [hostname, outpost_id, outpost_name, port, guest_ip, status, desired_state]
+      properties:
+        hostname: {type: string, example: main-dev.example.com}
+        outpost_id: {type: string}
+        outpost_name: {type: string, example: dev}
+        port: {type: integer, minimum: 1, maximum: 65535, example: 3000}
+        guest_ip: {type: string, description: Current VM IP, not a pinned routing address}
+        status: {type: string}
+        desired_state: {type: string}
+    SetHostRequest:
+      type: object
+      required: [outpost_name, port]
+      properties:
+        outpost_name: {type: string, minLength: 1}
+        port: {type: integer, minimum: 1, maximum: 65535}
     Outpost:
       type: object
       required: [id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, created_at, updated_at]
