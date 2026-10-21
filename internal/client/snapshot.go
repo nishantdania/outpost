@@ -2,19 +2,12 @@ package client
 
 import (
 	"context"
-	"fmt"
+	"net/url"
 
-	"github.com/nishantdania/outpost/internal/api"
 	"github.com/nishantdania/outpost/internal/outpost"
 )
 
-func (c *Client) SnapshotOutpost(ctx context.Context, name, tag string) (outpost.Image, error) {
-	response, err := c.snapshotAPI.SnapshotOutpostWithResponse(ctx, name, &api.SnapshotOutpostParams{Tag: tag})
-	if err != nil {
-		return outpost.Image{}, err
-	}
-	if response.JSON201 == nil {
-		return outpost.Image{}, fmt.Errorf("snapshot outpost: %s: %s", response.Status(), response.Body)
-	}
-	return image(*response.JSON201), nil
+func (c *Client) SnapshotOutpost(ctx context.Context, name, tag string) (result outpost.Image, err error) {
+	err = c.request(ctx, "POST", "/outposts/"+url.PathEscape(name)+"/snapshot?tag="+url.QueryEscape(tag), nil, "", 201, &result, true)
+	return
 }

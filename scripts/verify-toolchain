@@ -17,9 +17,14 @@ if set(image)!={'architecture','base','snapshot','packages'} or image['architect
 dockerfile=open('images/default/Dockerfile').read()
 if not dockerfile.startswith('FROM '+image['base']+'\n') or 'snapshot.ubuntu.com/ubuntu/'+image['snapshot']+'/' not in dockerfile or any(p not in dockerfile for p in image['packages']): raise SystemExit('default image inputs disagree')
 if x['firecracker']['url']!='https://github.com/firecracker-microvm/firecracker/releases/download/v1.16.1/firecracker-v1.16.1-x86_64.tgz' or x['kernel']['url']!='https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/20260819-0a745def42dd-0/x86_64/vmlinux-6.18.41': raise SystemExit('unsupported Firecracker or kernel input')
-for name in ('firecracker','kernel'):
- v=x[name]
- if set(v)!= {'url','sha256'} or not re.fullmatch(r'[a-f0-9]{64}',v['sha256']): raise SystemExit('invalid toolchain manifest')
+k=x['kernel']
+if set(k)!={'url','sha256','source','build_epoch'} or type(k['build_epoch']) is not int or k['build_epoch']!=1787097600: raise SystemExit('invalid kernel build inputs')
+if k['source']['url']!='https://codeload.github.com/amazonlinux/linux/tar.gz/08639e3f54096d1f84cfea2731f55fa472d02945': raise SystemExit('unsupported kernel source')
+if set(x['firecracker'])!={'url','sha256'} or set(k['source'])!={'url','sha256'}: raise SystemExit('invalid toolchain manifest')
+for v in (x['firecracker'],k,k['source']):
+ if not re.fullmatch(r'[a-f0-9]{64}',v['sha256']): raise SystemExit('invalid toolchain manifest')
  u=urllib.parse.urlsplit(v['url'])
  if u.scheme!='https' or not u.netloc or u.username or u.password or u.query or u.fragment: raise SystemExit('invalid toolchain manifest')
+kernel_builder=open('kernel/Dockerfile').read()
+if '\nFROM '+x['ubuntu']+'\n' not in kernel_builder or 'snapshot.ubuntu.com/ubuntu/'+image['snapshot']+'/' not in kernel_builder: raise SystemExit('kernel builder inputs disagree')
 PY

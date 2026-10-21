@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
@@ -16,7 +15,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -105,19 +103,6 @@ func (r Report) Failed() bool {
 
 func (r Report) JSON(w io.Writer) error { return json.NewEncoder(w).Encode(r) }
 
-type HTTPClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
-func API(client HTTPClient, request *http.Request) Check {
-	response, err := client.Do(request)
-	if err != nil {
-		return Check{Name: "api-auth", Detail: err.Error()}
-	}
-	defer response.Body.Close()
-	return Check{Name: "api-auth", OK: response.StatusCode == http.StatusOK, Detail: response.Status}
-}
-
 func (r Report) Text(w io.Writer) {
 	for _, check := range r.Checks {
 		status := "ok"
@@ -129,12 +114,6 @@ func (r Report) Text(w io.Writer) {
 		}
 		fmt.Fprintf(w, "%-5s %-20s %s\n", status, check.Name, check.Detail)
 	}
-}
-
-func Local(p Probe, identity, knownHosts string) Report {
-	checks := []Check{command(p, "ssh"), command(p, "scp"), command(p, "rsync")}
-	checks = append(checks, regular(p, "identity", identity, 0600), regular(p, "known-hosts", knownHosts, 0644))
-	return Report{Checks: checks}
 }
 
 type Directory struct {
@@ -162,7 +141,7 @@ type ServerConfig struct {
 }
 
 func Server(p Probe, config ServerConfig) Report {
-	checks := []Check{command(p, "ip"), command(p, "nft"), command(p, "e2fsck"), command(p, "resize2fs"), command(p, "debugfs"), command(p, "ssh"), command(p, "scp"), command(p, "rsync"), command(p, "id"), charDevice(p, "kvm", "/dev/kvm"), charDevice(p, "tun", "/dev/net/tun"), charDevice(p, "userfaultfd", "/dev/userfaultfd"), directory(p, "cgroup-v2", "/sys/fs/cgroup"), content(p, "cgroup-controllers", "/sys/fs/cgroup/cgroup.controllers", false), directory(p, "state", config.StateDir), directory(p, "jailer", config.JailerDir), directory(p, "runtime", config.RuntimeDir), content(p, "ip-forward", "/proc/sys/net/ipv4/ip_forward", true)}
+	checks := []Check{command(p, "ip"), command(p, "nft"), charDevice(p, "kvm", "/dev/kvm"), charDevice(p, "tun", "/dev/net/tun"), charDevice(p, "userfaultfd", "/dev/userfaultfd"), directory(p, "cgroup-v2", "/sys/fs/cgroup"), content(p, "cgroup-controllers", "/sys/fs/cgroup/cgroup.controllers", false), directory(p, "state", config.StateDir), directory(p, "jailer", config.JailerDir), directory(p, "runtime", config.RuntimeDir), content(p, "ip-forward", "/proc/sys/net/ipv4/ip_forward", true)}
 	for _, dir := range config.Directories {
 		checks = append(checks, secureDirectory(p, dir))
 	}
@@ -197,97 +176,9 @@ func Server(p Probe, config ServerConfig) Report {
 	for _, name := range names {
 		checks = append(checks, checksum(p, name, config.Assets[name], config.Manifest[name]))
 	}
-	checks = append(checks, imageBuildChecks(p)...)
 	return Report{Checks: checks}
 }
 
-func imageBuildChecks(p Probe) []Check {
-	if _, err := p.LookPath("podman"); err != nil {
-		return []Check{{Name: "image-build", Optional: true, Detail: "podman is not installed"}}
-	}
-	checks := []Check{{Name: "podman", OK: true, Optional: true, Detail: "command available"}}
-	for _, name := range []string{"newuidmap", "newgidmap", "fuse-overlayfs"} {
-		check := command(p, name)
-		check.Optional = true
-		checks = append(checks, check)
-	}
-	for _, path := range []string{"/etc/outpostd/storage.conf", "/etc/outpostd/containers.conf", "/var/lib/outpostd/images", "/var/lib/outpostd/podman/storage", "/run/outpost/podman/storage"} {
-		check := regularOrDirectory(p, path)
-		check.Optional = true
-		checks = append(checks, check)
-	}
-	for _, path := range []string{"/etc/subuid", "/etc/subgid"} {
-		check := subID(p, path)
-		check.Optional = true
-		checks = append(checks, check)
-	}
-	ok := true
-	for _, check := range checks {
-		if !check.OK {
-			ok = false
-		}
-	}
-	checks = append(checks, Check{Name: "image-build", OK: ok, Optional: true, Detail: "rootless image build prerequisites"})
-	return checks
-}
-func imageCheckName(path string) string {
-	switch path {
-	case "/var/lib/outpostd/podman/storage":
-		return "image-graphroot"
-	case "/run/outpost/podman/storage":
-		return "image-runroot"
-	default:
-		return "image-" + filepath.Base(path)
-	}
-}
-func regularOrDirectory(p Probe, path string) Check {
-	name := imageCheckName(path)
-	info, err := p.Stat(path)
-	if err != nil {
-		return Check{Name: name, Detail: err.Error()}
-	}
-	if path == "/etc/outpostd/storage.conf" || path == "/etc/outpostd/containers.conf" {
-		if !info.Mode().IsRegular() || info.Mode().Perm() > 0640 {
-			return Check{Name: name, Detail: "unsafe file"}
-		}
-		data, err := p.ReadFile(path)
-		want := "[storage]"
-		if path == "/etc/outpostd/containers.conf" {
-			want = `cgroup_manager = "cgroupfs"`
-		}
-		if err != nil || !strings.Contains(string(data), want) {
-			return Check{Name: name, Detail: "configuration is incomplete"}
-		}
-	} else if !info.IsDir() || (path == "/var/lib/outpostd/images" && info.Mode().Perm() != 0750) || (path != "/var/lib/outpostd/images" && info.Mode().Perm() != 0700 && info.Mode().Perm() != 0750) {
-		return Check{Name: name, Detail: "wrong directory mode"}
-	}
-	if strings.HasPrefix(path, "/var/lib/outpostd/") || strings.HasPrefix(path, "/run/outpost/") {
-		if q, ok := p.(interface{ Access(string) error }); ok {
-			if err := q.Access(path); err != nil {
-				return Check{Name: name, Detail: err.Error()}
-			}
-		}
-	}
-	return Check{Name: name, OK: true, Detail: path}
-}
-func subID(p Probe, path string) Check {
-	data, err := p.ReadFile(path)
-	if err != nil {
-		return Check{Name: "image-" + filepath.Base(path), Detail: err.Error()}
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		parts := strings.Split(line, ":")
-		if len(parts) != 3 || parts[0] != "outpostd" {
-			continue
-		}
-		start, first := strconv.ParseUint(parts[1], 10, 64)
-		size, second := strconv.ParseUint(parts[2], 10, 64)
-		if first == nil && second == nil && start > 0 && size >= 65536 {
-			return Check{Name: "image-" + filepath.Base(path), OK: true, Detail: path}
-		}
-	}
-	return Check{Name: "image-" + filepath.Base(path), Detail: "outpostd needs a contiguous range of at least 65536"}
-}
 func command(p Probe, name string) Check {
 	_, err := p.LookPath(name)
 	return result(name, err, "command available")

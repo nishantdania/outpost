@@ -1,25 +1,26 @@
 [Unit]
-Description=Outpost privileged VM launcher
+Description=Outpost VM manager
 After=network-online.target local-fs.target systemd-tmpfiles-setup.service
 Wants=network-online.target systemd-tmpfiles-setup.service
-RequiresMountsFor=@STATE@ /srv/outpost
+RequiresMountsFor=/var/lib/outpost /srv/outpost
 
 [Service]
 Type=exec
 User=root
-Group=outpostd
-EnvironmentFile=@CONFIG@/launcher.env
-ExecStart=@PREFIX@/lib/outpost/launcher/outpost-vm-launcher --socket=@RUNTIME@/vm-launcher.sock --state-dir=@LAUNCHER_STATE@ --runtime-dir=@RUNTIME@ --jailer-base=@JAIL@ --firecracker=@PREFIX@/lib/outpost/launcher/firecracker --jailer=@PREFIX@/lib/outpost/launcher/jailer --kernel=@PREFIX@/lib/outpost/launcher/vmlinux --default-rootfs=@STATE@/images/default/rootfs.ext4 --uplink=${OUTPOST_UPLINK} --dns=${OUTPOST_DNS}
+Group=root
+EnvironmentFile=/etc/outpost/launcher.env
+ExecStart=/usr/local/lib/outpost/launcher/outpost-vm-launcher --database=/var/lib/outpost/outpost.db --socket-group=outpost --state-dir=/srv/outpost/state --jailer-base=/srv/outpost/jailer --firecracker=/usr/local/lib/outpost/launcher/firecracker --jailer=/usr/local/lib/outpost/launcher/jailer --kernel=/usr/local/lib/outpost/launcher/vmlinux --default-rootfs=/var/lib/outpost/images/default/rootfs.ext4 --image-store=/var/lib/outpost/images --uplink=${OUTPOST_UPLINK}
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=3min
-UMask=0007
+KillMode=mixed
+UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/srv/outpost @RUNTIME@ /sys/fs/cgroup
-ReadOnlyPaths=@PREFIX@/lib/outpost/launcher @STATE@/images/default
+ReadWritePaths=/var/lib/outpost /srv/outpost /run/outpost /sys/fs/cgroup
+ReadOnlyPaths=/usr/local/lib/outpost/launcher
 PrivateDevices=false
 DeviceAllow=/dev/kvm rwm
 DeviceAllow=/dev/net/tun rwm

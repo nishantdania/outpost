@@ -14,7 +14,7 @@ import (
 )
 
 // OpenSnapshot captures a stopped disk while holding the lifecycle lock. The
-// caller gets a private, recovered copy, never a handle to the mutable VM disk.
+// caller gets a private byte-for-byte copy, never a handle to the mutable VM disk.
 func (r *FirecrackerRuntime) OpenSnapshot(ctx context.Context, id string) (_ io.ReadCloser, resultErr error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -22,7 +22,7 @@ func (r *FirecrackerRuntime) OpenSnapshot(ctx context.Context, id string) (_ io.
 	if !validID(id) {
 		return nil, vmapi.ErrInvalid
 	}
-	// Bound private copies through recovery, streaming, and publication waits.
+	// Serialize private copies through streaming and publication waits.
 	// Wait without holding the lifecycle lock and honor request cancellation.
 	select {
 	case r.snapshotCapacity <- struct{}{}:
@@ -43,7 +43,7 @@ func (r *FirecrackerRuntime) OpenSnapshot(ctx context.Context, id string) (_ io.
 		}
 	}()
 	m, err := r.load(id)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, vmapi.ErrNotFound) {
 		return nil, vmapi.ErrNotFound
 	}
 	if err != nil {
@@ -67,7 +67,7 @@ func (r *FirecrackerRuntime) OpenSnapshot(ctx context.Context, id string) (_ io.
 	if err != nil {
 		return nil, err
 	}
-	if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > int64(m.Spec.DiskGiB)<<30 {
+	if !info.Mode().IsRegular() {
 		return nil, vmapi.ErrInvalid
 	}
 	dir, err := os.MkdirTemp(r.config.StateDir, ".snapshot-")
@@ -87,11 +87,6 @@ func (r *FirecrackerRuntime) OpenSnapshot(ctx context.Context, id string) (_ io.
 	}
 	r.mu.Unlock()
 	locked = false
-	// Stop currently terminates Firecracker rather than shutting down the guest.
-	// Recover the COPY so that snapshotting never alters the baseline disk.
-	if err := r.e2fsck(ctx, target); err != nil {
-		return nil, err
-	}
 	file, err := os.Open(target)
 	if err != nil {
 		return nil, err

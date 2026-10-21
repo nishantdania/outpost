@@ -1,342 +1,210 @@
 #!/bin/sh
+# Install one privileged launcher and its local CLI. No API daemon or token.
 set -eu
 root=${OUTPOST_INSTALL_ROOT:-}
 test_mode=${OUTPOST_INSTALL_TEST:-0}
-log_event() { [ -z "${OUTPOST_INSTALL_TEST_LOG:-}" ] || printf '%s\n' "$1" >> "$OUTPOST_INSTALL_TEST_LOG"; }
-[ "$test_mode" != 1 ] || [ -n "$root" ] || { echo 'OUTPOST_INSTALL_ROOT is required' >&2; exit 1; }
+[ "$test_mode" != 1 ] || [ -n "$root" ] || exit 1
 version=${OUTPOST_VERSION:?OUTPOST_VERSION is required}
-prefix=${OUTPOST_PREFIX:-/usr/local}
-state=${OUTPOST_STATE_DIR:-/var/lib/outpostd}
-launcher_state=${OUTPOST_LAUNCHER_STATE_DIR:-/srv/outpost/state}
-runtime=${OUTPOST_RUNTIME_DIR:-/run/outpost}
-jail=${OUTPOST_JAILER_DIR:-/srv/outpost/jailer}
-config=${OUTPOST_CONFIG_DIR:-/etc/outpostd}
-listen=${OUTPOST_LISTEN:-127.0.0.1:17890}
-[ "$prefix:$state:$launcher_state:$runtime:$jail:$config" = "/usr/local:/var/lib/outpostd:/srv/outpost/state:/run/outpost:/srv/outpost/jailer:/etc/outpostd" ] || { echo 'path overrides are unsupported' >&2; exit 1; }
-uplink=${OUTPOST_UPLINK:?OUTPOST_UPLINK is required}
-dns=${OUTPOST_DNS:-1.1.1.1}
-handoff=${OUTPOST_CLIENT_HANDOFF:-}
-server=${OUTPOST_SERVER:-http://$listen}
-python3 - "$prefix" "$state" "$launcher_state" "$runtime" "$jail" "$config" "$handoff" "$listen" "$uplink" "$dns" "$server" <<'PY'
-import ipaddress,re,sys,urllib.parse
-*paths,listen,uplink,dns,server=sys.argv[1:]
-for p in paths:
- if p and (not re.fullmatch(r'/[A-Za-z0-9._/-]*',p) or '//' in p or '/./' in p+'/' or '/../' in p+'/' or (len(p)>1 and p.endswith('/'))): raise SystemExit('invalid absolute path')
-if not re.fullmatch(r'(127\.0\.0\.1|localhost|(?:[0-9]{1,3}\.){3}[0-9]{1,3}):[1-9][0-9]{0,4}',listen): raise SystemExit('invalid listen address')
-host,port=listen.rsplit(':',1)
-if host not in ('localhost','127.0.0.1'): ipaddress.IPv4Address(host)
-if int(port)>65535: raise SystemExit('invalid listen port')
-if not re.fullmatch(r'[A-Za-z0-9_.-]{1,15}',uplink): raise SystemExit('invalid uplink')
-ipaddress.IPv4Address(dns)
-u=urllib.parse.urlsplit(server)
-if u.scheme not in ('http','https') or not u.hostname or u.username or u.password or u.path not in ('','/') or u.query or u.fragment or not re.fullmatch(r'[A-Za-z0-9.:-]+',u.netloc): raise SystemExit('invalid OUTPOST_SERVER')
-if host=='0.0.0.0' and server=='http://'+listen: raise SystemExit('OUTPOST_SERVER is required for wildcard listen')
-PY
-[ -z "${OUTPOST_ASSETS_DIR:-}" ] || [ "$OUTPOST_ASSETS_DIR" = "$prefix/lib/outpost" ] || { echo 'OUTPOST_ASSETS_DIR is unsupported' >&2; exit 1; }
-for value in "$prefix" "$state" "$launcher_state" "$runtime" "$jail" "$config"; do case "$value" in /*) ;; *) echo 'all paths must be absolute' >&2; exit 1;; esac; done
+[ -z "$root" ] || [ "$test_mode" = 1 ] || { echo 'installation root is only available in test mode' >&2; exit 1; }
+case "$root" in /|*/../*|*/..|*/./*|*/.) echo 'unsafe test root' >&2; exit 1;; ''|/*) :;; *) exit 1;; esac
+# Reject the retired layout before installing packages, changing ownership, or
+# replacing binaries. Never silently mix incompatible schema/runtime lineages.
+for legacy in /var/lib/outpostd /etc/systemd/system/outpostd.service; do
+ if [ -e "$root$legacy" ] || [ -L "$root$legacy" ]; then
+  echo "retired installation found at $legacy; preserve/export its disks before explicitly removing it" >&2
+  exit 1
+ fi
+done
+for path in /var/lib/outpost /var/lib/outpost/images /var/lib/outpost/images/default /srv /srv/outpost /srv/outpost/state /srv/outpost/jailer /etc/outpost /usr/local/lib/outpost /usr/local/lib/outpost/launcher; do
+ [ ! -L "$root$path" ] || { echo "refusing symlink: $path" >&2; exit 1; }
+done
+printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || exit 1
+admin_user=${OUTPOST_ADMIN_USER:-}
+if [ -n "$admin_user" ]; then
+ case "$admin_user" in [!A-Za-z_]*|*[!A-Za-z0-9_-]*) echo 'invalid administrator username' >&2; exit 1;; esac
+ [ "${#admin_user}" -le 32 ] || { echo 'invalid administrator username' >&2; exit 1; }
+ if [ "$test_mode" != 1 ]; then
+  id "$admin_user" >/dev/null 2>&1 || { echo "administrator account does not exist: $admin_user" >&2; exit 1; }
+  command -v usermod >/dev/null 2>&1 || { echo 'missing usermod' >&2; exit 1; }
+ fi
+fi
 if [ "$test_mode" != 1 ]; then
  [ "$(id -u)" = 0 ] || { echo 'must run as root' >&2; exit 1; }
- [ "$(uname -s)" = Linux ] || { echo 'Linux is required' >&2; exit 1; }
- case "$(uname -m)" in x86_64) :;; *) echo 'unsupported architecture' >&2; exit 1;; esac
- for command in ip nft e2fsck resize2fs debugfs ssh-keygen ssh scp rsync sha256sum install useradd usermod groupadd getent systemctl python3 base64 curl zstd; do command -v "$command" >/dev/null 2>&1 || { echo "missing $command" >&2; exit 1; }; done
- if ! { [ -r /dev/kvm ] && [ -c /dev/net/tun ] && [ -c /dev/userfaultfd ] && [ -f /sys/fs/cgroup/cgroup.controllers ]; }; then
-  echo 'KVM, TUN, userfaultfd, and cgroup v2 are required' >&2
-  exit 1
+ [ "$(uname -s):$(uname -m)" = Linux:x86_64 ] || { echo 'Linux x86-64 is required' >&2; exit 1; }
+ if command -v apt-get >/dev/null 2>&1; then
+  apt-get update
+  apt-get install -y curl zstd iproute2 nftables python3
  fi
- [ "$(cat /proc/sys/net/ipv4/ip_forward)" = 1 ] || { echo 'IPv4 forwarding must be enabled' >&2; exit 1; }
-fi
-if [ "$test_mode" = 1 ]; then
- handoff_home=${OUTPOST_INSTALL_HANDOFF_HOME:?OUTPOST_INSTALL_HANDOFF_HOME is required in test mode}; handoff_uid=${OUTPOST_INSTALL_HANDOFF_UID:?OUTPOST_INSTALL_HANDOFF_UID is required in test mode}; handoff_gid=${OUTPOST_INSTALL_HANDOFF_GID:?OUTPOST_INSTALL_HANDOFF_GID is required in test mode}
-elif [ -n "${SUDO_UID:-}" ] && [ -n "${SUDO_GID:-}" ]; then
- user_record=$(getent passwd "$SUDO_UID") || { echo 'invalid sudo user' >&2; exit 1; }
- IFS=: read -r _ _ handoff_uid handoff_gid _ handoff_home _ <<EOF
-$user_record
-EOF
- if ! { [ "$handoff_uid:$handoff_gid" = "$SUDO_UID:$SUDO_GID" ] && [ -n "$handoff_home" ]; }; then
-  echo 'invalid sudo user' >&2
-  exit 1
- fi
-else
- handoff_home=/root; handoff_uid=0; handoff_gid=0
-fi
-[ -n "$handoff" ] || handoff=$handoff_home/.config/outpost/server.env
-case "$handoff" in /*) ;; *) echo 'invalid client handoff path' >&2; exit 1;; esac
-source=${OUTPOST_ARTIFACT_DIR:-}
-stage="$root/.outpost-install-stage.$$"
-cleanup() { rm -rf "$stage"; }
-trap cleanup EXIT HUP INT TERM
-mkdir -p "$stage"
-if [ -z "$source" ]; then
- base=${OUTPOST_RELEASE_URL:?OUTPOST_RELEASE_URL is required when OUTPOST_ARTIFACT_DIR is unset}
- want=${OUTPOST_ASSETS_MANIFEST_SHA256:?OUTPOST_ASSETS_MANIFEST_SHA256 is required for remote installation}
- case "$base" in https://*) ;; *) echo 'OUTPOST_RELEASE_URL must use HTTPS' >&2; exit 1;; esac
- [ "${#want}" -eq 64 ] || { echo 'invalid manifest checksum' >&2; exit 1; }
- case "$want" in *[!0-9a-f]*) echo 'invalid manifest checksum' >&2; exit 1;; esac
- curl --fail --location --proto '=https' --tlsv1.2 -o "$stage/assets.json" "$base/assets.json"
- actual=$(sha256sum "$stage/assets.json" | awk '{print $1}'); [ "$actual" = "$want" ] || { echo 'manifest checksum mismatch' >&2; exit 1; }
- source=$stage
- python3 - "$source/assets.json" "$version" <<'PY' | while IFS=' ' read -r file url; do
-import json,re,sys,urllib.parse
-def pairs(v):
- d={}
- for k,x in v:
-  if k in d: raise ValueError('duplicate key')
-  d[k]=x
- return d
-m=json.load(open(sys.argv[1]),object_pairs_hook=pairs); required={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service','tmpfiles':'outpost-tmpfiles.conf'}
-if set(m)!= {'version','architecture','assets'} or m['version']!=sys.argv[2] or m['architecture']!='amd64' or len(m['assets'])!=len(required): raise SystemExit('invalid remote manifest')
-seen=set()
-for a in m['assets']:
- if not isinstance(a,dict) or set(a)!= {'name','file','sha256','url'} or required.get(a.get('name'))!=a.get('file') or a['file'] in seen or not re.fullmatch(r'[a-f0-9]{64}',a['sha256']): raise SystemExit('invalid remote manifest')
- u=urllib.parse.urlsplit(a['url'])
- if u.scheme!='https' or not u.netloc or u.username or u.password or u.query or u.fragment or not re.fullmatch(r'/[A-Za-z0-9._~/%+-]*',u.path): raise SystemExit('invalid remote manifest')
- seen.add(a['file']); print(a['file'],a['url'])
-PY
-  curl --fail --location --proto '=https' --tlsv1.2 -o "$source/$file" "$url"
+ for command in curl zstd ip nft python3 sha256sum install groupadd useradd getent systemctl; do
+  command -v "$command" >/dev/null 2>&1 || { echo "missing $command; install dependencies through your normal system upgrade" >&2; exit 1; }
  done
+ if [ ! -c /dev/kvm ] || [ ! -c /dev/net/tun ] || [ ! -c /dev/userfaultfd ] || [ ! -f /sys/fs/cgroup/cgroup.controllers ]; then
+  echo 'KVM, TUN, userfaultfd and cgroup v2 are required' >&2
+  exit 1
+ fi
+ [ "$(cat /proc/sys/net/ipv4/ip_forward)" = 1 ] || { echo 'enable IPv4 forwarding before installation' >&2; exit 1; }
 fi
-python3 - "$source" "$version" "$stage/verified" <<'PY'
-import hashlib,json,os,re,stat,sys,urllib.parse
-source,version,out=sys.argv[1:]
-required={'outpost':'outpost','outpostd':'outpostd','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','default':'default.oci.tar.zst','outpostd.service':'outpostd.service','outpost-vm-launcher.service':'outpost-vm-launcher.service','tmpfiles':'outpost-tmpfiles.conf'}
-try:
- if stat.S_ISLNK(os.lstat(source+'/assets.json').st_mode): raise ValueError('symlink manifest')
- fd=os.open(source+'/assets.json',os.O_RDONLY|os.O_NOFOLLOW)
- try:
-  before=os.fstat(fd)
-  if not stat.S_ISREG(before.st_mode): raise ValueError('invalid manifest')
-  d=os.read(fd,before.st_size)
-  after=os.fstat(fd)
-  if (before.st_dev,before.st_ino,before.st_mode,before.st_size)!=(after.st_dev,after.st_ino,after.st_mode,after.st_size): raise ValueError('manifest changed while reading')
- finally: os.close(fd)
- def pairs(v):
-  x={}
-  for k,n in v:
-   if k in x: raise ValueError('duplicate key')
-   x[k]=n
-  return x
- o=json.loads(d,object_pairs_hook=pairs)
-except Exception as e: raise SystemExit('invalid manifest: '+str(e))
-if set(o)!= {'version','architecture','assets'} or o['version'] != version or o['architecture'] != 'amd64' or not isinstance(o['assets'],list) or len(o['assets']) != len(required): raise SystemExit('invalid asset manifest')
-seen=set(); files=set(); safe=re.compile(r'^[a-z0-9][a-z0-9._-]*$'); dig=re.compile(r'^[a-f0-9]{64}$')
-os.mkdir(out)
-open(os.path.join(out,'bootstrap-assets.json'),'xb').write(d)
-for a in o['assets']:
- u=urllib.parse.urlsplit(a.get('url',''))
- if not isinstance(a,dict) or set(a)!={'name','file','sha256','url'} or required.get(a.get('name')) != a.get('file') or a['name'] in seen or a['file'] in files or not safe.fullmatch(a['file']) or not dig.fullmatch(a['sha256']) or u.scheme!='https' or not u.netloc or u.username or u.password or u.query or u.fragment or not re.fullmatch(r'/[A-Za-z0-9._~/%+-]*',u.path): raise SystemExit('invalid asset manifest')
- p=os.path.join(source,a['file'])
- fd=os.open(p, os.O_RDONLY|os.O_NOFOLLOW)
- try:
-  before=os.fstat(fd)
-  if not stat.S_ISREG(before.st_mode): raise ValueError('invalid asset source')
-  target=os.path.join(out,a['file'])
-  h=hashlib.sha256()
-  with os.fdopen(fd,'rb',closefd=False) as src, open(target,'xb') as dst:
-   while True:
-    chunk=src.read(1024*1024)
-    if not chunk: break
-    h.update(chunk); dst.write(chunk)
-  after=os.fstat(fd)
-  if h.hexdigest()!=a['sha256']:
-   os.unlink(target); raise ValueError('checksum mismatch: '+a['file'])
-  if (before.st_dev,before.st_ino,before.st_mode,before.st_size)!=(after.st_dev,after.st_ino,after.st_mode,after.st_size):
-   os.unlink(target); raise ValueError('asset changed while reading')
- finally: os.close(fd)
- seen.add(a['name']); files.add(a['file'])
+uplink=${OUTPOST_UPLINK:-$(ip -4 route show default | awk 'NR == 1 {print $5}')}
+python3 - "$uplink" <<'PY'
+import re,sys
+if not re.fullmatch(r'[A-Za-z0-9_.-]{1,15}',sys.argv[1]): raise SystemExit('invalid uplink')
 PY
-python3 - "$stage/verified" "${OUTPOST_ROOTFS_MAX_BYTES:-8589934592}" "${OUTPOST_OCI_MAX_BYTES:-8589934592}" <<'PY'
-import os,subprocess,sys
-root,rootfs_max,oci_max=sys.argv[1:]
-for source,target,limit in (('rootfs.ext4.zst','rootfs.ext4',rootfs_max),('default.oci.tar.zst','default.oci.tar',oci_max)):
- try: limit=int(limit)
- except ValueError: raise SystemExit('invalid expansion limit')
- if limit < 1: raise SystemExit('invalid expansion limit')
- source=os.path.join(root,source); target=os.path.join(root,target)
- infd=os.open(source,os.O_RDONLY|os.O_NOFOLLOW)
- outfd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
- total=0
- process=None
- zeros=b'\0'*(1024*1024)
- try:
-  process=subprocess.Popen(['zstd','-d','-q','-c'],stdin=infd,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
-  while True:
-   chunk=process.stdout.read(1024*1024)
-   if not chunk: break
-   total+=len(chunk)
-   if total>limit: process.kill(); process.wait(); raise ValueError('expansion limit exceeded')
-   if chunk==zeros[:len(chunk)]:
-    os.lseek(outfd,len(chunk),os.SEEK_CUR)
-    continue
-   offset=0
-   while offset<len(chunk):
-    written=os.write(outfd,chunk[offset:])
-    if written<=0: raise ValueError('failed to write expanded asset')
-    offset+=written
-  if process.wait()!=0: raise ValueError('invalid compressed asset')
-  os.ftruncate(outfd,total)
-  os.fsync(outfd)
- except Exception:
-  if process is not None and process.poll() is None: process.kill(); process.wait()
-  os.unlink(target); raise
- finally:
-  os.close(infd); os.close(outfd)
+umask 077
+stage=$(mktemp -d "$root/.outpost-install.XXXXXX")
+trap 'rm -rf "$stage"' EXIT HUP INT TERM
+source=${OUTPOST_ARTIFACT_DIR:-}
+if [ -z "$source" ]; then
+ base=${OUTPOST_RELEASE_URL:?OUTPOST_RELEASE_URL is required}
+ want=${OUTPOST_ASSETS_MANIFEST_SHA256:?OUTPOST_ASSETS_MANIFEST_SHA256 is required}
+ case "$base" in https://*) :;; *) echo 'release URL must use HTTPS' >&2; exit 1;; esac
+ curl --fail --location --proto '=https' --tlsv1.2 -o "$stage/assets.json" "$base/assets.json"
+ [ "$(sha256sum "$stage/assets.json" | awk '{print $1}')" = "$want" ] || { echo 'manifest checksum mismatch' >&2; exit 1; }
+ source=$stage
+fi
+# Validate the complete manifest before downloading or copying any named asset.
+python3 - "$source/assets.json" "$version" "$stage/downloads" "$stage/validated-assets.json" <<'PY'
+import json,os,re,stat,sys,urllib.parse
+required={'outpost':'outpost','outpost-vm-launcher':'outpost-vm-launcher','firecracker':'firecracker','jailer':'jailer','vmlinux':'vmlinux','rootfs.ext4':'rootfs.ext4.zst','outpost-vm-launcher.service':'outpost-vm-launcher.service','tmpfiles':'outpost-tmpfiles.conf','uninstall-server':'uninstall-server'}
+def pairs(values):
+ result={}
+ for k,v in values:
+  if k in result: raise ValueError('duplicate JSON key')
+  result[k]=v
+ return result
+fd=os.open(sys.argv[1],os.O_RDONLY|os.O_NOFOLLOW)
+with os.fdopen(fd,'rb') as f:
+ if not stat.S_ISREG(os.fstat(f.fileno()).st_mode): raise ValueError('invalid manifest file')
+ m=json.load(f,object_pairs_hook=pairs)
+if set(m)!={'version','architecture','assets'} or m['version']!=sys.argv[2] or m['architecture']!='amd64' or len(m['assets'])!=len(required): raise SystemExit('invalid manifest')
+seen=set(); lines=[]
+for a in m['assets']:
+ if not isinstance(a,dict) or set(a)!={'name','file','sha256','url'} or required.get(a.get('name'))!=a.get('file') or a['name'] in seen or not re.fullmatch(r'[a-f0-9]{64}',a['sha256']): raise SystemExit('invalid asset')
+ u=urllib.parse.urlsplit(a['url'])
+ if u.scheme!='https' or not u.netloc or u.username or u.password or u.query or u.fragment or not re.fullmatch(r'/[A-Za-z0-9._~/%+-]*',u.path): raise SystemExit('invalid asset URL')
+ seen.add(a['name']); lines.append(a['file']+' '+a['url'])
+open(sys.argv[3],'w').write('\n'.join(lines)+'\n')
+with open(sys.argv[4],'x') as f: json.dump(m,f)
+PY
+if [ "$source" = "$stage" ]; then
+ while IFS=' ' read -r file url; do
+  curl --fail --location --proto '=https' --tlsv1.2 -o "$source/$file" "$url"
+ done < "$stage/downloads"
+fi
+# Stage regular files by descriptor, hash while copying, and reject changed input.
+python3 - "$source" "$stage/verified" "$stage/validated-assets.json" <<'PY'
+import hashlib,json,os,stat,sys
+source,out,manifest=sys.argv[1:]; os.mkdir(out)
+m=json.load(open(manifest))
+for a in m['assets']:
+ fd=os.open(os.path.join(source,a['file']),os.O_RDONLY|os.O_NOFOLLOW)
+ with os.fdopen(fd,'rb') as src, open(os.path.join(out,a['file']),'xb') as dst:
+  before=os.fstat(src.fileno())
+  if not stat.S_ISREG(before.st_mode): raise ValueError('invalid asset file')
+  h=hashlib.sha256()
+  for chunk in iter(lambda:src.read(1024*1024),b''): h.update(chunk); dst.write(chunk)
+  after=os.fstat(src.fileno())
+  if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns)!=(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns) or h.hexdigest()!=a['sha256']: raise ValueError('asset changed or checksum mismatch: '+a['file'])
+# Keep the verified manifest for constructing runtime checksums below.
+with open(out+'/release-assets.json','x') as f: json.dump(m,f)
 PY
 python3 - "$stage/verified" <<'PY'
-import hashlib,json,os,stat,sys
-root=sys.argv[1]
-runtime=(('outpost','outpost','outpost'),('outpostd','outpostd','outpostd'),('outpost-vm-launcher','outpost-vm-launcher','outpost-vm-launcher'),('firecracker','firecracker','firecracker'),('jailer','jailer','jailer'),('vmlinux','vmlinux','vmlinux'),('rootfs.ext4','rootfs.ext4','rootfs.ext4'),('default','default.oci.tar','default.oci.tar'))
-def pairs(v):
- d={}
- for k,x in v:
-  if k in d: raise ValueError('duplicate key')
-  d[k]=x
- return d
-def read_regular(path):
- fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
- try:
-  before=os.fstat(fd)
-  if not stat.S_ISREG(before.st_mode): raise ValueError('invalid staged manifest')
-  chunks=[]
-  while True:
-   chunk=os.read(fd,1024*1024)
-   if not chunk: break
-   chunks.append(chunk)
-  after=os.fstat(fd)
-  if (before.st_dev,before.st_ino,before.st_mode,before.st_size)!=(after.st_dev,after.st_ino,after.st_mode,after.st_size): raise ValueError('staged manifest changed while reading')
-  return b''.join(chunks)
- finally: os.close(fd)
-release=json.loads(read_regular(os.path.join(root,'bootstrap-assets.json')),object_pairs_hook=pairs)
-by_name={a['name']:a for a in release['assets']}
-def digest(path):
- fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
- try:
-  before=os.fstat(fd)
-  if not stat.S_ISREG(before.st_mode): raise ValueError('invalid staged asset')
-  h=hashlib.sha256()
-  while True:
-   chunk=os.read(fd,1024*1024)
-   if not chunk: break
-   h.update(chunk)
-  after=os.fstat(fd)
-  if (before.st_dev,before.st_ino,before.st_mode,before.st_size)!=(after.st_dev,after.st_ino,after.st_mode,after.st_size): raise ValueError('staged asset changed while reading')
-  return h.hexdigest()
- finally: os.close(fd)
-assets=[]
-for name,file,staged in runtime:
- release_asset=by_name[name]
- assets.append({'name':name,'file':file,'sha256':digest(os.path.join(root,staged)),'url':release_asset['url']})
-data=json.dumps({'version':release['version'],'architecture':'amd64','assets':assets},sort_keys=True,separators=(',',':')).encode()
-fd=os.open(os.path.join(root,'assets.json'),os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+import os,subprocess,sys
+root=sys.argv[1]; target=root+'/rootfs.ext4'
+p=subprocess.Popen(['zstd','-dq','-c',root+'/rootfs.ext4.zst'],stdout=subprocess.PIPE)
 try:
- offset=0
- while offset<len(data):
-  written=os.write(fd,data[offset:])
-  if written<=0: raise ValueError('failed to write runtime manifest')
-  offset+=written
- os.fsync(fd)
-finally: os.close(fd)
+ with open(target,'xb') as f:
+  size=0
+  for chunk in iter(lambda:p.stdout.read(1024*1024),b''):
+   size+=len(chunk)
+   if not chunk.strip(b'\0'): f.seek(len(chunk),1)
+   else: f.write(chunk)
+  if p.wait()!=0: raise ValueError('invalid compressed disk')
+  f.truncate(size)
+except BaseException:
+ p.kill(); p.wait(); raise
 PY
-assets_dir=$prefix/lib/outpost
-launcher_assets_dir=$assets_dir/launcher
-for path in "$launcher_state" "$jail"; do install -d -m 0750 "$root$path"; done
-probe="$root$launcher_state/.outpost-hardlink-probe"; : > "$probe"
-if [ "${OUTPOST_INSTALL_TEST_FAIL_HARDLINK:-0}" = 1 ] || ! ln "$probe" "$root$jail/.outpost-hardlink-probe"; then rm -f "$probe" "$root$jail/.outpost-hardlink-probe"; echo 'launcher state and jail must support hardlinks' >&2; exit 1; fi
-rm -f "$probe" "$root$jail/.outpost-hardlink-probe"
-log_event hardlink
-log_event identities
+# All downloads and validation must succeed before interrupting an installation.
+# Stop the old launcher before changing shared binaries, ownership or rootfs.
 if [ "$test_mode" != 1 ]; then
- getent group outpostd >/dev/null || groupadd --system outpostd
- getent group outpostvm >/dev/null || groupadd --system outpostvm
- id outpostd >/dev/null 2>&1 || useradd --system --gid outpostd --home-dir /nonexistent --shell /usr/sbin/nologin outpostd
- id outpostvm >/dev/null 2>&1 || useradd --system --gid outpostvm --home-dir /nonexistent --shell /usr/sbin/nologin outpostvm
- usermod -L outpostd; usermod -L outpostvm
- if command -v podman >/dev/null 2>&1; then
-  command -v newuidmap >/dev/null 2>&1 || { echo 'newuidmap is required for rootless Podman' >&2; exit 1; }
-  command -v newgidmap >/dev/null 2>&1 || { echo 'newgidmap is required for rootless Podman' >&2; exit 1; }
-  allocate_subid() {
-   file=$1
-   python3 - "$file" <<'PY'
-import sys
-used=[]
-try:
- for line in open(sys.argv[1]):
-  parts=line.strip().split(':')
-  if len(parts)==3 and parts[1].isdigit() and parts[2].isdigit(): used.append((int(parts[1]),int(parts[1])+int(parts[2])))
-except FileNotFoundError: pass
-start=100000
-while any(start < end and start+65536 > begin for begin,end in used): start+=65536
-print(f'{start}-{start+65535}')
-PY
-  }
-  grep -q '^outpostd:' /etc/subuid || usermod --add-subuids "$(allocate_subid /etc/subuid)" outpostd
-  grep -q '^outpostd:' /etc/subgid || usermod --add-subgids "$(allocate_subid /etc/subgid)" outpostd
+ if [ "$(systemctl show -p LoadState --value outpost-vm-launcher.service)" != not-found ]; then
+  printf 'Stopping the existing launcher and its VMs before upgrading.\n'
+  systemctl stop outpost-vm-launcher.service
+  [ "$(systemctl show -p ActiveState --value outpost-vm-launcher.service)" = inactive ] || { echo 'launcher did not stop; refusing to replace files' >&2; exit 1; }
  fi
- owner_outpostd=outpostd:outpostd; owner_static=root:outpostd; owner_launcher=root:outpostd; owner_vm=root:outpostvm; owner_root=root:root
-else owner_outpostd=${OUTPOST_INSTALL_UID:-0}:${OUTPOST_INSTALL_GID:-0}; root_uid=${OUTPOST_INSTALL_ROOT_UID:-${OUTPOST_INSTALL_UID:-0}}; root_gid=${OUTPOST_INSTALL_ROOT_GID:-${OUTPOST_INSTALL_GID:-0}}; owner_static=$root_uid:${OUTPOST_INSTALL_GID:-0}; owner_launcher=$owner_outpostd; owner_vm=${OUTPOST_INSTALL_OUTPOSTVM_UID:-${OUTPOST_INSTALL_UID:-0}}:${OUTPOST_INSTALL_OUTPOSTVM_GID:-${OUTPOST_INSTALL_GID:-0}}; owner_root=$root_uid:$root_gid; fi
-for path in "$state" "$launcher_state" "$jail" "$runtime" "$config" "$assets_dir" "$launcher_assets_dir" "$state/images" "$state/images/default" "$state/podman" "$runtime/podman" "/etc/systemd/system"; do install -d -m 0750 "$root$path"; done
-install -d -m 0755 "$root/usr/lib/tmpfiles.d"
-chown "$owner_outpostd" "$root$state" "$root$config" "$root$state/images" "$root$state/images/default" "$root$state/podman" "$root$runtime/podman"
-chown "$owner_static" "$root$assets_dir"
-chown "$owner_launcher" "$root$launcher_state" "$root$runtime"
-chown "$owner_vm" "$root$jail" "$root$launcher_assets_dir"
-install -m 0750 "$stage/verified/outpost" "$root$assets_dir/.outpost.new.$$"
-install -m 0750 "$stage/verified/outpostd" "$root$assets_dir/.outpostd.new.$$"
-for name in default.oci.tar assets.json; do install -m 0640 "$stage/verified/$name" "$root$assets_dir/.$name.new.$$"; done
-for name in outpost-vm-launcher firecracker jailer; do install -m 0750 "$stage/verified/$name" "$root$launcher_assets_dir/.$name.new.$$"; done
-install -m 0640 "$stage/verified/vmlinux" "$root$launcher_assets_dir/.vmlinux.new.$$"
-install -m 0640 "$stage/verified/rootfs.ext4" "$root$state/images/default/.rootfs.ext4.new.$$"
-chown "$owner_static" "$root$assets_dir/.outpost.new.$$" "$root$assets_dir/.outpostd.new.$$" "$root$assets_dir/.default.oci.tar.new.$$" "$root$assets_dir/.assets.json.new.$$"
-chown "$owner_outpostd" "$root$state/images/default/.rootfs.ext4.new.$$"
-chown "$owner_vm" "$root$launcher_assets_dir/.outpost-vm-launcher.new.$$" "$root$launcher_assets_dir/.firecracker.new.$$" "$root$launcher_assets_dir/.jailer.new.$$" "$root$launcher_assets_dir/.vmlinux.new.$$"
-mv "$root$assets_dir/.outpost.new.$$" "$root$assets_dir/outpost"
-mv "$root$assets_dir/.outpostd.new.$$" "$root$assets_dir/outpostd"
-rm -f "$root$prefix/bin/outpost"
-for name in default.oci.tar assets.json; do mv "$root$assets_dir/.$name.new.$$" "$root$assets_dir/$name"; done
-for name in outpost-vm-launcher firecracker jailer vmlinux; do mv "$root$launcher_assets_dir/.$name.new.$$" "$root$launcher_assets_dir/$name"; done
-rm -f "$root$assets_dir/outpost-vm-launcher" "$root$assets_dir/firecracker" "$root$assets_dir/jailer" "$root$assets_dir/vmlinux"
-mv "$root$state/images/default/.rootfs.ext4.new.$$" "$root$state/images/default/rootfs.ext4"
-if [ ! -s "$root$config/token" ]; then umask 077; head -c 32 /dev/urandom | base64 > "$root$config/token"; fi
-chmod 0600 "$root$config/token"; chown "$owner_outpostd" "$root$config/token"
-cat > "$root$config/outpostd.env" <<EOF
-OUTPOSTD_TOKEN=$(cat "$root$config/token")
-OUTPOST_LAUNCHER_SOCKET=$runtime/vm-launcher.sock
-HOME=$state/podman
-XDG_DATA_HOME=$state/podman
-XDG_RUNTIME_DIR=$runtime/podman
-CONTAINERS_STORAGE_CONF=$config/storage.conf
-CONTAINERS_CONF=$config/containers.conf
-EOF
-chmod 0600 "$root$config/outpostd.env"; chown "$owner_outpostd" "$root$config/outpostd.env"
-cat > "$root$config/storage.conf" <<EOF
-[storage]
-driver = "overlay"
-runroot = "$runtime/podman/storage"
-graphroot = "$state/podman/storage"
-EOF
-chmod 0600 "$root$config/storage.conf"; chown "$owner_outpostd" "$root$config/storage.conf"
-cat > "$root$config/containers.conf" <<EOF
-[engine]
-cgroup_manager = "cgroupfs"
-events_logger = "file"
-EOF
-chmod 0640 "$root$config/containers.conf"; chown "$owner_static" "$root$config/containers.conf"
-cat > "$root$config/launcher.env" <<EOF
-OUTPOST_UPLINK=$uplink
-OUTPOST_DNS=$dns
-EOF
-chmod 0600 "$root$config/launcher.env"; chown "$owner_root" "$root$config/launcher.env"
-# UFW's default routed policy blocks Firecracker guest traffic even when the
-# launcher installs its own nftables forwarding and masquerade rules. Install
-# one persistent rule for Outpost's allocated guest range when UFW is active.
-if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qx 'Status: active'; then
- ufw route allow out on "$uplink" from 172.30.0.0/16
+ getent group outpost >/dev/null || groupadd --system outpost
+ getent group outpostvm >/dev/null || groupadd --system outpostvm
+ id outpostvm >/dev/null 2>&1 || useradd --system --gid outpostvm --home-dir /nonexistent --shell /usr/sbin/nologin outpostvm
+ owner=root:root; vm_owner=root:outpostvm; socket_owner=root:outpost
+else
+ owner=${OUTPOST_INSTALL_UID:-$(id -u)}:${OUTPOST_INSTALL_GID:-$(id -g)}; vm_owner=$owner; socket_owner=$owner
 fi
-sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" -e "s|@LISTEN@|$listen|g" "$stage/verified/outpostd.service" > "$root/etc/systemd/system/outpostd.service"
-sed -e "s|@PREFIX@|$prefix|g" -e "s|@STATE@|$state|g" -e "s|@LAUNCHER_STATE@|$launcher_state|g" -e "s|@RUNTIME@|$runtime|g" -e "s|@JAIL@|$jail|g" -e "s|@CONFIG@|$config|g" "$stage/verified/outpost-vm-launcher.service" > "$root/etc/systemd/system/outpost-vm-launcher.service"
-chmod 0644 "$root/etc/systemd/system/outpostd.service" "$root/etc/systemd/system/outpost-vm-launcher.service"
+# Do not preserve the old daemon layout or open its user-writable SQLite files.
+for path in /var/lib/outpost /var/lib/outpost/images /var/lib/outpost/images/default /srv/outpost/state /etc/outpost; do
+ install -d -m 0700 "$root$path"; chown "$owner" "$root$path"
+done
+install -d -m 0750 "$root/srv/outpost/jailer" "$root/run/outpost" "$root/usr/local/lib/outpost/launcher"
+chown "$vm_owner" "$root/srv/outpost/jailer" "$root/usr/local/lib/outpost/launcher"
+chown "$socket_owner" "$root/run/outpost"
+install -d -m 0755 "$root/usr/local/lib/outpost" "$root/usr/local/bin" "$root/etc/systemd/system" "$root/usr/lib/tmpfiles.d"
+probe=$root/srv/outpost/state/.outpost-hardlink-probe
+: > "$probe"
+ln "$probe" "$root/srv/outpost/jailer/.outpost-hardlink-probe" || { rm -f "$probe"; echo 'state and jail must support hardlinks' >&2; exit 1; }
+rm -f "$probe" "$root/srv/outpost/jailer/.outpost-hardlink-probe"
+for name in outpost uninstall-server; do
+ install -m 0755 "$stage/verified/$name" "$root/usr/local/lib/outpost/.$name.new"
+ chown "$owner" "$root/usr/local/lib/outpost/.$name.new"
+ mv "$root/usr/local/lib/outpost/.$name.new" "$root/usr/local/lib/outpost/$name"
+done
+ln -sfn /usr/local/lib/outpost/outpost "$root/usr/local/bin/outpost"
+for name in outpost-vm-launcher firecracker jailer vmlinux; do
+ mode=0750; [ "$name" != vmlinux ] || mode=0640
+ install -m "$mode" "$stage/verified/$name" "$root/usr/local/lib/outpost/launcher/.$name.new"
+ chown "$vm_owner" "$root/usr/local/lib/outpost/launcher/.$name.new"
+ mv "$root/usr/local/lib/outpost/launcher/.$name.new" "$root/usr/local/lib/outpost/launcher/$name"
+done
+cp --sparse=always "$stage/verified/rootfs.ext4" "$root/var/lib/outpost/images/default/.rootfs.new"
+chmod 0640 "$root/var/lib/outpost/images/default/.rootfs.new"; chown "$owner" "$root/var/lib/outpost/images/default/.rootfs.new"
+mv "$root/var/lib/outpost/images/default/.rootfs.new" "$root/var/lib/outpost/images/default/rootfs.ext4"
+python3 - "$stage/verified" "$root/usr/local/lib/outpost/assets.json" <<'PY'
+import hashlib,json,sys
+source,target=sys.argv[1:]; m=json.load(open(source+'/release-assets.json'))
+assets=[]
+for a in m['assets']:
+ if a['name'] not in ('outpost','outpost-vm-launcher','firecracker','jailer','vmlinux','rootfs.ext4'): continue
+ a=dict(a)
+ if a['name']=='rootfs.ext4':
+  a['file']='rootfs.ext4'; h=hashlib.sha256()
+  with open(source+'/rootfs.ext4','rb') as f:
+   for chunk in iter(lambda:f.read(1024*1024),b''): h.update(chunk)
+  a['sha256']=h.hexdigest()
+ assets.append(a)
+m['assets']=assets
+with open(target,'w') as f: json.dump(m,f,sort_keys=True,separators=(',',':'))
+PY
+chown "$owner" "$root/usr/local/lib/outpost/assets.json"; chmod 0644 "$root/usr/local/lib/outpost/assets.json"
+printf 'OUTPOST_UPLINK=%s\n' "$uplink" > "$root/etc/outpost/launcher.env"
+chown "$owner" "$root/etc/outpost/launcher.env"; chmod 0600 "$root/etc/outpost/launcher.env"
+install -m 0644 "$stage/verified/outpost-vm-launcher.service" "$root/etc/systemd/system/outpost-vm-launcher.service"
 install -m 0644 "$stage/verified/outpost-tmpfiles.conf" "$root/usr/lib/tmpfiles.d/outpost.conf"
-install -d -m 0700 "$root$(dirname "$handoff")"
-chown "$handoff_uid:$handoff_gid" "$root$(dirname "$handoff")"
-printf 'OUTPOST_SERVER=%s\nOUTPOST_TOKEN=%s\n' "$server" "$(cat "$root$config/token")" > "$root$handoff"
-chmod 0600 "$root$handoff"; chown "$handoff_uid:$handoff_gid" "$root$handoff"
-if [ "$test_mode" != 1 ] || [ "${OUTPOST_INSTALL_TEST_SYSTEMCTL:-0}" = 1 ]; then systemctl daemon-reload; systemctl enable outpost-vm-launcher.service outpostd.service; systemctl restart outpost-vm-launcher.service outpostd.service; fi
+if [ "$test_mode" != 1 ]; then
+ if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qx 'Status: active'; then ufw route allow out on "$uplink" from 172.30.0.0/16; fi
+ systemctl daemon-reload
+ systemctl enable outpost-vm-launcher.service
+ systemctl restart outpost-vm-launcher.service
+ python3 - <<'PY'
+import subprocess,time
+end=time.monotonic()+30
+while time.monotonic()<end:
+ try:
+  result=subprocess.run(['/usr/local/bin/outpost','list'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=2)
+  if result.returncode==0: break
+ except (OSError,subprocess.TimeoutExpired): pass
+ time.sleep(.2)
+else: raise SystemExit('launcher is not ready; inspect journalctl -u outpost-vm-launcher.service')
+PY
+fi
+if [ -n "$admin_user" ] && [ "$test_mode" != 1 ]; then
+ usermod -aG outpost "$admin_user"
+ printf 'Granted %s privileged Outpost management access. Start a new login session or run newgrp outpost to activate it.\n' "$admin_user"
+fi
+printf 'Installed one launcher. Use sudo outpost, or a trusted member of the outpost group.\n'

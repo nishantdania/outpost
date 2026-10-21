@@ -1,10 +1,14 @@
+// Package client implements the CLI's local launcher transport.
 package client
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/nishantdania/outpost/internal/api"
@@ -12,34 +16,52 @@ import (
 
 const lifecycleRequestTimeout = 5 * time.Minute
 
-type Client struct{ api, snapshotAPI *api.ClientWithResponses }
+type Client struct{ http *http.Client }
 
-func New(baseURL string, tokens ...string) (*Client, error) {
-	parsedURL, err := url.Parse(baseURL)
+func New() (*Client, error) {
+	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", api.SocketPath)
+	}}
+	return &Client{http: &http.Client{Transport: transport}}, nil
+}
+
+// request streams uploads rather than buffering disk images. Ordinary operations
+// have a deadline; imports and snapshots use the caller's cancellation instead.
+func (c *Client) request(ctx context.Context, method, path string, body io.Reader, contentType string, status int, result any, stream bool) error {
+	if !stream {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, lifecycleRequestTimeout)
+		defer cancel()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, "http://launcher/v1"+path, body)
 	if err != nil {
-		return nil, fmt.Errorf("parse server URL: %w", err)
+		return err
 	}
-	if parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return nil, fmt.Errorf("server URL must include a scheme and host: %q", baseURL)
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
-	token := ""
-	if len(tokens) > 0 {
-		token = tokens[0]
+	response, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("%s %s: %w", method, path, err)
 	}
-	authenticate := api.WithRequestEditorFn(func(_ context.Context, request *http.Request) error {
-		if token != "" {
-			request.Header.Set("Authorization", "Bearer "+token)
+	defer response.Body.Close()
+	if response.StatusCode != status {
+		var detail api.Error
+		if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&detail); err == nil && detail.Error != "" {
+			return fmt.Errorf("%s %s: %s", method, path, detail.Error)
 		}
+		return fmt.Errorf("%s %s: %s", method, path, response.Status)
+	}
+	if result == nil {
 		return nil
-	})
-	apiClient, err := api.NewClientWithResponses(parsedURL.String(), api.WithHTTPClient(&http.Client{Timeout: lifecycleRequestTimeout}), authenticate)
-	if err != nil {
-		return nil, err
 	}
-	// Disk exports can take arbitrarily long; the caller's context controls cancellation.
-	snapshotAPI, err := api.NewClientWithResponses(parsedURL.String(), api.WithHTTPClient(&http.Client{}), authenticate)
-	if err != nil {
-		return nil, err
+	if err := json.NewDecoder(response.Body).Decode(result); err != nil {
+		return fmt.Errorf("%s %s: decode response: %w", method, path, err)
 	}
-	return &Client{api: apiClient, snapshotAPI: snapshotAPI}, nil
+	return nil
+}
+
+func jsonBody(value any) (io.Reader, error) {
+	body, err := json.Marshal(value)
+	return bytes.NewReader(body), err
 }

@@ -3,14 +3,16 @@ package launcher
 import (
 	"context"
 
+	"github.com/nishantdania/outpost/internal/outpost"
 	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
-type Runtime interface {
-	Create(context.Context, vmapi.VMSpec) error
-	Start(context.Context, string) (string, error)
-	Stop(context.Context, string) error
-	Delete(context.Context, string) error
-	Inspect(context.Context, string) (vmapi.RuntimeState, error)
-	List(context.Context) ([]vmapi.RuntimeState, error)
+// Manager adapts lifecycle creation input to the in-process Firecracker runtime.
+// All other operations, including snapshot export, are direct method calls.
+type Manager struct{ *FirecrackerRuntime }
+
+var _ vmapi.Manager = Manager{}
+
+func (m Manager) Create(ctx context.Context, vm outpost.Outpost) error {
+	return m.FirecrackerRuntime.Create(ctx, runtimeView(outpost.Runtime{VM: vm}).Spec)
 }

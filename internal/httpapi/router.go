@@ -1,29 +1,28 @@
+// Package httpapi frames application operations over the local Unix socket.
 package httpapi
 
 import (
-	"crypto/sha256"
-	"crypto/subtle"
 	"net/http"
-	"strings"
 
-	"github.com/nishantdania/outpost/internal/api"
-	"github.com/nishantdania/outpost/internal/service"
+	"github.com/nishantdania/outpost/internal/manager"
 )
 
-func newRouter(application *service.Service, token string) http.Handler {
-	return authenticate(token, api.Handler(handler{service: application}))
-}
-
-func authenticate(token string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		credential, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		provided := sha256.Sum256([]byte(credential))
-		expected := sha256.Sum256([]byte(token))
-		if !ok || credential == "" || subtle.ConstantTimeCompare(provided[:], expected[:]) != 1 {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			writeJSON(w, http.StatusUnauthorized, api.Error{Error: "unauthorized"})
-			return
-		}
-		next.ServeHTTP(w, r)
+func Handler(application *manager.Manager) http.Handler {
+	h := handler{service: application}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/outposts", h.ListOutposts)
+	mux.HandleFunc("POST /v1/outposts", h.CreateOutpost)
+	mux.HandleFunc("GET /v1/outposts/{name}", func(w http.ResponseWriter, r *http.Request) { h.GetOutpost(w, r, r.PathValue("name")) })
+	mux.HandleFunc("DELETE /v1/outposts/{name}", func(w http.ResponseWriter, r *http.Request) { h.DeleteOutpost(w, r, r.PathValue("name")) })
+	mux.HandleFunc("POST /v1/outposts/{name}/start", func(w http.ResponseWriter, r *http.Request) { h.StartOutpost(w, r, r.PathValue("name")) })
+	mux.HandleFunc("POST /v1/outposts/{name}/stop", func(w http.ResponseWriter, r *http.Request) { h.StopOutpost(w, r, r.PathValue("name")) })
+	mux.HandleFunc("POST /v1/outposts/{name}/snapshot", func(w http.ResponseWriter, r *http.Request) {
+		h.SnapshotOutpost(w, r, r.PathValue("name"), r.URL.Query().Get("tag"))
 	})
+	mux.HandleFunc("GET /v1/images", h.ListImages)
+	mux.HandleFunc("POST /v1/images", func(w http.ResponseWriter, r *http.Request) { h.ImportImage(w, r, r.URL.Query().Get("tag")) })
+	mux.HandleFunc("GET /v1/images/{reference}", func(w http.ResponseWriter, r *http.Request) { h.GetImage(w, r, r.PathValue("reference")) })
+	mux.HandleFunc("DELETE /v1/images/{reference}", func(w http.ResponseWriter, r *http.Request) { h.DeleteImage(w, r, r.PathValue("reference")) })
+	mux.HandleFunc("POST /v1/images/gc", h.GcImages)
+	return mux
 }

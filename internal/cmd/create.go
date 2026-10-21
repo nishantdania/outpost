@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -15,34 +14,21 @@ import (
 
 func newCreateCmd(options *rootOptions) *cobra.Command {
 	input := client.CreateOutpostInput{ImageID: outpost.DefaultImageID, VCPUs: outpost.DefaultVCPUs, MemoryMiB: outpost.DefaultMemoryMiB, DiskGiB: outpost.DefaultDiskGiB}
-	memory, disk, publicKeyPath := "4G", "8G", ""
-	command := &cobra.Command{Use: "create <name>", Short: "Create an Outpost", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	memory, disk := "4G", "8G"
+	command := &cobra.Command{Use: "run <name>", Aliases: []string{"create"}, Short: "Create and start a VM", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		var err error
 		input.Name = args[0]
-		if publicKeyPath != "" {
-			key, err := os.ReadFile(publicKeyPath)
-			if err != nil {
-				return fmt.Errorf("read SSH public key: %w", err)
-			}
-			input.SSHPublicKey = strings.TrimSpace(string(key))
-		} else {
-			key, err := options.ssh.EnsureIdentity(cmd.Context(), options.runner)
-			if err != nil {
-				return err
-			}
-			input.SSHPublicKey = key
-		}
 		if input.MemoryMiB, err = parseMemoryMiB(memory); err != nil {
 			return fmt.Errorf("parse memory: %w", err)
 		}
 		if input.DiskGiB, err = parseDiskGiB(disk); err != nil {
 			return fmt.Errorf("parse disk: %w", err)
 		}
-		outpostdClient, err := client.New(options.serverURL, options.token)
+		launcherClient, err := client.New()
 		if err != nil {
-			return fmt.Errorf("create outpostd client: %w", err)
+			return fmt.Errorf("create launcher client: %w", err)
 		}
-		result, err := outpostdClient.CreateOutpostWith(cmd.Context(), input)
+		result, err := launcherClient.CreateOutpostWith(cmd.Context(), input)
 		if err != nil {
 			return err
 		}
@@ -56,7 +42,6 @@ func newCreateCmd(options *rootOptions) *cobra.Command {
 	command.Flags().IntVar(&input.VCPUs, "cpus", input.VCPUs, "virtual CPUs")
 	command.Flags().StringVar(&memory, "memory", memory, "memory (MiB, M, MB, G, or GB)")
 	command.Flags().StringVar(&disk, "disk", disk, "disk (GiB, G, or GB)")
-	command.Flags().StringVar(&publicKeyPath, "ssh-public-key", publicKeyPath, "SSH public key file")
 	return command
 }
 

@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nishantdania/outpost/internal/artifact"
+	"github.com/nishantdania/outpost/internal/outpost"
 	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
@@ -146,8 +148,8 @@ func (OSProcessController) Signal(pid int, signal os.Signal) error {
 }
 
 type FirecrackerConfig struct {
+	Store         *outpost.Store
 	StateDir      string
-	RuntimeDir    string
 	JailerBase    string
 	Firecracker   string
 	Jailer        string
@@ -155,41 +157,34 @@ type FirecrackerConfig struct {
 	DefaultRootFS string
 	ImageStore    string
 	Uplink        string
-	DNS           string
 	OutpostVMUID  int
 	OutpostVMGID  int
-	OutpostdUID   int
-	OutpostdGID   int
-	MaxImageBytes int64
 	Runner        CommandRunner
 	Launcher      ProcessLauncher
 	Processes     ProcessController
-	SSHTimeout    time.Duration
 	PIDTimeout    time.Duration
 	StopTimeout   time.Duration
 	PollInterval  time.Duration
 }
 
-type manifest struct {
-	Spec      vmapi.VMSpec `json:"spec"`
-	Tap       string       `json:"tap"`
-	GuestIP   string       `json:"guest_ip"`
-	Gateway   string       `json:"gateway"`
-	PID       int          `json:"pid"`
-	StartTime string       `json:"start_time"`
-	UFWRoute  bool         `json:"ufw_route"`
+type runtimeRecord struct {
+	Spec      vmapi.VMSpec
+	Tap       string
+	GuestIP   string
+	Gateway   string
+	PID       int
+	StartTime string
+	UFWRoute  bool
 }
 
 type FirecrackerRuntime struct {
 	config           FirecrackerConfig
 	mu               sync.Mutex
 	snapshotCapacity chan struct{}
-	guestStat        func(context.Context, string, string) (os.FileInfo, error)
 }
 
 type vmPaths struct {
 	stateDir    string
-	manifest    string
 	stateDisk   string
 	log         string
 	jailIDDir   string
@@ -246,6 +241,9 @@ var interfaceName = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,15}$`)
 var executableName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,255}$`)
 
 func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error) {
+	if config.Store == nil {
+		return nil, fmt.Errorf("launcher requires the shared VM database: %w", vmapi.ErrInvalid)
+	}
 	if config.ImageStore == "" {
 		config.ImageStore = filepath.Dir(config.DefaultRootFS)
 	}
@@ -258,15 +256,6 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 	if config.Processes == nil {
 		config.Processes = OSProcessController{}
 	}
-	if config.SSHTimeout == 0 {
-		config.SSHTimeout = 2 * time.Minute
-	}
-	if config.MaxImageBytes == 0 {
-		config.MaxImageBytes = 1024 << 30
-	}
-	if config.OutpostdUID == 0 && config.OutpostdGID == 0 {
-		config.OutpostdUID, config.OutpostdGID = -1, -1
-	}
 	if config.PIDTimeout == 0 {
 		config.PIDTimeout = 10 * time.Second
 	}
@@ -276,7 +265,7 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 	if config.PollInterval == 0 {
 		config.PollInterval = 50 * time.Millisecond
 	}
-	for _, path := range []string{config.StateDir, config.RuntimeDir, config.JailerBase, config.Firecracker, config.Jailer, config.Kernel, config.DefaultRootFS, config.ImageStore} {
+	for _, path := range []string{config.StateDir, config.JailerBase, config.Firecracker, config.Jailer, config.Kernel, config.DefaultRootFS, config.ImageStore} {
 		if !safeAbsolutePath(path) {
 			return nil, fmt.Errorf("firecracker configuration: %w", vmapi.ErrInvalid)
 		}
@@ -287,7 +276,7 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 			return nil, fmt.Errorf("trusted asset %q: %w", path, vmapi.ErrInvalid)
 		}
 	}
-	if !interfaceName.MatchString(config.Uplink) || net.ParseIP(config.DNS) == nil || net.ParseIP(config.DNS).To4() == nil || config.OutpostVMUID < 0 || config.OutpostVMGID < 0 || config.OutpostdUID < -1 || config.OutpostdGID < -1 || config.MaxImageBytes <= 0 || config.SSHTimeout <= 0 || config.PIDTimeout <= 0 || config.StopTimeout <= 0 || config.PollInterval <= 0 {
+	if !interfaceName.MatchString(config.Uplink) || config.OutpostVMUID <= 0 || config.OutpostVMGID <= 0 || config.PIDTimeout <= 0 || config.StopTimeout <= 0 || config.PollInterval <= 0 {
 		return nil, fmt.Errorf("firecracker configuration: %w", vmapi.ErrInvalid)
 	}
 	executable := filepath.Base(config.Firecracker)
@@ -296,7 +285,7 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 	}
 	// No exports can be active before this runtime is published. Remove copies
 	// abandoned by a previous launcher; ordinary reconciliation must not touch
-	// exports that are recovering or being streamed by this runtime.
+	// exports that are being copied or streamed by this runtime.
 	entries, err := os.ReadDir(config.StateDir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read snapshot exports: %w", err)
@@ -308,42 +297,19 @@ func NewFirecrackerRuntime(config FirecrackerConfig) (*FirecrackerRuntime, error
 			}
 		}
 	}
-	return &FirecrackerRuntime{config: config, snapshotCapacity: make(chan struct{}, 1), guestStat: statGuestFile}, nil
+	return &FirecrackerRuntime{config: config, snapshotCapacity: make(chan struct{}, 1)}, nil
 }
 
 func (r *FirecrackerRuntime) rootfs(id string) (*os.File, error) {
-	path := r.config.DefaultRootFS
-	if id != "default" {
-		if !regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(id) {
-			return nil, vmapi.ErrInvalid
-		}
-		path = filepath.Join(r.config.ImageStore, strings.TrimPrefix(id, "sha256:"), "rootfs.ext4")
+	var file *os.File
+	var err error
+	if id == "default" {
+		file, err = artifact.OpenFile(r.config.DefaultRootFS)
+	} else {
+		file, err = artifact.Open(r.config.ImageStore, id)
 	}
-	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, vmapi.ErrInvalid
-	}
-	file := os.NewFile(uintptr(fd), path)
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0027 != 0 || info.Size() <= 0 || info.Size() > r.config.MaxImageBytes || info.Mode()&os.ModeSymlink != 0 {
-		file.Close()
-		return nil, vmapi.ErrInvalid
-	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || stat.Nlink != 1 || (r.config.OutpostdUID >= 0 && int(stat.Uid) != r.config.OutpostdUID) || (r.config.OutpostdGID >= 0 && int(stat.Gid) != r.config.OutpostdGID) {
-		file.Close()
-		return nil, vmapi.ErrInvalid
-	}
-	if id != "default" {
-		hash := sha256.New()
-		if _, err = io.Copy(hash, file); err != nil || fmt.Sprintf("sha256:%x", hash.Sum(nil)) != id {
-			file.Close()
-			return nil, vmapi.ErrInvalid
-		}
-		if _, err = file.Seek(0, io.SeekStart); err != nil {
-			file.Close()
-			return nil, vmapi.ErrInvalid
-		}
 	}
 	return file, nil
 }
@@ -352,8 +318,18 @@ func (r *FirecrackerRuntime) Create(ctx context.Context, spec vmapi.VMSpec) erro
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := vmapi.ValidateCreate(vmapi.CreateRequest{Version: vmapi.Version, Spec: spec}); err != nil {
+	if err := vmapi.ValidateSpec(spec); err != nil {
 		return vmapi.ErrInvalid
+	}
+	a, err := r.config.Store.GetByID(ctx, spec.ID)
+	if errors.Is(err, outpost.ErrNotFound) {
+		return vmapi.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if runtimeView(outpost.Runtime{VM: a}).Spec != spec {
+		return vmapi.ErrConflict
 	}
 	rootfs, err := r.rootfs(spec.ImageID)
 	if err != nil {
@@ -367,7 +343,7 @@ func (r *FirecrackerRuntime) Create(ctx context.Context, spec vmapi.VMSpec) erro
 			return vmapi.ErrConflict
 		}
 		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
+	} else if !errors.Is(err, vmapi.ErrNotFound) {
 		return err
 	}
 	base, err := rootfs.Stat()
@@ -388,25 +364,18 @@ func (r *FirecrackerRuntime) Create(ctx context.Context, spec vmapi.VMSpec) erro
 	if err := copySparse(ctx, rootfs, paths.stateDisk); err != nil {
 		return r.failCreate(paths, err)
 	}
-	if _, err := r.run(ctx, "truncate", "-s", strconv.FormatInt(target, 10), paths.stateDisk); err != nil {
+	if err := os.Truncate(paths.stateDisk, target); err != nil {
 		return r.failCreate(paths, err)
 	}
-	if err := r.e2fsck(ctx, paths.stateDisk); err != nil {
-		return r.failCreate(paths, err)
-	}
-	if _, err := r.run(ctx, "resize2fs", paths.stateDisk); err != nil {
-		return r.failCreate(paths, err)
-	}
-	if err := r.installGuestFiles(ctx, paths, spec); err != nil {
-		return r.failCreate(paths, err)
-	}
+	// Every source, including default, is opaque. Only extend the disk file;
+	// filesystem growth, identity and guest configuration belong to the guest.
 	if err := os.Chown(paths.stateDisk, r.config.OutpostVMUID, r.config.OutpostVMGID); err != nil {
 		return r.failCreate(paths, err)
 	}
 	if err := os.Chmod(paths.stateDisk, 0600); err != nil {
 		return r.failCreate(paths, err)
 	}
-	if err := r.save(spec.ID, manifest{Spec: spec}); err != nil {
+	if err := r.save(spec.ID, runtimeRecord{Spec: spec}); err != nil {
 		return r.failCreate(paths, err)
 	}
 	return nil
@@ -419,89 +388,6 @@ func (r *FirecrackerRuntime) failCreate(paths vmPaths, cause error) error {
 	return cause
 }
 
-func (r *FirecrackerRuntime) installGuestFiles(ctx context.Context, paths vmPaths, spec vmapi.VMSpec) error {
-	// Disk snapshots contain the baseline's machine identity. Clear it so each
-	// fork generates its own identity and random seed at boot.
-	empty := filepath.Join(paths.stateDir, "machine-id")
-	if err := os.WriteFile(empty, nil, 0600); err != nil {
-		return err
-	}
-	defer os.Remove(empty)
-	for _, path := range []string{"/etc/machine-id", "/var/lib/dbus/machine-id", "/var/lib/systemd/random-seed", "/root/.ssh/authorized_keys"} {
-		if err := r.removeGuestIdentity(ctx, paths.stateDisk, path); err != nil {
-			return err
-		}
-	}
-	if _, err := r.run(ctx, "debugfs", "-w", "-R", "write "+empty+" /etc/machine-id", paths.stateDisk); err != nil {
-		return err
-	}
-	if err := r.inode(ctx, paths.stateDisk, "/etc/machine-id", "0100644"); err != nil {
-		return err
-	}
-	info, err := r.guestStat(ctx, paths.stateDisk, "/etc/machine-id")
-	if err != nil {
-		return err
-	}
-	if !info.Mode().IsRegular() || info.Size() != 0 {
-		return fmt.Errorf("machine-id is not an empty regular file")
-	}
-	resolvPath := filepath.Join(paths.stateDir, "resolv.conf")
-	if err := os.WriteFile(resolvPath, []byte("nameserver "+r.config.DNS+"\n"), 0644); err != nil {
-		return err
-	}
-	_, _ = r.run(ctx, "debugfs", "-w", "-R", "rm /etc/resolv.conf", paths.stateDisk)
-	if _, err := r.run(ctx, "debugfs", "-w", "-R", "write "+resolvPath+" /etc/resolv.conf", paths.stateDisk); err != nil {
-		return err
-	}
-	if err := r.inode(ctx, paths.stateDisk, "/etc/resolv.conf", "0100644"); err != nil {
-		return err
-	}
-	for _, kind := range []string{"rsa", "ecdsa", "ed25519"} {
-		keyPath := filepath.Join(paths.stateDir, "ssh_host_"+kind+"_key")
-		args := []string{"-q", "-N", "", "-f", keyPath, "-t", kind}
-		if kind == "rsa" {
-			args = append(args, "-b", "4096")
-		}
-		if kind == "ecdsa" {
-			args = append(args, "-b", "521")
-		}
-		if _, err := r.run(ctx, "ssh-keygen", args...); err != nil {
-			return err
-		}
-		for _, suffix := range []string{"", ".pub"} {
-			guestPath := "/etc/ssh/ssh_host_" + kind + "_key" + suffix
-			_, _ = r.run(ctx, "debugfs", "-w", "-R", "rm "+guestPath, paths.stateDisk)
-			if _, err := r.run(ctx, "debugfs", "-w", "-R", "write "+keyPath+suffix+" "+guestPath, paths.stateDisk); err != nil {
-				return err
-			}
-			mode := "0100600"
-			if suffix == ".pub" {
-				mode = "0100644"
-			}
-			if err := r.inode(ctx, paths.stateDisk, guestPath, mode); err != nil {
-				return err
-			}
-		}
-		if err := os.Remove(keyPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		if err := os.Remove(keyPath + ".pub"); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-	}
-	if spec.SSHPublicKey == "" {
-		return nil
-	}
-	keyPath := filepath.Join(paths.stateDir, "authorized_keys")
-	if err := os.WriteFile(keyPath, []byte(spec.SSHPublicKey+"\n"), 0600); err != nil {
-		return err
-	}
-	if _, err := r.run(ctx, "debugfs", "-w", "-R", "write "+keyPath+" /root/.ssh/authorized_keys", paths.stateDisk); err != nil {
-		return err
-	}
-	return r.inode(ctx, paths.stateDisk, "/root/.ssh/authorized_keys", "0100600")
-}
-
 func (r *FirecrackerRuntime) Start(ctx context.Context, id string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -512,7 +398,7 @@ func (r *FirecrackerRuntime) Start(ctx context.Context, id string) (string, erro
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, err := r.load(id)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, vmapi.ErrNotFound) {
 		return "", vmapi.ErrNotFound
 	}
 	if err != nil {
@@ -526,6 +412,9 @@ func (r *FirecrackerRuntime) Start(ctx context.Context, id string) (string, erro
 		return "", fmt.Errorf("refusing unverified live PID for %s", id)
 	}
 	if state == processVerified {
+		if err := r.config.Store.ObserveRuntime(ctx, id, true); err != nil {
+			return "", err
+		}
 		return m.GuestIP, nil
 	}
 	if m.PID != 0 {
@@ -591,9 +480,6 @@ func (r *FirecrackerRuntime) Start(ctx context.Context, id string) (string, erro
 	if err := r.save(id, m); err != nil {
 		return r.cleanupLaunched(id, m, process, wait, err)
 	}
-	if err := r.ready(ctx, m.GuestIP); err != nil {
-		return r.cleanupLaunched(id, m, process, wait, err)
-	}
 	state, err = r.runtimeProcess(m)
 	if err != nil || state != processVerified {
 		if err == nil {
@@ -601,10 +487,13 @@ func (r *FirecrackerRuntime) Start(ctx context.Context, id string) (string, erro
 		}
 		return r.cleanupLaunched(id, m, process, wait, err)
 	}
+	if err := r.config.Store.ObserveRuntime(ctx, id, true); err != nil {
+		return "", err
+	}
 	return m.GuestIP, nil
 }
 
-func (r *FirecrackerRuntime) prepareJail(paths vmPaths, m manifest) error {
+func (r *FirecrackerRuntime) prepareJail(paths vmPaths, m runtimeRecord) error {
 	if err := os.MkdirAll(paths.jailRoot, 0700); err != nil {
 		return err
 	}
@@ -642,13 +531,13 @@ func (r *FirecrackerRuntime) jailerArgs(id string) []string {
 	return []string{"--id", id, "--exec-file", r.config.Firecracker, "--uid", strconv.Itoa(r.config.OutpostVMUID), "--gid", strconv.Itoa(r.config.OutpostVMGID), "--chroot-base-dir", r.config.JailerBase, "--cgroup-version", "2", "--resource-limit", "no-file=1024", "--", "--api-sock", "/firecracker.sock", "--config-file", "/config.json"}
 }
 
-func (r *FirecrackerRuntime) cleanupBeforeLaunch(id string, m manifest, cause error) (string, error) {
+func (r *FirecrackerRuntime) cleanupBeforeLaunch(id string, m runtimeRecord, cause error) (string, error) {
 	ctx, cancel := r.cleanupContext()
 	defer cancel()
 	return "", errors.Join(cause, r.networkDown(ctx, m), r.removeJailID(id))
 }
 
-func (r *FirecrackerRuntime) cleanupLaunched(id string, m manifest, process LaunchProcess, wait *processWait, cause error) (string, error) {
+func (r *FirecrackerRuntime) cleanupLaunched(id string, m runtimeRecord, process LaunchProcess, wait *processWait, cause error) (string, error) {
 	if err := r.terminateLaunched(process, wait); err != nil {
 		return "", errors.Join(cause, err)
 	}
@@ -679,7 +568,7 @@ func (r *FirecrackerRuntime) Stop(ctx context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, err := r.load(id)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, vmapi.ErrNotFound) {
 		return vmapi.ErrNotFound
 	}
 	if err != nil {
@@ -688,7 +577,7 @@ func (r *FirecrackerRuntime) Stop(ctx context.Context, id string) error {
 	return r.stopLocked(m)
 }
 
-func (r *FirecrackerRuntime) stopLocked(m manifest) error {
+func (r *FirecrackerRuntime) stopLocked(m runtimeRecord) error {
 	state, err := r.runtimeProcess(m)
 	if err != nil {
 		return err
@@ -711,7 +600,10 @@ func (r *FirecrackerRuntime) stopLocked(m manifest) error {
 	if err := r.networkDown(ctx, m); err != nil {
 		return err
 	}
-	return r.removeJailID(m.Spec.ID)
+	if err := r.removeJailID(m.Spec.ID); err != nil {
+		return err
+	}
+	return r.config.Store.ObserveRuntime(ctx, m.Spec.ID, false)
 }
 
 func (r *FirecrackerRuntime) Delete(ctx context.Context, id string) error {
@@ -724,8 +616,11 @@ func (r *FirecrackerRuntime) Delete(ctx context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, err := r.load(id)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
+	if errors.Is(err, vmapi.ErrNotFound) {
+		if _, err := os.Lstat(r.vmPaths(id).jailIDDir); !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("refusing to delete untracked VM jail for %s", id)
+		}
+		return os.RemoveAll(r.vmPaths(id).stateDir)
 	}
 	if err != nil {
 		return err
@@ -750,7 +645,10 @@ func (r *FirecrackerRuntime) Delete(ctx context.Context, id string) error {
 	if err := r.removeJailID(id); err != nil {
 		return err
 	}
-	return os.RemoveAll(r.vmPaths(id).stateDir)
+	if err := os.RemoveAll(r.vmPaths(id).stateDir); err != nil {
+		return err
+	}
+	return r.config.Store.RemoveRuntime(ctx, id)
 }
 
 func (r *FirecrackerRuntime) Inspect(ctx context.Context, id string) (vmapi.RuntimeState, error) {
@@ -763,7 +661,10 @@ func (r *FirecrackerRuntime) Inspect(ctx context.Context, id string) (vmapi.Runt
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	m, err := r.load(id)
-	if errors.Is(err, os.ErrNotExist) {
+	if errors.Is(err, vmapi.ErrNotFound) {
+		if err := r.config.Store.ObserveRuntime(ctx, id, false); err != nil {
+			return vmapi.RuntimeState{}, err
+		}
 		return vmapi.RuntimeState{}, vmapi.ErrNotFound
 	}
 	if err != nil {
@@ -776,6 +677,9 @@ func (r *FirecrackerRuntime) Inspect(ctx context.Context, id string) (vmapi.Runt
 	if state == processUnverified {
 		return vmapi.RuntimeState{}, fmt.Errorf("unverified live PID for %s", id)
 	}
+	if err := r.config.Store.ObserveRuntime(ctx, id, state == processVerified); err != nil {
+		return vmapi.RuntimeState{}, err
+	}
 	return vmapi.RuntimeState{Spec: m.Spec, Running: state == processVerified}, nil
 }
 
@@ -785,15 +689,15 @@ func (r *FirecrackerRuntime) List(ctx context.Context) ([]vmapi.RuntimeState, er
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	manifests, err := r.loadAll()
+	records, err := r.loadAll()
 	if err != nil {
 		return nil, err
 	}
-	if err := validateUniqueAllocations(manifests); err != nil {
+	if err := validateUniqueAllocations(records); err != nil {
 		return nil, err
 	}
-	out := make([]vmapi.RuntimeState, 0, len(manifests))
-	for _, m := range manifests {
+	out := make([]vmapi.RuntimeState, 0, len(records))
+	for _, m := range records {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -803,6 +707,9 @@ func (r *FirecrackerRuntime) List(ctx context.Context) ([]vmapi.RuntimeState, er
 		}
 		if state == processUnverified {
 			return nil, fmt.Errorf("unverified live PID for %s", m.Spec.ID)
+		}
+		if err := r.config.Store.ObserveRuntime(ctx, m.Spec.ID, state == processVerified); err != nil {
+			return nil, err
 		}
 		out = append(out, vmapi.RuntimeState{Spec: m.Spec, Running: state == processVerified})
 	}
@@ -816,15 +723,18 @@ func (r *FirecrackerRuntime) Reconcile(ctx context.Context) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	manifests, err := r.loadAll()
+	records, err := r.loadAll()
 	if err != nil {
 		return err
 	}
-	if err := validateUniqueAllocations(manifests); err != nil {
+	if err := validateUniqueAllocations(records); err != nil {
 		return err
 	}
-	states := make([]processState, len(manifests))
-	for i, m := range manifests {
+	if err := r.checkRegistry(ctx, records); err != nil {
+		return err
+	}
+	states := make([]processState, len(records))
+	for i, m := range records {
 		states[i], err = r.runtimeProcess(m)
 		if err != nil {
 			return err
@@ -833,8 +743,11 @@ func (r *FirecrackerRuntime) Reconcile(ctx context.Context) error {
 			return fmt.Errorf("refusing unverified live PID for %s", m.Spec.ID)
 		}
 	}
-	for i, m := range manifests {
+	for i, m := range records {
 		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := r.config.Store.ObserveRuntime(ctx, m.Spec.ID, states[i] == processVerified); err != nil {
 			return err
 		}
 		if states[i] == processVerified {
@@ -856,24 +769,17 @@ func (r *FirecrackerRuntime) Reconcile(ctx context.Context) error {
 }
 
 func (r *FirecrackerRuntime) Shutdown(ctx context.Context) error {
-	entries, err := os.ReadDir(filepath.Join(r.config.StateDir, "vms"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
+	rows, err := r.config.Store.Runtimes(ctx)
 	if err != nil {
 		return err
 	}
 	var result error
-	for _, entry := range entries {
+	for _, row := range rows {
 		if err := ctx.Err(); err != nil {
 			return errors.Join(result, err)
 		}
-		if !entry.IsDir() {
-			result = errors.Join(result, fmt.Errorf("invalid VM state entry %s", entry.Name()))
-			continue
-		}
-		if err := r.Stop(ctx, entry.Name()); err != nil && !errors.Is(err, vmapi.ErrNotFound) {
-			result = errors.Join(result, fmt.Errorf("stop %s: %w", entry.Name(), err))
+		if err := r.Stop(ctx, row.VM.ID); err != nil && !errors.Is(err, vmapi.ErrNotFound) {
+			result = errors.Join(result, fmt.Errorf("stop %s: %w", row.VM.ID, err))
 		}
 	}
 	return result
@@ -885,7 +791,6 @@ func (r *FirecrackerRuntime) vmPaths(id string) vmPaths {
 	jailRoot := filepath.Join(jailIDDir, "root")
 	return vmPaths{
 		stateDir:    stateDir,
-		manifest:    filepath.Join(stateDir, "runtime.json"),
 		stateDisk:   filepath.Join(stateDir, "rootfs.ext4"),
 		log:         filepath.Join(stateDir, "firecracker.log"),
 		jailIDDir:   jailIDDir,
@@ -901,116 +806,6 @@ func (r *FirecrackerRuntime) removeJailID(id string) error {
 	return os.RemoveAll(r.vmPaths(id).jailIDDir)
 }
 
-func (r *FirecrackerRuntime) load(id string) (manifest, error) {
-	var m manifest
-	if !validID(id) {
-		return m, fmt.Errorf("invalid runtime ID: %w", vmapi.ErrInvalid)
-	}
-	file, err := os.Open(r.vmPaths(id).manifest)
-	if err != nil {
-		return m, err
-	}
-	defer file.Close()
-	decoder := json.NewDecoder(file)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&m); err != nil {
-		return m, fmt.Errorf("invalid runtime manifest: %w", vmapi.ErrInvalid)
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF || m.Spec.ID != id || !manifestValid(m) {
-		return m, fmt.Errorf("invalid runtime manifest: %w", vmapi.ErrInvalid)
-	}
-	return m, nil
-}
-
-func (r *FirecrackerRuntime) loadAll() ([]manifest, error) {
-	entries, err := os.ReadDir(filepath.Join(r.config.StateDir, "vms"))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	manifests := make([]manifest, 0, len(entries))
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			return nil, fmt.Errorf("invalid VM state entry %s: %w", entry.Name(), vmapi.ErrInvalid)
-		}
-		m, err := r.load(entry.Name())
-		if err != nil {
-			return nil, fmt.Errorf("load runtime manifest %s: %w", entry.Name(), err)
-		}
-		manifests = append(manifests, m)
-	}
-	sort.Slice(manifests, func(i, j int) bool { return manifests[i].Spec.ID < manifests[j].Spec.ID })
-	return manifests, nil
-}
-
-func (r *FirecrackerRuntime) save(id string, m manifest) error {
-	if m.Spec.ID != id || !manifestValid(m) {
-		return fmt.Errorf("invalid runtime manifest: %w", vmapi.ErrInvalid)
-	}
-	path := r.vmPaths(id).manifest
-	data, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-	file, err := os.CreateTemp(filepath.Dir(path), "runtime-")
-	if err != nil {
-		return err
-	}
-	name := file.Name()
-	defer os.Remove(name)
-	written, err := file.Write(data)
-	if err == nil && written != len(data) {
-		err = io.ErrShortWrite
-	}
-	if err == nil {
-		err = file.Chmod(0600)
-	}
-	if err == nil {
-		err = file.Sync()
-	}
-	if closeErr := file.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		return err
-	}
-	directory, err := os.Open(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	err = directory.Sync()
-	if closeErr := directory.Close(); err == nil {
-		err = closeErr
-	}
-	return err
-}
-
-func (r *FirecrackerRuntime) inode(ctx context.Context, rootfs, path, mode string) error {
-	for _, command := range []string{"set_inode_field " + path + " mode " + mode, "set_inode_field " + path + " uid 0", "set_inode_field " + path + " gid 0"} {
-		if _, err := r.run(ctx, "debugfs", "-w", "-R", command, rootfs); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *FirecrackerRuntime) e2fsck(ctx context.Context, rootfs string) error {
-	output, err := r.config.Runner.Run(ctx, "e2fsck", "-fy", rootfs)
-	if err == nil {
-		return nil
-	}
-	var status interface{ ExitCode() int }
-	if errors.As(err, &status) && status.ExitCode() == 1 {
-		return nil
-	}
-	return fmt.Errorf("e2fsck: %w: %s", err, strings.TrimSpace(string(output)))
-}
-
 func (r *FirecrackerRuntime) run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	output, err := r.config.Runner.Run(ctx, name, args...)
 	if err != nil {
@@ -1020,12 +815,12 @@ func (r *FirecrackerRuntime) run(ctx context.Context, name string, args ...strin
 }
 
 func (r *FirecrackerRuntime) allocate(id string) (string, string, string, error) {
-	manifests, err := r.loadAll()
+	records, err := r.loadAll()
 	if err != nil {
 		return "", "", "", err
 	}
-	used := make(map[string]bool, len(manifests))
-	for _, m := range manifests {
+	used := make(map[string]bool, len(records))
+	for _, m := range records {
 		if m.Spec.ID != id && allocationValid(m) {
 			used[m.GuestIP] = true
 		}
@@ -1043,12 +838,12 @@ func (r *FirecrackerRuntime) allocate(id string) (string, string, string, error)
 	return "", "", "", errors.New("Outpost /30 address space is exhausted")
 }
 
-func (r *FirecrackerRuntime) ensureAllocationUnique(id string, allocation manifest) error {
-	manifests, err := r.loadAll()
+func (r *FirecrackerRuntime) ensureAllocationUnique(id string, allocation runtimeRecord) error {
+	records, err := r.loadAll()
 	if err != nil {
 		return err
 	}
-	for _, m := range manifests {
+	for _, m := range records {
 		if m.Spec.ID != id && (m.Tap == allocation.Tap || m.Gateway == allocation.Gateway || m.GuestIP == allocation.GuestIP) {
 			return fmt.Errorf("network allocation collision with %s: %w", m.Spec.ID, vmapi.ErrConflict)
 		}
@@ -1056,9 +851,9 @@ func (r *FirecrackerRuntime) ensureAllocationUnique(id string, allocation manife
 	return nil
 }
 
-func validateUniqueAllocations(manifests []manifest) error {
+func validateUniqueAllocations(records []runtimeRecord) error {
 	used := make(map[string]string)
-	for _, m := range manifests {
+	for _, m := range records {
 		if !allocationValid(m) {
 			continue
 		}
@@ -1072,7 +867,7 @@ func validateUniqueAllocations(manifests []manifest) error {
 	return nil
 }
 
-func (r *FirecrackerRuntime) networkUp(ctx context.Context, m manifest) error {
+func (r *FirecrackerRuntime) networkUp(ctx context.Context, m runtimeRecord) error {
 	if !allocationValid(m) {
 		return fmt.Errorf("invalid network allocation: %w", vmapi.ErrInvalid)
 	}
@@ -1132,7 +927,7 @@ func (r *FirecrackerRuntime) ufwActive(ctx context.Context) bool {
 	return err == nil && strings.HasPrefix(string(output), "Status: active")
 }
 
-func (r *FirecrackerRuntime) networkDown(ctx context.Context, m manifest) error {
+func (r *FirecrackerRuntime) networkDown(ctx context.Context, m runtimeRecord) error {
 	if m.Tap == "" && m.Gateway == "" && m.GuestIP == "" {
 		return nil
 	}
@@ -1163,7 +958,7 @@ func (r *FirecrackerRuntime) networkDown(ctx context.Context, m manifest) error 
 	return result
 }
 
-func networkTable(m manifest) string {
+func networkTable(m runtimeRecord) string {
 	return m.Tap
 }
 
@@ -1172,7 +967,7 @@ func resourceAbsent(err error) bool {
 	return strings.Contains(text, "no such file") || strings.Contains(text, "not found") || strings.Contains(text, "does not exist") || strings.Contains(text, "cannot find device")
 }
 
-func allocationValid(m manifest) bool {
+func allocationValid(m runtimeRecord) bool {
 	if len(m.Tap) != 11 || !strings.HasPrefix(m.Tap, "outpost") {
 		return false
 	}
@@ -1197,8 +992,8 @@ func allocationValid(m manifest) bool {
 	return m.Tap == fmt.Sprintf("outpost%04x", n) && m.Gateway == fmt.Sprintf("172.30.%d.%d", third, fourth-1)
 }
 
-func manifestValid(m manifest) bool {
-	if vmapi.ValidateCreate(vmapi.CreateRequest{Version: vmapi.Version, Spec: m.Spec}) != nil || (m.Spec.ImageID != "default" && !regexp.MustCompile(`^sha256:[a-f0-9]{64}$`).MatchString(m.Spec.ImageID)) {
+func runtimeValid(m runtimeRecord) bool {
+	if vmapi.ValidateSpec(m.Spec) != nil {
 		return false
 	}
 	allocationEmpty := m.Tap == "" && m.Gateway == "" && m.GuestIP == ""
@@ -1211,7 +1006,7 @@ func manifestValid(m manifest) bool {
 	return m.PID == 0 || !allocationEmpty
 }
 
-func (r *FirecrackerRuntime) runtimeProcess(m manifest) (processState, error) {
+func (r *FirecrackerRuntime) runtimeProcess(m runtimeRecord) (processState, error) {
 	paths := r.vmPaths(m.Spec.ID)
 	if m.PID > 0 {
 		info, err := r.config.Processes.Inspect(m.PID, paths.jailRoot, filepath.Base(r.config.Firecracker))
@@ -1314,24 +1109,6 @@ func (r *FirecrackerRuntime) waitPID(ctx context.Context, paths vmPaths, wait *p
 	}
 }
 
-func (r *FirecrackerRuntime) ready(ctx context.Context, ip string) error {
-	readyCtx, cancel := context.WithTimeout(ctx, r.config.SSHTimeout)
-	defer cancel()
-	for {
-		output, err := r.run(readyCtx, "ssh-keyscan", "-T", "1", "-t", "ed25519,ecdsa,rsa", ip)
-		if err == nil && len(output) > 0 {
-			return nil
-		}
-		timer := time.NewTimer(time.Second)
-		select {
-		case <-readyCtx.Done():
-			timer.Stop()
-			return readyCtx.Err()
-		case <-timer.C:
-		}
-	}
-}
-
 func (r *FirecrackerRuntime) terminateLaunched(process LaunchProcess, wait *processWait) error {
 	select {
 	case <-wait.done:
@@ -1360,7 +1137,7 @@ func (r *FirecrackerRuntime) waitForReap(wait *processWait, timeout time.Duratio
 	}
 }
 
-func (r *FirecrackerRuntime) terminatePersisted(m manifest) error {
+func (r *FirecrackerRuntime) terminatePersisted(m runtimeRecord) error {
 	if err := r.config.Processes.Signal(m.PID, syscall.SIGTERM); err != nil {
 		return err
 	}
@@ -1390,7 +1167,7 @@ func (r *FirecrackerRuntime) terminatePersisted(m manifest) error {
 
 var errStopTimeout = errors.New("process did not stop")
 
-func (r *FirecrackerRuntime) waitStopped(m manifest, timeout time.Duration) error {
+func (r *FirecrackerRuntime) waitStopped(m runtimeRecord, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	ticker := time.NewTicker(r.config.PollInterval)
@@ -1431,7 +1208,7 @@ func parseProcStat(data []byte) (string, bool, error) {
 }
 
 func validID(id string) bool {
-	return vmapi.ValidateID(vmapi.IDRequest{Version: vmapi.Version, ID: id}) == nil
+	return vmapi.ValidID(id)
 }
 
 func safeAbsolutePath(path string) bool {

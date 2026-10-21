@@ -3,210 +3,113 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/nishantdania/outpost/internal/api"
+	"github.com/nishantdania/outpost/internal/catalog"
+	"github.com/nishantdania/outpost/internal/manager"
 	"github.com/nishantdania/outpost/internal/outpost"
-	"github.com/nishantdania/outpost/internal/service"
+	"github.com/nishantdania/outpost/internal/vmapi"
 )
 
-type handler struct{ service *service.Service }
+type handler struct{ service *manager.Manager }
 
-var _ api.ServerInterface = handler{}
+func respond(w http.ResponseWriter, status int, value any, err error) {
+	if err == nil {
+		if status == http.StatusNoContent {
+			w.WriteHeader(status)
+		} else {
+			writeJSON(w, status, value)
+		}
+		return
+	}
+	message := err.Error()
+	switch {
+	case errors.Is(err, outpost.ErrNotFound), errors.Is(err, outpost.ErrImageNotFound), errors.Is(err, vmapi.ErrNotFound):
+		status = http.StatusNotFound
+	case errors.Is(err, outpost.ErrNameRequired), errors.Is(err, outpost.ErrInvalidResources), errors.Is(err, outpost.ErrInvalidImage):
+		status = http.StatusBadRequest
+	case errors.Is(err, outpost.ErrNameTaken), errors.Is(err, manager.ErrInvalidState), errors.Is(err, vmapi.ErrConflict), errors.Is(err, catalog.ErrImageProtected):
+		status = http.StatusConflict
+	default:
+		status, message = http.StatusInternalServerError, "operation failed"
+	}
+	writeJSON(w, status, api.Error{Error: message})
+}
 
 func (h handler) ListOutposts(w http.ResponseWriter, r *http.Request) {
-	outposts, err := h.service.List(r.Context())
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "failed to list outposts"})
-		return
+	vms, err := h.service.List(r.Context())
+	result := make([]api.Outpost, 0, len(vms))
+	for _, vm := range vms {
+		result = append(result, apiOutpost(vm))
 	}
-	writeJSON(w, http.StatusOK, apiOutposts(outposts))
+	respond(w, http.StatusOK, result, err)
 }
 func (h handler) GetOutpost(w http.ResponseWriter, r *http.Request, name string) {
-	a, err := h.service.Get(r.Context(), name)
-	if errors.Is(err, outpost.ErrNotFound) {
-		notFound(w)
-		return
-	}
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "failed to get outpost"})
-		return
-	}
-	writeJSON(w, http.StatusOK, apiOutpost(a))
+	vm, err := h.service.Get(r.Context(), name)
+	respond(w, http.StatusOK, apiOutpost(vm), err)
 }
 func (h handler) CreateOutpost(w http.ResponseWriter, r *http.Request) {
 	var request api.CreateOutpostRequest
-	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
 		writeJSON(w, http.StatusBadRequest, api.Error{Error: "invalid request body"})
 		return
 	}
-	created, err := h.service.Create(r.Context(), outpost.CreateInput{Name: request.Name, ImageID: request.ImageId, VCPUs: request.Vcpus, MemoryMiB: request.MemoryMib, DiskGiB: request.DiskGib, SSHPublicKey: stringValue(request.SshPublicKey)})
-	if errors.Is(err, outpost.ErrNameRequired) || errors.Is(err, outpost.ErrInvalidResources) || errors.Is(err, outpost.ErrInvalidSSHPublicKey) {
-		writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, api.Error{Error: "expected a single JSON request"})
 		return
 	}
-	if errors.Is(err, outpost.ErrNameTaken) {
-		writeJSON(w, http.StatusConflict, api.Error{Error: err.Error()})
-		return
-	}
-	if errors.Is(err, outpost.ErrInvalidImage) || errors.Is(err, outpost.ErrImageNotFound) {
-		writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
-		return
-	}
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "failed to create outpost"})
-		return
-	}
-	writeJSON(w, http.StatusCreated, apiOutpost(created))
+	vm, err := h.service.Create(r.Context(), outpost.CreateInput{Name: request.Name, ImageID: request.ImageId, VCPUs: request.Vcpus, MemoryMiB: request.MemoryMib, DiskGiB: request.DiskGib})
+	respond(w, http.StatusCreated, apiOutpost(vm), err)
+}
+func (h handler) StartOutpost(w http.ResponseWriter, r *http.Request, name string) {
+	vm, err := h.service.Start(r.Context(), name)
+	respond(w, http.StatusOK, apiOutpost(vm), err)
+}
+func (h handler) StopOutpost(w http.ResponseWriter, r *http.Request, name string) {
+	vm, err := h.service.Stop(r.Context(), name)
+	respond(w, http.StatusOK, apiOutpost(vm), err)
+}
+func (h handler) DeleteOutpost(w http.ResponseWriter, r *http.Request, name string) {
+	vm, err := h.service.Delete(r.Context(), name)
+	respond(w, http.StatusOK, apiOutpost(vm), err)
 }
 func (h handler) ListImages(w http.ResponseWriter, r *http.Request) {
 	images, err := h.service.Images(r.Context())
-	if errors.Is(err, service.ErrImagesUnavailable) {
-		writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
-		return
-	}
-	if err != nil {
-		writeJSON(w, 500, api.Error{Error: "failed to list images"})
-		return
-	}
-	out := make([]api.Image, 0, len(images))
-	for _, v := range images {
-		out = append(out, apiImage(v))
-	}
-	writeJSON(w, 200, out)
+	respond(w, http.StatusOK, images, err)
 }
 func (h handler) GetImage(w http.ResponseWriter, r *http.Request, ref string) {
 	image, err := h.service.Image(r.Context(), ref)
-	if errors.Is(err, service.ErrImagesUnavailable) {
-		writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
-		return
-	}
-	if errors.Is(err, outpost.ErrImageNotFound) {
-		notFound(w)
-		return
-	}
-	if err != nil {
-		writeJSON(w, 400, api.Error{Error: "invalid image"})
-		return
-	}
-	writeJSON(w, 200, apiImage(image))
+	respond(w, http.StatusOK, image, err)
 }
-func (h handler) BuildImage(w http.ResponseWriter, r *http.Request, p api.BuildImageParams) {
-	h.uploadImage(w, r, p.Tag, true)
-}
-func (h handler) ImportImage(w http.ResponseWriter, r *http.Request, p api.ImportImageParams) {
-	h.uploadImage(w, r, p.Tag, false)
-}
-func (h handler) uploadImage(w http.ResponseWriter, r *http.Request, tag string, build bool) {
-	want := "application/octet-stream"
-	if build {
-		want = "application/x-tar"
-	}
-	if r.Header.Get("Content-Type") != want {
-		writeJSON(w, http.StatusUnsupportedMediaType, api.Error{Error: "invalid image content type"})
+func (h handler) ImportImage(w http.ResponseWriter, r *http.Request, tag string) {
+	if r.Header.Get("Content-Type") != "application/octet-stream" {
+		writeJSON(w, http.StatusUnsupportedMediaType, api.Error{Error: "expected application/octet-stream"})
 		return
 	}
 	defer r.Body.Close()
-	var image outpost.Image
-	var err error
-	if build {
-		image, err = h.service.BuildImage(r.Context(), r.Body, tag)
-	} else {
-		image, err = h.service.ImportImage(r.Context(), r.Body, tag)
-	}
-	if err != nil {
-		if errors.Is(err, service.ErrImagesUnavailable) {
-			writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
-			return
-		}
-		if errors.Is(err, outpost.ErrInvalidImage) {
-			writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "image operation failed"})
-		return
-	}
-	writeJSON(w, http.StatusCreated, apiImage(image))
+	image, err := h.service.ImportImage(r.Context(), r.Body, tag)
+	respond(w, http.StatusCreated, image, err)
 }
 func (h handler) DeleteImage(w http.ResponseWriter, r *http.Request, ref string) {
-	if err := h.service.RemoveImage(r.Context(), ref); err != nil {
-		if errors.Is(err, service.ErrImagesUnavailable) {
-			writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
-			return
-		}
-		if errors.Is(err, outpost.ErrImageNotFound) {
-			notFound(w)
-			return
-		}
-		if errors.Is(err, outpost.ErrInvalidImage) {
-			writeJSON(w, http.StatusBadRequest, api.Error{Error: err.Error()})
-			return
-		}
-		writeJSON(w, http.StatusConflict, api.Error{Error: "image cannot be removed"})
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	err := h.service.RemoveImage(r.Context(), ref)
+	respond(w, http.StatusNoContent, nil, err)
 }
 func (h handler) GcImages(w http.ResponseWriter, r *http.Request) {
 	ids, err := h.service.GCImages(r.Context())
-	if err != nil {
-		if errors.Is(err, service.ErrImagesUnavailable) {
-			writeJSON(w, http.StatusServiceUnavailable, api.Error{Error: err.Error()})
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "image GC failed"})
-		return
+	if ids == nil {
+		ids = []string{}
 	}
-	writeJSON(w, 200, ids)
+	respond(w, http.StatusOK, ids, err)
 }
-func apiImage(v outpost.Image) api.Image {
-	return api.Image{Digest: v.Digest, SizeBytes: int(v.Size), Tags: v.Tags, CreatedAt: v.CreatedAt}
-}
-
-func (h handler) StartOutpost(w http.ResponseWriter, r *http.Request, name api.OutpostName) {
-	h.lifecycle(w, func() (outpost.Outpost, error) { return h.service.Start(r.Context(), name) }, "start")
-}
-func (h handler) StopOutpost(w http.ResponseWriter, r *http.Request, name api.OutpostName) {
-	h.lifecycle(w, func() (outpost.Outpost, error) { return h.service.Stop(r.Context(), name) }, "stop")
-}
-func (h handler) DeleteOutpost(w http.ResponseWriter, r *http.Request, name string) {
-	h.lifecycle(w, func() (outpost.Outpost, error) { return h.service.Delete(r.Context(), name) }, "delete")
-}
-func (h handler) lifecycle(w http.ResponseWriter, action func() (outpost.Outpost, error), operation string) {
-	a, err := action()
-	if errors.Is(err, outpost.ErrNotFound) {
-		notFound(w)
-		return
-	}
-	if errors.Is(err, service.ErrInvalidState) {
-		writeJSON(w, http.StatusConflict, api.Error{Error: err.Error()})
-		return
-	}
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, api.Error{Error: "failed to " + operation + " outpost"})
-		return
-	}
-	writeJSON(w, http.StatusOK, apiOutpost(a))
-}
-func stringValue(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
-}
-
-func notFound(w http.ResponseWriter) {
-	writeJSON(w, http.StatusNotFound, api.Error{Error: outpost.ErrNotFound.Error()})
-}
-func apiOutposts(outposts []outpost.Outpost) []api.Outpost {
-	response := make([]api.Outpost, 0, len(outposts))
-	for _, a := range outposts {
-		response = append(response, apiOutpost(a))
-	}
-	return response
+func (h handler) SnapshotOutpost(w http.ResponseWriter, r *http.Request, name, tag string) {
+	image, err := h.service.Snapshot(r.Context(), name, tag)
+	respond(w, http.StatusCreated, image, err)
 }
 func apiOutpost(a outpost.Outpost) api.Outpost {
-	return api.Outpost{Id: a.ID, Name: a.Name, ImageId: a.ImageID, Vcpus: a.VCPUs, MemoryMib: a.MemoryMiB, DiskGib: a.DiskGiB, DesiredState: api.OutpostDesiredState(a.DesiredState), Status: api.OutpostStatus(a.Status), GuestIp: a.GuestIP, Failure: a.Failure, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+	return api.Outpost{Id: a.ID, Name: a.Name, ImageId: a.ImageID, Vcpus: a.VCPUs, MemoryMib: a.MemoryMiB, DiskGib: a.DiskGiB, DesiredState: a.DesiredState, Status: a.Status, GuestIp: a.GuestIP, Failure: a.Failure, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
 }

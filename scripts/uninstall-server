@@ -1,83 +1,76 @@
 #!/bin/sh
+# Remove a launcher-only installation. Does not manage the retired API daemon.
 set -eu
-[ "$#" -eq 0 ] || exit 1
+fail() { printf '%s\n' "$*" >&2; exit 1; }
 root=${OUTPOST_UNINSTALL_ROOT:-}
 test_mode=${OUTPOST_UNINSTALL_TEST:-0}
-[ -z "$root" ] || [ "$test_mode" = 1 ] || exit 1
-case "$root" in ''|/*) :;; *) exit 1;; esac
-[ "$test_mode" = 1 ] || [ "$(id -u)" = 0 ] || exit 1
-log() { [ -z "${OUTPOST_UNINSTALL_TEST_LOG:-}" ] || printf '%s\n' "$1" >> "$OUTPOST_UNINSTALL_TEST_LOG"; }
-remove() { if [ -e "$root$1" ] || [ -L "$root$1" ]; then rm -rf -- "$root$1"; fi; }
-inactive() { [ "$(systemctl show -p ActiveState --value "$1.service")" = inactive ]; }
-stop() { systemctl stop "$1.service" || [ "$(systemctl show -p LoadState --value "$1.service")" = not-found ]; inactive "$1"; }
-ready() {
- [ "$test_mode" = 1 ] && [ "${OUTPOST_UNINSTALL_TEST_READY:-}" = 1 ] && return
- python3 - "$root/run/outpost/vm-launcher.sock" "${OUTPOST_UNINSTALL_READY_TIMEOUT:-30}" <<'PY'
-import socket,sys,time
-path,timeout=sys.argv[1],int(sys.argv[2]); end=time.monotonic()+timeout
+[ "$test_mode" != 1 ] || [ -n "$root" ] || fail 'test mode requires a root directory'
+[ -z "$root" ] || [ "$test_mode" = 1 ] || fail 'root override is only available in test mode'
+case "$root" in /|*/../*|*/..|*/./*|*/.) fail 'unsafe test root';; ''|/*) :;; *) fail 'test root must be absolute';; esac
+yes=0
+for option in "$@"; do
+ case "$option" in
+  --yes) yes=1;;
+  --help) printf 'Usage: uninstall-server [--yes]\nRemoves launcher software, configuration, ALL VMs, saved images and metadata.\n'; exit 0;;
+  *) fail "unknown option: $option";;
+ esac
+done
+if [ "$test_mode" != 1 ]; then
+ [ "$(id -u)" = 0 ] || fail 'must run as root'
+ for command in systemctl python3; do command -v "$command" >/dev/null 2>&1 || fail "missing $command"; done
+fi
+# An old deployment needs its own uninstaller; never mix the two data layouts.
+for path in /var/lib/outpostd /etc/systemd/system/outpostd.service; do
+ if [ -e "$root$path" ] || [ -L "$root$path" ]; then
+  fail "retired installation found at $path; use its matching uninstaller"
+ fi
+done
+for path in /etc/outpost /var/lib/outpost /srv /srv/outpost /srv/outpost/state /srv/outpost/jailer /run/outpost /usr/local/lib/outpost; do
+ [ ! -L "$root$path" ] || fail "refusing symlink: $path"
+done
+printf 'WARNING: this deletes ALL Outpost VM disks, saved images and metadata. No backup is created.\n' >&2
+if [ "$yes" != 1 ]; then
+ printf 'Type uninstall to continue: ' >&2
+ IFS= read -r answer
+ [ "$answer" = uninstall ] || fail 'uninstall cancelled'
+fi
+if [ "$test_mode" != 1 ]; then
+ if [ "$(systemctl show -p LoadState --value outpost-vm-launcher.service)" != not-found ]; then
+  # Reconcile surviving jailed processes before asking the launcher to stop all
+  # VMs. Do not delete any state if startup or graceful shutdown fails.
+  systemctl start outpost-vm-launcher.service
+  python3 - <<'PY'
+import subprocess,time
+end=time.monotonic()+30
 while time.monotonic()<end:
  try:
-  s=socket.socket(socket.AF_UNIX); s.settimeout(.2); s.connect(path); s.close(); raise SystemExit(0)
- except OSError: time.sleep(.1)
-raise SystemExit(1)
+  result=subprocess.run(['/usr/local/bin/outpost','list'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=2)
+  if result.returncode==0: break
+ except (OSError,subprocess.TimeoutExpired): pass
+ time.sleep(.2)
+else: raise SystemExit('launcher did not become ready; refusing to delete VM state')
 PY
-}
-handoff=''; created_outpostd_user=''; created_outpostvm_user=''; created_outpostd_group=''; created_outpostvm_group=''; created_subuid=''; created_subgid=''; ip_previous=''; changed_ip=''; created_sysctl=''
-file=$root/etc/outpostd/uninstall.env
-if [ -f "$file" ] && [ ! -L "$file" ]; then
- [ "$test_mode" = 1 ] || [ "$(stat -c %u:%a "$file")" = 0:600 ] || exit 1
- { IFS= read -r one; IFS= read -r two; IFS= read -r three; IFS= read -r four; IFS= read -r five; IFS= read -r six; IFS= read -r seven; IFS= read -r eight; IFS= read -r nine; IFS= read -r ten; IFS= read -r extra || :; } < "$file"
- [ -z "$extra" ] || exit 1
- set -- "$one" "$two" "$three" "$four" "$five" "$six" "$seven" "$eight" "$nine" "$ten"
- case "$1:$2:$3:$4:$5:$6:$7:$8:$9:${10}" in
-  OUTPOST_HANDOFF=*:OUTPOST_CREATED_OUTPOSTD_USER=[01]:OUTPOST_CREATED_OUTPOSTVM_USER=[01]:OUTPOST_CREATED_OUTPOSTD_GROUP=[01]:OUTPOST_CREATED_OUTPOSTVM_GROUP=[01]:OUTPOST_CREATED_OUTPOSTD_SUBUID=[01]:OUTPOST_CREATED_OUTPOSTD_SUBGID=[01]:OUTPOST_IP_FORWARD_PREVIOUS=[01]:OUTPOST_CHANGED_IP_FORWARD=[01]:OUTPOST_CREATED_SYSCTL=[01]) :;; *) exit 1;;
- esac
- handoff=${1#OUTPOST_HANDOFF=}
- if [ "$test_mode" = 1 ]; then
-  case "$handoff" in /*/.config/outpost/server.env) :;; *) exit 1;; esac
- else
-  case "$handoff" in
-   /root/.config/outpost/server.env) : ;;
-   /home/*/.config/outpost/server.env)
-    user=${handoff#/home/}; user=${user%%/*}
-    case "$user" in ''|*[!A-Za-z0-9_.-]*) exit 1;; esac
-    [ "$handoff" = "/home/$user/.config/outpost/server.env" ] || exit 1
-    ;;
-   *) exit 1 ;;
-  esac
+  systemctl stop outpost-vm-launcher.service
+  [ "$(systemctl show -p ActiveState --value outpost-vm-launcher.service)" = inactive ] || fail 'launcher did not stop; refusing to delete state'
+  systemctl disable outpost-vm-launcher.service
  fi
- created_outpostd_user=${2#*=}; created_outpostvm_user=${3#*=}; created_outpostd_group=${4#*=}; created_outpostvm_group=${5#*=}; created_subuid=${6#*=}; created_subgid=${7#*=}; ip_previous=${8#*=}; changed_ip=${9#*=}; created_sysctl=${10#*=}
+ # Also protect partial-uninstall retries where the unit file is already gone.
+ python3 - <<'PY'
+from pathlib import Path
+for entry in Path('/proc').iterdir():
+ if not entry.name.isdigit(): continue
+ try: exe=(entry/'exe').readlink().as_posix()
+ except FileNotFoundError: continue
+ if exe.startswith(('/usr/local/lib/outpost/','/srv/outpost/jailer/')):
+  raise SystemExit('Outpost process still running (PID '+entry.name+'); refusing to delete state')
+PY
 fi
-launcher_load=$(systemctl show -p LoadState --value outpost-vm-launcher.service)
-log stop-outpostd; stop outpostd || exit 1
-log stop-launcher; stop outpost-vm-launcher || exit 1
-if [ "$launcher_load" != not-found ]; then
- log reconcile-launcher; systemctl start outpost-vm-launcher.service && systemctl is-active --quiet outpost-vm-launcher.service && ready || exit 1
- log stop-reconciled-launcher; stop outpost-vm-launcher || exit 1
+rm -f "$root/etc/systemd/system/outpost-vm-launcher.service" "$root/usr/lib/tmpfiles.d/outpost.conf"
+# Do not delete an unrelated executable that replaced our CLI symlink.
+if [ -L "$root/usr/local/bin/outpost" ]; then
+ [ "$(readlink "$root/usr/local/bin/outpost")" != /usr/local/lib/outpost/outpost ] || rm -f "$root/usr/local/bin/outpost"
 fi
-systemctl disable outpostd.service || [ "$(systemctl show -p LoadState --value outpostd.service)" = not-found ] || exit 1
-systemctl disable outpost-vm-launcher.service || [ "$launcher_load" = not-found ] || exit 1
-[ -z "$handoff" ] || remove "$handoff"
-[ "$created_sysctl" != 1 ] || remove /etc/sysctl.d/99-outpost.conf
-remove /etc/systemd/system/outpostd.service
-remove /etc/systemd/system/outpost-vm-launcher.service
-remove /usr/lib/tmpfiles.d/outpost.conf
-remove /usr/local/bin/outpost
-remove /usr/local/lib/outpost
-remove /etc/outpostd
-remove /var/lib/outpostd
-remove /srv/outpost/state
-remove /srv/outpost/jailer
-rmdir -- "$root/srv/outpost" 2>/dev/null || :
-remove /run/outpost
-if [ "$test_mode" != 1 ]; then
- [ "$created_subuid" != 1 ] || sed -i '/^outpostd:/d' /etc/subuid
- [ "$created_subgid" != 1 ] || sed -i '/^outpostd:/d' /etc/subgid
- [ "$created_outpostd_user" != 1 ] || userdel outpostd
- [ "$created_outpostvm_user" != 1 ] || userdel outpostvm
- [ "$created_outpostd_group" != 1 ] || groupdel outpostd
- [ "$created_outpostvm_group" != 1 ] || groupdel outpostvm
- if [ "$changed_ip" = 1 ] && ! grep -Rqs '^[[:space:]]*net.ipv4.ip_forward[[:space:]]*=[[:space:]]*1[[:space:]]*$' /etc/sysctl.conf /etc/sysctl.d 2>/dev/null; then sysctl -w "net.ipv4.ip_forward=$ip_previous" >/dev/null; fi
-fi
-systemctl daemon-reload
-log complete
+rm -rf "$root/usr/local/lib/outpost" "$root/etc/outpost" "$root/var/lib/outpost" "$root/srv/outpost/state" "$root/srv/outpost/jailer" "$root/run/outpost"
+rmdir "$root/srv/outpost" 2>/dev/null || :
+if [ "$test_mode" != 1 ]; then systemctl daemon-reload; fi
+printf 'Removed launcher, host CLI and all Outpost data.\nThe outpost group and outpostvm account/group are retained for administrator review.\nWorkstation CLI copies in ~/.local/bin, if any, must be removed separately.\n'

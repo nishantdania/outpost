@@ -2,99 +2,42 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"net/url"
 
 	"github.com/nishantdania/outpost/internal/api"
 )
 
 type CreateOutpostInput struct {
-	Name, ImageID, SSHPublicKey string
-	VCPUs, MemoryMiB, DiskGiB   int
+	Name, ImageID             string
+	VCPUs, MemoryMiB, DiskGiB int
 }
 
-func (c *Client) CreateOutpostWith(ctx context.Context, input CreateOutpostInput) (api.Outpost, error) {
-	response, err := c.api.CreateOutpostWithResponse(ctx, api.CreateOutpostRequest{Name: input.Name, ImageId: input.ImageID, Vcpus: input.VCPUs, MemoryMib: input.MemoryMiB, DiskGib: input.DiskGiB, SshPublicKey: stringPointer(input.SSHPublicKey)})
+func (c *Client) CreateOutpostWith(ctx context.Context, input CreateOutpostInput) (result api.Outpost, err error) {
+	body, err := jsonBody(api.CreateOutpostRequest{Name: input.Name, ImageId: input.ImageID, Vcpus: input.VCPUs, MemoryMib: input.MemoryMiB, DiskGib: input.DiskGiB})
 	if err != nil {
-		return api.Outpost{}, fmt.Errorf("create outpost: %w", err)
+		return result, err
 	}
-	return createdResponse(response.StatusCode(), response.Status(), response.JSON201, response.JSON400, response.JSON409)
-}
-func stringPointer(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
+	err = c.request(ctx, "POST", "/outposts", body, "application/json", 201, &result, false)
+	return
 }
 
-func (c *Client) DeleteOutpost(ctx context.Context, name string) (api.Outpost, error) {
-	response, err := c.api.DeleteOutpostWithResponse(ctx, name)
-	if err != nil {
-		return api.Outpost{}, fmt.Errorf("delete outpost: %w", err)
-	}
-	return lifecycleResponse("delete", response.StatusCode(), response.Status(), response.JSON200, response.JSON404, response.JSON409)
+func (c *Client) DeleteOutpost(ctx context.Context, name string) (result api.Outpost, err error) {
+	err = c.request(ctx, "DELETE", "/outposts/"+url.PathEscape(name), nil, "", 200, &result, false)
+	return
 }
-func (c *Client) GetOutpost(ctx context.Context, name string) (api.Outpost, error) {
-	response, err := c.api.GetOutpostWithResponse(ctx, name)
-	if err != nil {
-		return api.Outpost{}, fmt.Errorf("get outpost: %w", err)
-	}
-	return lifecycleResponse("get", response.StatusCode(), response.Status(), response.JSON200, response.JSON404, nil)
+func (c *Client) GetOutpost(ctx context.Context, name string) (result api.Outpost, err error) {
+	err = c.request(ctx, "GET", "/outposts/"+url.PathEscape(name), nil, "", 200, &result, false)
+	return
 }
-func (c *Client) StartOutpost(ctx context.Context, name string) (api.Outpost, error) {
-	response, err := c.api.StartOutpostWithResponse(ctx, name)
-	if err != nil {
-		return api.Outpost{}, fmt.Errorf("start outpost: %w", err)
-	}
-	return lifecycleResponse("start", response.StatusCode(), response.Status(), response.JSON200, response.JSON404, response.JSON409)
+func (c *Client) StartOutpost(ctx context.Context, name string) (result api.Outpost, err error) {
+	err = c.request(ctx, "POST", "/outposts/"+url.PathEscape(name)+"/start", nil, "", 200, &result, false)
+	return
 }
-func (c *Client) StopOutpost(ctx context.Context, name string) (api.Outpost, error) {
-	response, err := c.api.StopOutpostWithResponse(ctx, name)
-	if err != nil {
-		return api.Outpost{}, fmt.Errorf("stop outpost: %w", err)
-	}
-	return lifecycleResponse("stop", response.StatusCode(), response.Status(), response.JSON200, response.JSON404, response.JSON409)
+func (c *Client) StopOutpost(ctx context.Context, name string) (result api.Outpost, err error) {
+	err = c.request(ctx, "POST", "/outposts/"+url.PathEscape(name)+"/stop", nil, "", 200, &result, false)
+	return
 }
-func (c *Client) ListOutposts(ctx context.Context) ([]api.Outpost, error) {
-	response, err := c.api.ListOutpostsWithResponse(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list outposts: %w", err)
-	}
-	if response.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("list outposts: unexpected response status: %s", response.Status())
-	}
-	if response.JSON200 == nil {
-		return nil, fmt.Errorf("list outposts: response did not contain JSON")
-	}
-	return *response.JSON200, nil
-}
-func createdResponse(status int, statusText string, body *api.Outpost, badRequest, conflict *api.Error) (api.Outpost, error) {
-	if status != http.StatusCreated {
-		if badRequest != nil {
-			return api.Outpost{}, fmt.Errorf("create outpost: %s", badRequest.Error)
-		}
-		if conflict != nil {
-			return api.Outpost{}, fmt.Errorf("create outpost: %s", conflict.Error)
-		}
-		return api.Outpost{}, fmt.Errorf("create outpost: unexpected response status: %s", statusText)
-	}
-	if body == nil {
-		return api.Outpost{}, fmt.Errorf("create outpost: response did not contain JSON")
-	}
-	return *body, nil
-}
-func lifecycleResponse(operation string, status int, statusText string, body *api.Outpost, notFound, conflict *api.Error) (api.Outpost, error) {
-	if status != http.StatusOK {
-		if notFound != nil {
-			return api.Outpost{}, fmt.Errorf("%s outpost: %s", operation, notFound.Error)
-		}
-		if conflict != nil {
-			return api.Outpost{}, fmt.Errorf("%s outpost: %s", operation, conflict.Error)
-		}
-		return api.Outpost{}, fmt.Errorf("%s outpost: unexpected response status: %s", operation, statusText)
-	}
-	if body == nil {
-		return api.Outpost{}, fmt.Errorf("%s outpost: response did not contain JSON", operation)
-	}
-	return *body, nil
+func (c *Client) ListOutposts(ctx context.Context) (result []api.Outpost, err error) {
+	err = c.request(ctx, "GET", "/outposts", nil, "", 200, &result, false)
+	return
 }

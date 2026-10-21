@@ -7,5 +7,7 @@ import (
 )
 
 func newDeleteCmd(options *rootOptions) *cobra.Command {
-	return newOutpostNameCmd(options, "delete <name>", "Delete an Outpost", (*client.Client).DeleteOutpost)
+	command := newOutpostNameCmd(options, "rm <name>", "Remove a VM and its writable disk, keeping source images", (*client.Client).DeleteOutpost)
+	command.Aliases = []string{"delete", "remove"}
+	return command
 }

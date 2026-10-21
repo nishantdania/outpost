@@ -16,12 +16,12 @@ func newListCmd(options *rootOptions) *cobra.Command {
 		Short: "List Outposts",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			outpostdClient, err := client.New(options.serverURL, options.token)
+			launcherClient, err := client.New()
 			if err != nil {
-				return fmt.Errorf("create outpostd client: %w", err)
+				return fmt.Errorf("create launcher client: %w", err)
 			}
 
-			outposts, err := outpostdClient.ListOutposts(cmd.Context())
+			outposts, err := launcherClient.ListOutposts(cmd.Context())
 			if err != nil {
 				return err
 			}

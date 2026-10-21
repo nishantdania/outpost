@@ -2,52 +2,44 @@ package launcher
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
-	"strconv"
+	"path/filepath"
 	"syscall"
 	"time"
 
-	"github.com/nishantdania/outpost/internal/vmapi"
+	"github.com/nishantdania/outpost/internal/api"
 )
-
-const maxBodyBytes = 64 << 10
 
 type Config struct {
 	SocketPath string
 	StateDir   string
 	RuntimeDir string
 	SocketGID  int
-	AllowedUID int
-	Authorize  func(int) bool
 }
 
 func DefaultConfig() Config {
-	return Config{SocketPath: "/run/outpost/vm-launcher.sock", StateDir: "/srv/outpost/state", RuntimeDir: "/run/outpost", SocketGID: -1}
+	return Config{SocketPath: api.SocketPath, StateDir: "/srv/outpost/state", RuntimeDir: filepath.Dir(api.SocketPath), SocketGID: -1}
 }
 
+// Server exposes the launcher's application operations directly to local clients.
+// Access is controlled by the root-owned socket and its parent directory, not a
+// second network service or bearer tokens. Socket-group membership is privileged.
 type Server struct {
-	config   Config
-	runtime  Runtime
-	http     *http.Server
-	listener net.Listener
+	config Config
+	http   *http.Server
 }
 
-func NewServer(config Config, runtime Runtime) (*Server, error) {
-	if config.SocketPath == "" || runtime == nil {
-		return nil, fmt.Errorf("launcher configuration: %w", vmapi.ErrInvalid)
+func NewServer(config Config, handler http.Handler) (*Server, error) {
+	if !filepath.IsAbs(config.SocketPath) || filepath.Clean(config.SocketPath) != config.SocketPath || filepath.Dir(config.SocketPath) != config.RuntimeDir || handler == nil {
+		return nil, fmt.Errorf("launcher socket must be a clean absolute path inside its runtime directory, with a handler")
 	}
-	if config.Authorize == nil {
-		allowed := config.AllowedUID
-		config.Authorize = func(uid int) bool { return uid == allowed }
-	}
-	return &Server{config: config, runtime: runtime}, nil
+	return &Server{config: config, http: &http.Server{
+		Handler: handler, ReadHeaderTimeout: 5 * time.Second, MaxHeaderBytes: 8 << 10,
+	}}, nil
 }
 
 func (s *Server) ListenAndServe() (serveErr error) {
@@ -55,24 +47,11 @@ func (s *Server) ListenAndServe() (serveErr error) {
 	if err != nil {
 		return err
 	}
-	s.listener = listener
 	defer func() {
 		if err := os.Remove(s.config.SocketPath); err != nil && !errors.Is(err, os.ErrNotExist) && serveErr == nil {
 			serveErr = fmt.Errorf("remove launcher socket: %w", err)
 		}
 	}()
-	s.http = &http.Server{
-		Handler:           s.handler(),
-		ReadHeaderTimeout: 5 * time.Second,
-		MaxHeaderBytes:    8 << 10,
-		ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
-			uid, err := peerUID(conn)
-			if err != nil {
-				return ctx
-			}
-			return context.WithValue(ctx, peerKey{}, uid)
-		},
-	}
 	serveErr = s.http.Serve(listener)
 	if errors.Is(serveErr, http.ErrServerClosed) {
 		return nil
@@ -80,183 +59,11 @@ func (s *Server) ListenAndServe() (serveErr error) {
 	return serveErr
 }
 
-func (s *Server) Shutdown(ctx context.Context) error {
-	if s.http == nil {
-		return nil
-	}
-	return s.http.Shutdown(ctx)
-}
-
-type peerKey struct{}
-
-func (s *Server) handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/create", s.create)
-	mux.HandleFunc("POST /v1/snapshot", s.snapshot)
-	mux.HandleFunc("POST /v1/start", s.start)
-	mux.HandleFunc("POST /v1/stop", s.stop)
-	mux.HandleFunc("POST /v1/delete", s.delete)
-	mux.HandleFunc("POST /v1/inspect", s.inspect)
-	mux.HandleFunc("POST /v1/list", s.list)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		uid, ok := r.Context().Value(peerKey{}).(int)
-		if !ok || !s.config.Authorize(uid) {
-			writeError(w, http.StatusForbidden, "unauthorized Unix peer")
-			return
-		}
-		mux.ServeHTTP(w, r)
-	})
-}
-
-func (s *Server) snapshot(w http.ResponseWriter, r *http.Request) {
-	var request vmapi.IDRequest
-	if !decode(w, r, &request) || vmapi.ValidateID(request) != nil {
-		writeError(w, http.StatusBadRequest, "invalid snapshot request")
-		return
-	}
-	runtime, ok := s.runtime.(interface {
-		OpenSnapshot(context.Context, string) (io.ReadCloser, error)
-	})
-	if !ok {
-		writeError(w, http.StatusNotImplemented, "snapshots unavailable")
-		return
-	}
-	disk, err := runtime.OpenSnapshot(r.Context(), request.ID)
-	if err != nil {
-		writeRuntimeError(w, err)
-		return
-	}
-	defer func() {
-		if err := disk.Close(); err != nil {
-			// The response may already be streamed, so an HTTP error cannot
-			// reliably reach the caller. Surface reclamation failures in the
-			// launcher's journal, including the affected VM for operators.
-			log.Printf("snapshot export cleanup for VM %s failed: %v", request.ID, err)
-		}
-	}()
-	// A declared length lets the receiving image store detect interrupted exports.
-	if file, ok := disk.(interface{ Stat() (os.FileInfo, error) }); ok {
-		info, err := file.Stat()
-		if err != nil {
-			writeRuntimeError(w, err)
-			return
-		}
-		w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
-	}
-	w.Header().Set("Content-Type", "application/octet-stream")
-	if _, err := io.Copy(w, disk); err != nil {
-		panic(http.ErrAbortHandler)
-	}
-}
-
-func (s *Server) create(w http.ResponseWriter, r *http.Request) {
-	var request vmapi.CreateRequest
-	if !decode(w, r, &request) || vmapi.ValidateCreate(request) != nil {
-		writeError(w, http.StatusBadRequest, "invalid create request")
-		return
-	}
-	if err := s.runtime.Create(r.Context(), request.Spec); err != nil {
-		writeRuntimeError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-func (s *Server) start(w http.ResponseWriter, r *http.Request) {
-	var request vmapi.IDRequest
-	if !decode(w, r, &request) || vmapi.ValidateID(request) != nil {
-		writeError(w, http.StatusBadRequest, "invalid start request")
-		return
-	}
-	ip, err := s.runtime.Start(r.Context(), request.ID)
-	if err != nil {
-		writeRuntimeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, vmapi.StartResponse{GuestIP: ip})
-}
-func (s *Server) inspect(w http.ResponseWriter, r *http.Request) {
-	var request vmapi.IDRequest
-	if !decode(w, r, &request) || vmapi.ValidateID(request) != nil {
-		writeError(w, http.StatusBadRequest, "invalid inspect request")
-		return
-	}
-	vm, err := s.runtime.Inspect(r.Context(), request.ID)
-	if err != nil {
-		writeRuntimeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, vmapi.InspectResponse{State: vm})
-}
-func (s *Server) list(w http.ResponseWriter, r *http.Request) {
-	var request vmapi.VersionRequest
-	if !decode(w, r, &request) || vmapi.ValidateVersion(request) != nil {
-		writeError(w, http.StatusBadRequest, "invalid list request")
-		return
-	}
-	vms, err := s.runtime.List(r.Context())
-	if err != nil {
-		writeRuntimeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, vmapi.ListResponse{VMs: vms})
-}
-func (s *Server) stop(w http.ResponseWriter, r *http.Request) { s.idOperation(w, r, s.runtime.Stop) }
-func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
-	s.idOperation(w, r, s.runtime.Delete)
-}
-func (s *Server) idOperation(w http.ResponseWriter, r *http.Request, operation func(context.Context, string) error) {
-	var request vmapi.IDRequest
-	if !decode(w, r, &request) || vmapi.ValidateID(request) != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
-		return
-	}
-	if err := operation(r.Context(), request.ID); err != nil {
-		writeRuntimeError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-func decode(w http.ResponseWriter, r *http.Request, value any) bool {
-	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodyBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(value); err != nil {
-		return false
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		return false
-	}
-	return true
-}
-func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, vmapi.ErrorResponse{Error: message})
-}
-func writeRuntimeError(w http.ResponseWriter, err error) {
-	if errors.Is(err, vmapi.ErrConflict) {
-		writeError(w, http.StatusConflict, err.Error())
-		return
-	}
-	if errors.Is(err, vmapi.ErrNotFound) {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		writeError(w, http.StatusRequestTimeout, err.Error())
-		return
-	}
-	writeError(w, http.StatusInternalServerError, "launcher operation failed")
-}
+func (s *Server) Shutdown(ctx context.Context) error { return s.http.Shutdown(ctx) }
+func (s *Server) Close() error                       { return s.http.Close() }
 
 func listenSocket(config Config) (net.Listener, error) {
 	if err := os.MkdirAll(config.RuntimeDir, 0750); err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(config.StateDir, 0750); err != nil {
 		return nil, err
 	}
 	if err := removeStaleSocket(config.SocketPath); err != nil {
@@ -266,18 +73,21 @@ func listenSocket(config Config) (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Chmod(config.SocketPath, 0660); err != nil {
-		_ = listener.Close()
-		return nil, err
-	}
+	mode := os.FileMode(0600)
 	if config.SocketGID >= 0 {
 		if err := os.Chown(config.SocketPath, 0, config.SocketGID); err != nil {
-			_ = listener.Close()
+			listener.Close()
 			return nil, err
 		}
+		mode = 0660
+	}
+	if err := os.Chmod(config.SocketPath, mode); err != nil {
+		listener.Close()
+		return nil, err
 	}
 	return listener, nil
 }
+
 func removeStaleSocket(path string) error {
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -291,7 +101,7 @@ func removeStaleSocket(path string) error {
 	}
 	conn, err := net.DialTimeout("unix", path, time.Second)
 	if err == nil {
-		_ = conn.Close()
+		conn.Close()
 		return fmt.Errorf("launcher socket %q is active", path)
 	}
 	if !errors.Is(err, syscall.ECONNREFUSED) {

@@ -1,0 +1,104 @@
+#!/bin/sh
+# Build the release kernel from pinned stable source and the verified Firecracker
+# baseline's embedded config. Container tools are build-time dependencies only.
+set -eu
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$root"
+scripts/verify-toolchain
+engine=${OCI_ENGINE:-docker}
+out=${OUTPOST_OUTPUT_DIR:-$root/dist}
+mkdir -p "$out"
+out=$(CDPATH='' cd -- "$out" && pwd)
+mkdir -p "$out/kernel-input"
+python3 - "$out/kernel-input/downloads" <<'PY'
+import json,sys
+k=json.load(open('deploy/toolchain.json'))['kernel']
+with open(sys.argv[1],'w') as f:
+ for name,asset in [('baseline-vmlinux',k),('amazon-linux-6.18.41.tar.gz',k['source'])]:
+  f.write(name+' '+asset['url']+' '+asset['sha256']+'\n')
+PY
+while IFS=' ' read -r name url sha; do
+ file=$out/kernel-input/$name
+ if [ ! -f "$file" ] || [ "$(sha256sum "$file" | awk '{print $1}')" != "$sha" ]; then
+  curl --fail --location --proto '=https' --tlsv1.2 -o "$file.new" "$url"
+  printf '%s  %s\n' "$sha" "$file.new" | sha256sum -c -
+  mv "$file.new" "$file"
+ fi
+done < "$out/kernel-input/downloads"
+work=$(mktemp -d "$out/.kernel-build.XXXXXX")
+image=outpost/kernel-builder:6.18.41
+built=0
+cleanup() {
+ if [ "$built" = 1 ]; then
+  "$engine" run --rm -v "$work:/work" "$image" sh -c 'rm -rf /work/linux' >/dev/null 2>&1 || :
+ fi
+ rm -rf "$work"
+}
+trap cleanup EXIT HUP INT TERM
+# Extract the existing Firecracker config, rather than inventing a generic
+# distribution config that could drop built-in virtio/ext4/network requirements.
+python3 - "$out/kernel-input/baseline-vmlinux" "$work/baseline.config" <<'PY'
+import gzip,pathlib,sys
+b=pathlib.Path(sys.argv[1]).read_bytes(); start=b.find(b'IKCFG_ST'); end=b.find(b'IKCFG_ED',start+8)
+if start<0 or end<start: raise SystemExit('baseline kernel has no embedded configuration')
+c=gzip.decompress(b[start+8:end]).decode()
+if '# CONFIG_BLK_DEV_WRITE_MOUNTED is not set\n' not in c: raise SystemExit('unexpected baseline write-mounted setting')
+pathlib.Path(sys.argv[2]).write_text(c)
+PY
+mkdir "$work/linux"
+tar -xzf "$out/kernel-input/amazon-linux-6.18.41.tar.gz" --strip-components=1 -C "$work/linux"
+cp "$work/baseline.config" "$work/linux/.config"
+owner="$(id -u):$(id -g)"
+case "${engine##*/}" in
+ podman|podman-remote)
+  set --
+  if [ "$("$engine" info --format '{{.Host.Security.Rootless}}')" = true ]; then owner=0:0; fi
+  ;;
+ *) set -- --provenance=false ;;
+esac
+"$engine" build "$@" -f kernel/Dockerfile -t "$image" "$root"
+built=1
+epoch=$(python3 -c 'import json; print(json.load(open("deploy/toolchain.json"))["kernel"]["build_epoch"])')
+# Variables in this command are expanded by the container shell, not the host.
+# shellcheck disable=SC2016
+"$engine" run --rm -v "$work:/work" -w /work/linux \
+ -e OWNER="$owner" -e SOURCE_DATE_EPOCH="$epoch" \
+ -e JOBS="${OUTPOST_BUILD_JOBS:-$(nproc)}" \
+ -e KBUILD_BUILD_USER=outpost -e KBUILD_BUILD_HOST=builder -e KBUILD_BUILD_VERSION=1 \
+ "$image" sh -ec '
+ export KBUILD_BUILD_TIMESTAMP="$(date -u -d "@$SOURCE_DATE_EPOCH" "+%a %b %d %T UTC %Y")"
+ scripts/config --enable BLK_DEV_WRITE_MOUNTED
+ make olddefconfig
+ make -j"$JOBS" vmlinux
+ cp vmlinux /work/vmlinux
+ cp .config /work/vmlinux.config
+ chown "$OWNER" /work/vmlinux /work/vmlinux.config
+ '
+# Refuse to publish unexpected feature changes. Compiler probe metadata may
+# differ because Rust/pahole are absent; Rust and debug/BTF are disabled here.
+python3 - "$work/baseline.config" "$work/vmlinux.config" "$out/kernel-config.diff" <<'PY'
+import difflib,pathlib,re,sys
+a=pathlib.Path(sys.argv[1]).read_text(); b=pathlib.Path(sys.argv[2]).read_text()
+pathlib.Path(sys.argv[3]).write_text(''.join(difflib.unified_diff(a.splitlines(True),b.splitlines(True),fromfile='baseline.config',tofile='vmlinux.config')))
+def values(text):
+ result={}
+ for line in text.splitlines():
+  if line.startswith('CONFIG_'):
+   k,v=line.split('=',1); result[k]=v
+  else:
+   m=re.fullmatch(r'# (CONFIG_\w+) is not set',line)
+   if m: result[m[1]]='n'
+ return result
+x,y=values(a),values(b)
+if y.get('CONFIG_BLK_DEV_WRITE_MOUNTED')!='y': raise SystemExit('mounted-write option lost')
+if y.get('CONFIG_RUST','n')!='n' or y.get('CONFIG_DEBUG_INFO_NONE')!='y': raise SystemExit('unexpected Rust/debug configuration')
+metadata={'CONFIG_RUSTC_VERSION','CONFIG_RUSTC_LLVM_VERSION','CONFIG_PAHOLE_VERSION'}
+changes={k for k in x.keys()|y.keys() if x.get(k)!=y.get(k)}
+unexpected={k for k in changes if k!='CONFIG_BLK_DEV_WRITE_MOUNTED' and k not in metadata and not k.startswith('CONFIG_RUSTC_HAS_')}
+if unexpected: raise SystemExit('unexpected configuration changes: '+', '.join(sorted(unexpected)))
+PY
+install -m 0644 "$work/vmlinux" "$out/vmlinux"
+install -m 0644 "$work/vmlinux.config" "$out/vmlinux.config"
+install -m 0644 "$work/baseline.config" "$out/baseline.config"
+(cd "$out" && sha256sum vmlinux vmlinux.config > kernel-checksums.txt)
+printf 'Built Linux 6.18.41 with mounted-filesystem resize support: %s/vmlinux\n' "$out"

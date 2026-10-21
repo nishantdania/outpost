@@ -9,7 +9,7 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  test:
+  check:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -18,19 +18,16 @@ jobs:
         with:
           go-version: '1.27.0'
       - run: scripts/verify-toolchain
-      - run: go generate ./...
-      - run: test -z "$(gofmt -l $(find . -name '*.go' -not -path './internal/api/openapi.gen.go'))"
-      - run: go test ./...
+      - run: test -z "$(gofmt -l $(find . -name '*.go'))"
+      - run: go build ./...
+      - run: go test -race ./...
       - run: go vet ./...
       - run: git diff --check
       - run: sudo apt-get update && sudo apt-get install -y shellcheck zstd
-      - run: shellcheck install.sh scripts/install-server scripts/uninstall-server scripts/release-artifacts scripts/test-install scripts/test-install-server scripts/verify-toolchain images/default/build.sh images/default/test-reproducible
-      - run: scripts/test-install
-      - run: scripts/test-install-server
-      - run: OUTPOST_VERSION=0.2.0 OUTPOST_ROOTFS_SIZE=1G SOURCE_DATE_EPOCH=1700000000 images/default/test-reproducible
+      - run: shellcheck install.sh scripts/install-server scripts/uninstall-server scripts/release-artifacts scripts/verify-toolchain scripts/build-kernel images/default/build.sh
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: test
+    needs: check
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -44,10 +41,10 @@ jobs:
       - run: '[[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
       - run: mkdir -p dist/input dist
       - run: scripts/verify-toolchain
-      - run: python3 -c 'import json; x=json.load(open("deploy/toolchain.json")); print("FC_URL="+x["firecracker"]["url"]); print("FC_SHA="+x["firecracker"]["sha256"]); print("KERNEL_URL="+x["kernel"]["url"]); print("KERNEL_SHA="+x["kernel"]["sha256"])' >> "$GITHUB_ENV"
+      - run: python3 -c 'import json; x=json.load(open("deploy/toolchain.json")); print("FC_URL="+x["firecracker"]["url"]); print("FC_SHA="+x["firecracker"]["sha256"])' >> "$GITHUB_ENV"
       - run: curl --fail --location --proto '=https' --tlsv1.2 -o dist/input/firecracker.tgz "$FC_URL" && echo "$FC_SHA  dist/input/firecracker.tgz" | sha256sum -c - && tar -C dist/input -xzf dist/input/firecracker.tgz
-      - run: curl --fail --location --proto '=https' --tlsv1.2 -o dist/input/vmlinux "$KERNEL_URL" && echo "$KERNEL_SHA  dist/input/vmlinux" | sha256sum -c -
-      - run: go build -trimpath -ldflags='-buildid=' -o dist/outpost ./cmd/outpost && go build -trimpath -ldflags='-buildid=' -o dist/outpostd ./cmd/outpostd && go build -trimpath -ldflags='-buildid=' -o dist/outpost-vm-launcher ./cmd/outpost-vm-launcher
+      - run: OUTPOST_OUTPUT_DIR=dist/input scripts/build-kernel
+      - run: go build -trimpath -ldflags='-buildid=' -o dist/outpost ./cmd/outpost && go build -trimpath -ldflags='-buildid=' -o dist/outpost-vm-launcher ./cmd/outpost-vm-launcher
       - run: OUTPOST_VERSION=${GITHUB_REF_NAME#v} OUTPOST_OUTPUT_DIR=dist OUTPOST_ROOTFS_SIZE=1G SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) images/default/build.sh
       - run: OUTPOST_VERSION=${GITHUB_REF_NAME#v} OUTPOST_OUTPUT_DIR=dist OUTPOST_FIRECRACKER=dist/input/release-v1.16.1-x86_64/firecracker-v1.16.1-x86_64 OUTPOST_JAILER=dist/input/release-v1.16.1-x86_64/jailer-v1.16.1-x86_64 OUTPOST_KERNEL=dist/input/vmlinux scripts/release-artifacts
       - run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,38 +1,36 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
-	"net/http"
 	"time"
 
+	"github.com/nishantdania/outpost/internal/api"
+	"github.com/nishantdania/outpost/internal/client"
 	"github.com/nishantdania/outpost/internal/doctor"
 	"github.com/spf13/cobra"
 )
 
-func newDoctorCmd(options *rootOptions) *cobra.Command {
-	return newDoctorCmdWith(options, doctor.OSProbe{}, &http.Client{Timeout: 5 * time.Second})
-}
-
-func newDoctorCmdWith(options *rootOptions, probe doctor.Probe, client doctor.HTTPClient) *cobra.Command {
+func newDoctorCmd() *cobra.Command {
 	var jsonOutput bool
-	command := &cobra.Command{Use: "doctor", Short: "Check local Outpost client requirements", RunE: func(cmd *cobra.Command, args []string) error {
-		report := doctor.Local(probe, options.ssh.IdentityFile, options.ssh.KnownHostsFile)
-		request, err := http.NewRequestWithContext(cmd.Context(), http.MethodGet, options.serverURL+"/v1/outposts", nil)
-		if err == nil && options.token != "" {
-			request.Header.Set("Authorization", "Bearer "+options.token)
+	command := &cobra.Command{Use: "doctor", Short: "Check local launcher connectivity", RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
+		defer cancel()
+		connection, err := client.New()
+		if err == nil {
+			_, err = connection.ListOutposts(ctx)
 		}
+		check := doctor.Check{Name: "launcher", OK: err == nil, Detail: api.SocketPath}
 		if err != nil {
-			report.Checks = append(report.Checks, doctor.Check{Name: "api-auth", Detail: err.Error()})
-		} else {
-			report.Checks = append(report.Checks, doctor.API(client, request))
+			check.Detail = err.Error()
 		}
+		report := doctor.Report{Checks: []doctor.Check{check}}
 		if jsonOutput {
-			err = report.JSON(cmd.OutOrStdout())
+			if err := report.JSON(cmd.OutOrStdout()); err != nil {
+				return err
+			}
 		} else {
 			report.Text(cmd.OutOrStdout())
-		}
-		if err != nil {
-			return err
 		}
 		if report.Failed() {
 			return fmt.Errorf("doctor found failing checks")

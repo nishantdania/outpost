@@ -11,18 +11,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nishantdania/outpost/internal/catalog"
 	_ "modernc.org/sqlite"
 )
 
+const DefaultDatabasePath = "/var/lib/outpost/outpost.db"
+
 var (
-	ErrNameRequired        = errors.New("outpost name is required")
-	ErrNameTaken           = errors.New("outpost name is already in use")
-	ErrNotFound            = errors.New("outpost not found")
-	ErrInvalidResources    = errors.New("outpost resources must be positive")
-	ErrInvalidSSHPublicKey = errors.New("SSH public key is invalid")
+	ErrNameRequired     = errors.New("outpost name is required")
+	ErrNameTaken        = errors.New("outpost name is already in use")
+	ErrNotFound         = errors.New("outpost not found")
+	ErrInvalidResources = errors.New("outpost resources must be positive")
 )
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db      *sql.DB
+	Catalog *catalog.Store
+}
 
 func Open(ctx context.Context, databasePath string) (*Store, error) {
 	if err := createDatabaseDirectory(databasePath); err != nil {
@@ -33,8 +38,8 @@ func Open(ctx context.Context, databasePath string) (*Store, error) {
 		separator = "&"
 	}
 	// DSN pragmas apply to every connection, including a connection reopened by
-	// database/sql. A one-time PRAGMA would lose VM/host cascade guarantees.
-	db, err := sql.Open("sqlite", databasePath+separator+"_pragma=foreign_keys(1)")
+	// database/sql. A one-time PRAGMA would lose catalog cascade guarantees.
+	db, err := sql.Open("sqlite", databasePath+separator+"_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate")
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -47,7 +52,7 @@ func Open(ctx context.Context, databasePath string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, Catalog: catalog.New(db)}, nil
 }
 
 func (s *Store) Create(ctx context.Context, name string) (Outpost, error) {
@@ -55,7 +60,7 @@ func (s *Store) Create(ctx context.Context, name string) (Outpost, error) {
 	if err != nil {
 		return Outpost{}, err
 	}
-	return s.SetState(ctx, a.ID, DesiredStopped, StatusStopped, "", "")
+	return s.SetState(ctx, a.ID, DesiredStopped, StatusStopped, "")
 }
 
 func (s *Store) CreateWith(ctx context.Context, input CreateInput) (Outpost, error) {
@@ -64,20 +69,17 @@ func (s *Store) CreateWith(ctx context.Context, input CreateInput) (Outpost, err
 	if input.Name == "" {
 		return Outpost{}, ErrNameRequired
 	}
-	if err := ValidateSSHPublicKey(input.SSHPublicKey); err != nil {
-		return Outpost{}, err
-	}
 	if input.VCPUs < MinVCPUs || input.VCPUs > MaxVCPUs || input.MemoryMiB < MinMemoryMiB || input.MemoryMiB > MaxMemoryMiB || input.DiskGiB < MinDiskGiB || input.DiskGiB > MaxDiskGiB {
 		return Outpost{}, ErrInvalidResources
 	}
-	resolved, err := s.ResolveImage(ctx, input.ImageID)
-	if err != nil {
-		return Outpost{}, err
+	// References are resolved by the lifecycle before persistence. Never store a
+	// mutable tag in a VM record.
+	if input.ImageID != DefaultImageID && !catalog.ValidDigest(input.ImageID) {
+		return Outpost{}, catalog.ErrInvalidImage
 	}
-	input.ImageID = resolved
 	now := time.Now().UTC()
-	a := Outpost{ID: uuid.NewString(), Name: input.Name, ImageID: input.ImageID, VCPUs: input.VCPUs, MemoryMiB: input.MemoryMiB, DiskGiB: input.DiskGiB, SSHPublicKey: input.SSHPublicKey, DesiredState: DesiredRunning, Status: StatusProvisioning, CreatedAt: now, UpdatedAt: now}
-	result, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO outposts (id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, ssh_public_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.ID, a.Name, a.ImageID, a.VCPUs, a.MemoryMiB, a.DiskGiB, a.DesiredState, a.Status, a.GuestIP, a.Failure, a.SSHPublicKey, timestamp(a.CreatedAt), timestamp(a.UpdatedAt))
+	a := Outpost{ID: uuid.NewString(), Name: input.Name, ImageID: input.ImageID, VCPUs: input.VCPUs, MemoryMiB: input.MemoryMiB, DiskGiB: input.DiskGiB, DesiredState: DesiredRunning, Status: StatusProvisioning, CreatedAt: now, UpdatedAt: now}
+	result, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO outposts (id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, a.ID, a.Name, a.ImageID, a.VCPUs, a.MemoryMiB, a.DiskGiB, a.DesiredState, a.Status, a.GuestIP, a.Failure, timestamp(a.CreatedAt), timestamp(a.UpdatedAt))
 	if err != nil {
 		return Outpost{}, fmt.Errorf("insert outpost: %w", err)
 	}
@@ -102,6 +104,14 @@ func (s *Store) Get(ctx context.Context, name string) (Outpost, error) {
 	return a, nil
 }
 
+func (s *Store) GetByID(ctx context.Context, id string) (Outpost, error) {
+	a, err := scanOutpost(s.db.QueryRowContext(ctx, outpostSelect+` WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Outpost{}, ErrNotFound
+	}
+	return a, err
+}
+
 func (s *Store) List(ctx context.Context) ([]Outpost, error) {
 	rows, err := s.db.QueryContext(ctx, outpostSelect+` ORDER BY name COLLATE NOCASE`)
 	if err != nil {
@@ -124,17 +134,18 @@ func (s *Store) List(ctx context.Context) ([]Outpost, error) {
 
 var ErrStateMismatch = errors.New("outpost state changed")
 
-func (s *Store) SetState(ctx context.Context, id, desired, status, guestIP, failure string) (Outpost, error) {
-	return s.setState(ctx, `UPDATE outposts SET desired_state = ?, status = ?, guest_ip = ?, failure = ?, updated_at = ? WHERE id = ? RETURNING `+outpostColumns, id, "", desired, status, guestIP, failure)
+// Lifecycle transitions never write allocations: the launcher owns guest_ip.
+func (s *Store) SetState(ctx context.Context, id, desired, status, failure string) (Outpost, error) {
+	return s.setState(ctx, `UPDATE outposts SET desired_state = ?, status = ?, failure = ?, updated_at = ? WHERE id = ? RETURNING `+outpostColumns, id, "", desired, status, failure)
 }
 
-func (s *Store) Transition(ctx context.Context, id, fromStatus, desired, status, guestIP, failure string) (Outpost, error) {
-	return s.setState(ctx, `UPDATE outposts SET desired_state = ?, status = ?, guest_ip = ?, failure = ?, updated_at = ? WHERE id = ? AND status = ? RETURNING `+outpostColumns, id, fromStatus, desired, status, guestIP, failure)
+func (s *Store) Transition(ctx context.Context, id, fromStatus, desired, status, failure string) (Outpost, error) {
+	return s.setState(ctx, `UPDATE outposts SET desired_state = ?, status = ?, failure = ?, updated_at = ? WHERE id = ? AND status = ? RETURNING `+outpostColumns, id, fromStatus, desired, status, failure)
 }
 
-func (s *Store) setState(ctx context.Context, query, id, fromStatus, desired, status, guestIP, failure string) (Outpost, error) {
+func (s *Store) setState(ctx context.Context, query, id, fromStatus, desired, status, failure string) (Outpost, error) {
 	now := time.Now().UTC()
-	args := []any{desired, status, guestIP, failure, timestamp(now), id}
+	args := []any{desired, status, failure, timestamp(now), id}
 	if fromStatus != "" {
 		args = append(args, fromStatus)
 	}
@@ -170,15 +181,16 @@ func (s *Store) delete(ctx context.Context, query, value string) (Outpost, error
 	return a, nil
 }
 
-const outpostColumns = `id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, ssh_public_key, created_at, updated_at`
+const outpostColumns = `id, name, image_id, vcpus, memory_mib, disk_gib, desired_state, status, guest_ip, failure, created_at, updated_at`
 const outpostSelect = `SELECT ` + outpostColumns + ` FROM outposts`
 
 type rowScanner interface{ Scan(...any) error }
 
-func scanOutpost(row rowScanner) (Outpost, error) {
+func scanOutpost(row rowScanner, extra ...any) (Outpost, error) {
 	var a Outpost
 	var createdAt, updatedAt string
-	err := row.Scan(&a.ID, &a.Name, &a.ImageID, &a.VCPUs, &a.MemoryMiB, &a.DiskGiB, &a.DesiredState, &a.Status, &a.GuestIP, &a.Failure, &a.SSHPublicKey, &createdAt, &updatedAt)
+	columns := []any{&a.ID, &a.Name, &a.ImageID, &a.VCPUs, &a.MemoryMiB, &a.DiskGiB, &a.DesiredState, &a.Status, &a.GuestIP, &a.Failure, &createdAt, &updatedAt}
+	err := row.Scan(append(columns, extra...)...)
 	if err != nil {
 		return Outpost{}, err
 	}

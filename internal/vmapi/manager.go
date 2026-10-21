@@ -3,6 +3,7 @@ package vmapi
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/nishantdania/outpost/internal/outpost"
 )
@@ -18,4 +19,7 @@ type Manager interface {
 	Start(context.Context, string) (string, error)
 	Stop(context.Context, string) error
 	Delete(context.Context, string) error
+	Inspect(context.Context, string) (RuntimeState, error)
+	List(context.Context) ([]RuntimeState, error)
+	OpenSnapshot(context.Context, string) (io.ReadCloser, error)
 }

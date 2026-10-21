@@ -1,4 +1,0 @@
-CREATE TABLE outposts (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL
-);
